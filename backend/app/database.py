@@ -236,3 +236,46 @@ def delete_job(job_id: str) -> bool:
         return cursor.rowcount > 0
     finally:
         conn.close()
+
+
+def search_jobs(q: str = "", page: int = 1, limit: int = 12) -> dict:
+    """제목+요약 LIKE 검색 + 페이지네이션.
+
+    반환: {"items": list[dict], "total": int, "page": int, "pages": int}
+    """
+    if page < 1:
+        page = 1
+    offset = (page - 1) * limit
+    conn = _get_conn()
+    try:
+        if q:
+            pattern = f"%{q}%"
+            rows = conn.execute(
+                """
+                SELECT * FROM meetings
+                WHERE (title LIKE ? OR summary LIKE ?)
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                (pattern, pattern, limit, offset),
+            ).fetchall()
+            total: int = conn.execute(
+                "SELECT COUNT(*) FROM meetings WHERE (title LIKE ? OR summary LIKE ?)",
+                (pattern, pattern),
+            ).fetchone()[0]
+        else:
+            rows = conn.execute(
+                "SELECT * FROM meetings ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (limit, offset),
+            ).fetchall()
+            total = conn.execute("SELECT COUNT(*) FROM meetings").fetchone()[0]
+
+        pages = max(1, (total + limit - 1) // limit)
+        return {
+            "items": [_row_to_dict(r) for r in rows],
+            "total": total,
+            "page": page,
+            "pages": pages,
+        }
+    finally:
+        conn.close()
