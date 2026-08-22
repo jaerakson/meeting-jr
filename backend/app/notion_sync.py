@@ -282,11 +282,26 @@ async def update_notion_page(page_id: str, title: str, summary_md: str) -> dict:
     for block in children_resp.get("results", []):
         await notion.blocks.delete(block_id=block["id"])
 
-    # 2. 제목 갱신
+    # 2. 제목 갱신 — DB의 실제 title property 이름을 동적으로 조회
+    page_info = await notion.pages.retrieve(page_id=page_id)
+    parent = page_info.get("parent", {})
+    database_id = parent.get("database_id")
+
+    title_prop_name = "title"  # fallback
+    if database_id:
+        try:
+            db_meta = await notion.databases.retrieve(database_id=database_id)
+            for prop_name, prop_info in db_meta.get("properties", {}).items():
+                if prop_info.get("type") == "title":
+                    title_prop_name = prop_name
+                    break
+        except Exception:
+            logger.warning("DB 메타데이터 조회 실패, title property 이름 fallback 사용")
+
     await notion.pages.update(
         page_id=page_id,
         properties={
-            "title": {"title": [{"text": {"content": title}}]},
+            title_prop_name: {"title": [{"text": {"content": title}}]},
         },
     )
 
