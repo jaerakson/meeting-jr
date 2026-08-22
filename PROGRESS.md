@@ -1,3 +1,20 @@
+## 2026-08-23 (작업 PC: 로컬) — 세션 2
+- 브랜치: main
+- 완료: Notion UX 개선 + 기본 회의 제목 설정 + 문서 전체 업데이트
+- 현재 상태: 서버 실행 중 (백엔드 8000, 프론트 3000), 모든 기능 정상
+- 다음 할 일: 테스트 후 추가 기능 논의
+- 구현 내용:
+  - `backend/app/main.py`: Notion 내보내기 제목에 `[회의날짜 HH:MM]` 접두 (created_at KST 변환)
+  - `backend/app/main.py`: Notion 페이지 상단에 `📤 업로드 일시: YYYY-MM-DD HH:MM` 자동 삽입
+  - `backend/app/main.py`: 녹음 시작 시 기본 제목 설정값 사용 (미설정 시 '회의록')
+  - `backend/app/main.py`: `GET /api/settings/default-title` 엔드포인트 추가
+  - `backend/app/settings_manager.py`: `DEFAULT_MEETING_TITLE` 키 추가
+  - `frontend/components/MainArea.tsx`: Notion 버튼 로딩 피드백 (스피너 + 텍스트 변경 + disabled)
+  - `frontend/components/SettingsModal.tsx`: 기본 회의 제목 입력 필드 추가 (하단 공통 저장 통합)
+  - 문서: SKILL.md TeamCreate에 product-manager 추가, DEVGUIDE.md/README.md 전체 업데이트
+- 관련 커밋: 980c6fb..4118915 (5개)
+- 푸시 여부: 미푸시 (git remote 미설정)
+
 ## 2026-08-23 (작업 PC: 로컬)
 - 브랜치: main
 - 완료: 회의 목록 페이지 (/meetings) 전체 구현 + QA 완료
