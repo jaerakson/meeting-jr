@@ -61,26 +61,39 @@ meeting-jr/
 │   │   ├── job_queue.py
 │   │   ├── audio_processor.py
 │   │   ├── summarizer.py
-│   │   └── notion_sync.py
+│   │   ├── notion_sync.py
+│   │   └── settings_manager.py  # 설정값 암호화 저장/조회
+│   ├── tests/
+│   │   ├── test_search_jobs.py
+│   │   └── test_meetings_endpoint.py
 │   ├── requirements.txt
 │   └── .env.example
 ├── frontend/
 │   ├── app/
 │   │   ├── layout.tsx
-│   │   ├── page.tsx
-│   │   └── globals.css
+│   │   ├── page.tsx              # ?job=<id> 파라미터 처리
+│   │   ├── globals.css
+│   │   └── meetings/
+│   │       └── page.tsx          # /meetings 회의 목록 페이지
 │   ├── components/
 │   │   ├── RecordingZone.tsx     # 핵심: 녹음 UI
-│   │   ├── Sidebar.tsx
+│   │   ├── Sidebar.tsx           # 전체 목록 보기 링크 포함
 │   │   ├── AudioPlayer.tsx
 │   │   ├── TranscriptEditor.tsx  # 핵심: 텍스트+참석자 편집
 │   │   ├── SummaryPanel.tsx
 │   │   ├── SpeakerMapper.tsx
-│   │   └── ProgressCard.tsx
+│   │   ├── ProgressCard.tsx
+│   │   ├── MeetingCard.tsx       # 회의 목록 카드 컴포넌트
+│   │   ├── Pagination.tsx        # 페이지 번호 네비게이션
+│   │   └── SettingsModal.tsx     # 설정 모달 (API 키, 기본 제목)
 │   ├── next.config.ts
 │   ├── package.json
 │   ├── tailwind.config.ts
 │   └── tsconfig.json
+├── docs/
+│   └── superpowers/
+│       ├── plans/                # 구현 계획 문서
+│       └── specs/                # 설계 문서
 ├── DEVGUIDE.md
 └── CLAUDE.md
 ```
@@ -266,10 +279,17 @@ meeting-jr/
 | DELETE | `/api/jobs/{job_id}` | 회의 삭제 |
 | PATCH | `/api/jobs/{job_id}/title` | 제목 편집 |
 | PATCH | `/api/jobs/{job_id}/summary` | 요약 내용 저장 |
+| PATCH | `/api/jobs/{job_id}/transcript` | 트랜스크립트 수정 저장 |
 | GET | `/api/jobs/{job_id}/download` | 마크다운 다운로드 |
 | GET | `/api/jobs/{job_id}/audio` | 녹음 오디오 서빙 |
 | GET | `/api/speakers` | 저장된 화자 이름 목록 |
-| POST | `/api/jobs/{job_id}/export-notion` | Notion 등록 |
+| POST | `/api/jobs/{job_id}/export-notion` | Notion 등록 (mode: new\|update) |
+| GET | `/api/meetings` | 회의 목록 검색+페이지네이션 (?q=&page=&limit=) |
+| GET | `/api/settings` | 설정 키 등록 여부 조회 |
+| PATCH | `/api/settings` | 설정값 저장 (암호화) |
+| GET | `/api/settings/default-title` | 기본 회의 제목 조회 |
+| GET | `/api/settings/claude-status` | Claude CLI 인증 상태 확인 |
+| POST | `/api/settings/claude-logout` | Claude CLI 로그아웃 |
 
 ### SSE 이벤트 형식
 ```json
@@ -311,12 +331,18 @@ meeting-jr/
 
 ## 8. 환경 변수
 
+`.env` 파일 (서버 시작 전 필요):
 ```env
 HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxx
-NOTION_API_KEY=secret_xxxxxxxx   # 선택
-NOTION_DATABASE_ID=xxxxxxxx      # 선택
 PORT=8000
 MAX_UPLOAD_MB=500
+```
+
+앱 실행 후 설정 모달에서 저장 (DB 암호화 저장):
+```
+NOTION_API_KEY=secret_xxxxxxxx      # 선택
+NOTION_DATABASE_ID=xxxxxxxx         # 선택
+DEFAULT_MEETING_TITLE=팀 주간회의   # 선택, 미설정 시 '회의록'
 ```
 
 ---
@@ -348,3 +374,8 @@ npm run dev   # http://localhost:3000
 | Job 영속성 | SQLite |
 | 동시 처리 | asyncio Queue 최대 1개 |
 | ANTHROPIC_API_KEY | 사용 안 함 |
+| 설정 저장 | DB settings 테이블 암호화 저장 (Fernet), SECRET_KEY는 .env |
+| 회의 목록 페이지 | `/meetings` 라우트, 12개/페이지, 제목+요약 LIKE 검색 |
+| 기본 회의 제목 | 설정 모달에서 입력, 미설정 시 '회의록' |
+| Notion 제목 형식 | `[회의날짜 HH:MM] 회의제목` + 페이지 상단에 업로드 일시 기록 |
+| 에이전트 팀 | product-manager → director → backend/frontend/ai-engineer → qa |

@@ -29,7 +29,7 @@ director (총괄+아키텍트)
 ```
 TeamCreate(
   team_name: "meeting-jr-dev-team",
-  members: [director, backend-dev, frontend-dev, ai-engineer, qa-engineer]
+  members: [product-manager, director, backend-dev, frontend-dev, ai-engineer, qa-engineer]
 )
 ```
 

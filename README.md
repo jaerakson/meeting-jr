@@ -13,7 +13,9 @@ M1 Mac 로컬에서 실행하며, 브라우저에서 직접 녹음하거나 외�
 - **STT** — MLX-Whisper로 전체 대화 텍스트 변환
 - **트랜스크립트 편집** — 화자 이름 지정, 발화 텍스트 수정 후 요약 진행
 - **AI 요약** — Claude CLI로 핵심 요약 / 주요 논의 / 결정 사항 / 액션 아이템 생성
-- **Notion 내보내기** — 요약 결과를 Notion 데이터베이스에 자동 등록
+- **회의 목록 페이지** — `/meetings`에서 전체 회의 검색(제목+요약) + 페이지네이션
+- **Notion 내보내기** — 요약 결과를 Notion 데이터베이스에 등록, 제목에 회의날짜 자동 접두, 업로드 일시 기록
+- **설정 모달** — Notion API 키, 기본 회의 제목 등 앱 내에서 직접 설정 (암호화 저장)
 - **외부 접속** — Cloudflare Tunnel로 외부 기기에서 접속 가능
 
 ---
@@ -151,18 +153,23 @@ meeting-jr/
 │
 ├── frontend/
 │   ├── app/
-│   │   └── page.tsx         # 메인 페이지
+│   │   ├── page.tsx              # 메인 페이지 (?job=<id> 처리)
+│   │   └── meetings/
+│   │       └── page.tsx          # 회의 목록 페이지 (검색+페이지네이션)
 │   ├── components/
-│   │   ├── Sidebar.tsx      # 회의 목록 사이드바
-│   │   ├── MainArea.tsx     # 메인 콘텐츠 영역
-│   │   ├── RecordingZone.tsx   # 녹음 UI
-│   │   ├── ProgressCard.tsx    # 처리 진행률 (SSE)
+│   │   ├── Sidebar.tsx           # 회의 목록 사이드바 + 목록 보기 링크
+│   │   ├── MainArea.tsx          # 메인 콘텐츠 영역
+│   │   ├── RecordingZone.tsx     # 녹음 UI
+│   │   ├── ProgressCard.tsx      # 처리 진행률 (SSE)
 │   │   ├── TranscriptEditor.tsx  # 화자/텍스트 편집
-│   │   ├── AudioPlayer.tsx  # 오디오 재생
-│   │   ├── Transcript.tsx   # 대화 스크립트
-│   │   └── SummaryPanel.tsx # 요약 패널
-│   ├── next.config.ts       # API 프록시 설정
-│   └── .env.local           # 환경변수 (gitignore)
+│   │   ├── AudioPlayer.tsx       # 오디오 재생
+│   │   ├── Transcript.tsx        # 대화 스크립트
+│   │   ├── SummaryPanel.tsx      # 요약 패널
+│   │   ├── MeetingCard.tsx       # 회의 목록 카드
+│   │   ├── Pagination.tsx        # 페이지 번호 네비게이션
+│   │   └── SettingsModal.tsx     # 설정 모달
+│   ├── next.config.ts            # API 프록시 설정
+│   └── .env.local                # 환경변수 (gitignore)
 │
 └── README.md
 ```
