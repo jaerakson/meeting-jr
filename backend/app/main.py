@@ -29,7 +29,7 @@ from .database import (
     delete_job,
 )
 from .job_queue import job_queue, start_worker, progress_store, update_progress
-from .settings_manager import get_settings_status, set_setting, SETTING_KEYS
+from .settings_manager import get_settings_status, get_setting, set_setting, SETTING_KEYS
 
 load_dotenv()
 
@@ -115,7 +115,8 @@ async def record_audio(audio: UploadFile = File(...)):
         save_path.unlink(missing_ok=True)
         raise HTTPException(status_code=422, detail="오디오 데이터가 없습니다.")
 
-    title = f"회의 {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    _custom = get_setting("DEFAULT_MEETING_TITLE")
+    title = _custom if _custom else "회의록"
     create_job(job_id, filename, title=title)
     await job_queue.put(job_id)
 
@@ -549,6 +550,12 @@ async def claude_logout():
 # ---------------------------------------------------------------------------
 # 14) GET /api/settings
 # ---------------------------------------------------------------------------
+
+@app.get("/api/settings/default-title")
+async def get_default_title():
+    """기본 회의 제목을 반환한다. 미설정 시 빈 문자열."""
+    return {"value": get_setting("DEFAULT_MEETING_TITLE") or ""}
+
 
 @app.get("/api/settings")
 async def get_settings():

@@ -11,7 +11,7 @@ import sqlite3
 DB_PATH = Path(__file__).resolve().parent.parent / "meetings.db"
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 
-SETTING_KEYS = ["HF_TOKEN", "NOTION_API_KEY", "NOTION_DATABASE_ID"]
+SETTING_KEYS = ["HF_TOKEN", "NOTION_API_KEY", "NOTION_DATABASE_ID", "DEFAULT_MEETING_TITLE"]
 
 
 def _get_fernet() -> Fernet:
