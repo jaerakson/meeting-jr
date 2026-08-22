@@ -32,8 +32,7 @@ export default function SettingsModal({ onClose }: Props) {
   const [claudeStatus, setClaudeStatus] = useState<ClaudeStatus | null>(null)
   const [loggingOut, setLoggingOut] = useState(false)
   const [defaultTitle, setDefaultTitle] = useState('')
-  const [defaultTitleSaving, setDefaultTitleSaving] = useState(false)
-  const [defaultTitleSaved, setDefaultTitleSaved] = useState(false)
+  const [initialDefaultTitle, setInitialDefaultTitle] = useState('')
 
   useEffect(() => {
     fetch('/api/settings')
@@ -46,7 +45,10 @@ export default function SettingsModal({ onClose }: Props) {
       .catch(console.error)
     fetch('/api/settings/default-title')
       .then(r => r.json())
-      .then(d => setDefaultTitle(d.value ?? ''))
+      .then(d => {
+        setDefaultTitle(d.value ?? '')
+        setInitialDefaultTitle(d.value ?? '')
+      })
       .catch(console.error)
   }, [])
 
@@ -69,33 +71,12 @@ export default function SettingsModal({ onClose }: Props) {
     }
   }
 
-  const handleSaveDefaultTitle = async () => {
-    setDefaultTitleSaving(true)
-    try {
-      await fetch('/api/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ DEFAULT_MEETING_TITLE: defaultTitle }),
-      })
-      setDefaultTitleSaved(true)
-      setTimeout(() => setDefaultTitleSaved(false), 2000)
-    } catch {
-      alert('저장에 실패했습니다.')
-    } finally {
-      setDefaultTitleSaving(false)
-    }
-  }
-
   const handleSave = async () => {
     setSaving(true)
     try {
-      const body: Record<string, string> = {}
+      const body: Record<string, string> = { DEFAULT_MEETING_TITLE: defaultTitle }
       for (const key of KEYS) {
         if (values[key] !== '') body[key] = values[key]
-      }
-      if (Object.keys(body).length === 0) {
-        setSaving(false)
-        return
       }
       const res = await fetch('/api/settings', {
         method: 'PATCH',
@@ -103,10 +84,10 @@ export default function SettingsModal({ onClose }: Props) {
         body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error('저장 실패')
-      // 저장 후 status 갱신
       const newStatus = await fetch('/api/settings').then(r => r.json())
       setStatus(newStatus)
       setValues({ HF_TOKEN: '', NOTION_API_KEY: '', NOTION_DATABASE_ID: '' })
+      setInitialDefaultTitle(defaultTitle)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
@@ -150,26 +131,13 @@ export default function SettingsModal({ onClose }: Props) {
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               기본 회의 제목
             </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={defaultTitle}
-                onChange={e => setDefaultTitle(e.target.value)}
-                placeholder="회의록 (미입력 시 기본값)"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <button
-                onClick={handleSaveDefaultTitle}
-                disabled={defaultTitleSaving || defaultTitleSaved}
-                className={`px-3 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-1 flex-shrink-0 ${
-                  defaultTitleSaved
-                    ? 'bg-green-500 text-white'
-                    : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white'
-                }`}
-              >
-                {defaultTitleSaved ? '저장됨' : defaultTitleSaving ? '저장 중...' : '저장'}
-              </button>
-            </div>
+            <input
+              type="text"
+              value={defaultTitle}
+              onChange={e => setDefaultTitle(e.target.value)}
+              placeholder="회의록 (미입력 시 기본값)"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
             <p className="mt-1 text-xs text-gray-400">새 녹음 시작 시 이 제목이 자동으로 설정됩니다.</p>
           </div>
 
@@ -286,7 +254,7 @@ export default function SettingsModal({ onClose }: Props) {
           </button>
           <button
             onClick={handleSave}
-            disabled={saving || saved || KEYS.every(k => values[k] === '')}
+            disabled={saving || saved || (KEYS.every(k => values[k] === '') && defaultTitle === initialDefaultTitle)}
             className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-all duration-300 flex items-center gap-1.5 ${
               saved
                 ? 'bg-green-500'
