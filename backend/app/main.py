@@ -466,7 +466,11 @@ async def export_notion(job_id: str, body: dict = {}):
         except Exception:
             meeting_ts = str(job.get("created_at", ""))[:16]
 
+        import re as _re
         base_title = job.get("title") or "제목 없음"
+        # 구 자동생성 형식 "회의 YYYY-MM-DD HH:MM" → "회의록" 으로 정규화
+        if _re.match(r"^회의\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}$", base_title):
+            base_title = "회의록"
         notion_title = f"[{meeting_ts}] {base_title}"
 
         # 업로드 일시 (내보내기 실행 시점, KST)
