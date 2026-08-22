@@ -3,7 +3,8 @@ FastAPI 진입점 및 모든 API 엔드포인트.
 """
 
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 import asyncio
 import json
@@ -454,10 +455,27 @@ async def export_notion(job_id: str, body: dict = {}):
         mode = body.get("mode", "update")  # "update" | "new"
         existing_page_id = job.get("notion_page_id")
 
+        # 회의 날짜 (created_at → KST)
+        _KST = ZoneInfo("Asia/Seoul")
+        try:
+            created_dt = datetime.fromisoformat(job["created_at"])
+            if created_dt.tzinfo is None:
+                created_dt = created_dt.replace(tzinfo=timezone.utc)
+            meeting_ts = created_dt.astimezone(_KST).strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            meeting_ts = str(job.get("created_at", ""))[:16]
+
+        base_title = job.get("title") or "제목 없음"
+        notion_title = f"[{meeting_ts}] {base_title}"
+
+        # 업로드 일시 (내보내기 실행 시점, KST)
+        upload_ts = datetime.now(_KST).strftime("%Y-%m-%d %H:%M")
+        summary_with_meta = f"📤 업로드 일시: {upload_ts}\n\n" + (job["summary"] or "")
+
         if existing_page_id and mode == "update":
-            result = await update_notion_page(existing_page_id, job["title"], job["summary"])
+            result = await update_notion_page(existing_page_id, notion_title, summary_with_meta)
         else:
-            result = await export_to_notion(job["title"], job["summary"])
+            result = await export_to_notion(notion_title, summary_with_meta)
             update_job_notion(job_id, result["url"], result["page_id"])
 
         return {"status": "exported", "job_id": job_id, **result}
