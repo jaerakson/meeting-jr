@@ -113,6 +113,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
 
   const [notionUrl, setNotionUrl] = useState<string | null>(null)
   const [showNotionConfirm, setShowNotionConfirm] = useState(false)
+  const [notionLoading, setNotionLoading] = useState(false)
 
   const handleExportNotion = async () => {
     if (!job) return
@@ -126,6 +127,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   const doExportNotion = async (mode: 'update' | 'new') => {
     setShowNotionConfirm(false)
     if (!job) return
+    setNotionLoading(true)
     try {
       const res = await fetch(`/api/jobs/${job.id}/export-notion`, {
         method: 'POST',
@@ -141,6 +143,8 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
       }
     } catch {
       alert('Notion 내보내기 요청에 실패했습니다.')
+    } finally {
+      setNotionLoading(false)
     }
   }
 
@@ -327,8 +331,21 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
               )}
               <button
                 onClick={handleExportNotion}
-                className="text-xs md:text-sm px-2 md:px-3 py-1.5 border rounded-lg hover:bg-gray-50 text-gray-600"
-              >{job?.notion_page_id ? '노션 업데이트' : '노션 보내기'}</button>
+                disabled={notionLoading}
+                className="text-xs md:text-sm px-2 md:px-3 py-1.5 border rounded-lg hover:bg-gray-50 text-gray-600 disabled:opacity-60 flex items-center gap-1.5 transition-colors"
+              >
+                {notionLoading ? (
+                  <>
+                    <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    {job?.notion_page_id ? '업데이트 중...' : '전송 중...'}
+                  </>
+                ) : (
+                  job?.notion_page_id ? '노션 업데이트' : '노션 보내기'
+                )}
+              </button>
             </div>
           </>
         ) : (
@@ -343,11 +360,13 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             <p className="text-sm text-gray-500">이미 Notion에 등록된 회의입니다.<br/>어떻게 진행할까요?</p>
             <div className="flex flex-col gap-2">
               <button onClick={() => doExportNotion('update')}
-                className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
+                disabled={notionLoading}
+                className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg text-sm font-medium">
                 기존 페이지 업데이트
               </button>
               <button onClick={() => doExportNotion('new')}
-                className="w-full py-2 px-4 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium">
+                disabled={notionLoading}
+                className="w-full py-2 px-4 border border-gray-300 hover:bg-gray-50 disabled:opacity-60 text-gray-700 rounded-lg text-sm font-medium">
                 새 페이지로 추가
               </button>
               <button onClick={() => setShowNotionConfirm(false)}
