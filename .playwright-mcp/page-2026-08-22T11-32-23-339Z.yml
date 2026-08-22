@@ -1,0 +1,108 @@
+- generic [ref=f8e1]:
+  - generic [ref=f8e2]:
+    - complementary [ref=f8e4]:
+      - heading "Meeting Jr." [level=1] [ref=f8e6]
+      - button "새 회의 녹음" [ref=f8e8] [cursor=pointer]
+      - generic [ref=f8e10]:
+        - generic [ref=f8e22] [cursor=pointer]:
+          - generic [ref=f8e23]: 회의 2026-08-22 19:32
+          - generic [ref=f8e26]: 2026-08-22
+        - generic [ref=f8e28] [cursor=pointer]:
+          - generic [ref=f8e29]: 회의 2026-08-22 19:09
+          - generic [ref=f8e32]: 2026-08-22
+    - generic [ref=f8e12]:
+      - generic [ref=f8e13]:
+        - heading "회의 2026-08-22 19:09" [level=1] [ref=f8e44] [cursor=pointer]
+        - button "Notion" [ref=f8e45] [cursor=pointer]
+      - generic [ref=f8e46]:
+        - generic [ref=f8e47]:
+          - button [ref=f8e48] [cursor=pointer]
+          - slider [disabled] [ref=f8e51] [cursor=pointer]: "0"
+          - generic [ref=f8e52]: 00:00
+        - generic [ref=f8e53]:
+          - generic [ref=f8e54]:
+            - generic [ref=f8e55]:
+              - generic [ref=f8e56]: 대화 스크립트
+              - generic [ref=f8e57]:
+                - button "취소" [ref=f8e146] [cursor=pointer]
+                - button "저장" [ref=f8e147] [cursor=pointer]
+                - button "재요약" [ref=f8e148] [cursor=pointer]
+            - generic [ref=f8e59]:
+              - generic [ref=f8e149]:
+                - generic [ref=f8e151]:
+                  - generic [ref=f8e221]:
+                    - textbox "새 이름" [active] [ref=f8e222]: 손재락
+                    - button "00:00" [ref=f8e223] [cursor=pointer]
+                  - generic [ref=f8e224]:
+                    - button "이 항목만" [ref=f8e225] [cursor=pointer]
+                    - button "전체 변경 (7개)" [ref=f8e226] [cursor=pointer]
+                    - button "취소" [ref=f8e227] [cursor=pointer]
+                - paragraph [ref=f8e154]: 지혜야 오늘 어떤 일을 한 거야? 알바 재밌었어?
+              - generic [ref=f8e155]:
+                - generic [ref=f8e157]:
+                  - generic "클릭하여 이름 변경" [ref=f8e158] [cursor=pointer]: 손지혜
+                  - button "00:04" [ref=f8e159] [cursor=pointer]
+                - paragraph [ref=f8e160]: 네. 학원 일했어요.
+              - generic [ref=f8e161]:
+                - generic [ref=f8e163]:
+                  - generic "클릭하여 이름 변경" [ref=f8e164] [cursor=pointer]: 손재락
+                  - button "00:07" [ref=f8e165] [cursor=pointer]
+                - paragraph [ref=f8e166]: 내 목소리가 왜 이렇게 힘들어 보여?
+              - generic [ref=f8e167]:
+                - generic [ref=f8e169]:
+                  - generic "클릭하여 이름 변경" [ref=f8e170] [cursor=pointer]: 손지혜
+                  - button "00:10" [ref=f8e171] [cursor=pointer]
+                - paragraph [ref=f8e172]: 조금 힘들었습니다.
+              - generic [ref=f8e173]:
+                - generic [ref=f8e175]:
+                  - generic "클릭하여 이름 변경" [ref=f8e176] [cursor=pointer]: 손재락
+                  - button "00:12" [ref=f8e177] [cursor=pointer]
+                - paragraph [ref=f8e178]: 뭐가 힘들었는데?
+              - generic [ref=f8e179]:
+                - generic [ref=f8e181]:
+                  - generic "클릭하여 이름 변경" [ref=f8e182] [cursor=pointer]: 손지혜
+                  - button "00:15" [ref=f8e183] [cursor=pointer]
+                - paragraph [ref=f8e184]: 항상 갈 때마다 돈을 받는 건 없게 됐어.
+              - generic [ref=f8e185]:
+                - generic [ref=f8e187]:
+                  - generic "클릭하여 이름 변경" [ref=f8e188] [cursor=pointer]: 손재락
+                  - button "00:21" [ref=f8e189] [cursor=pointer]
+                - paragraph [ref=f8e190]: 오늘은 주로 무슨 일을 했어?
+              - generic [ref=f8e191]:
+                - generic [ref=f8e193]:
+                  - generic "클릭하여 이름 변경" [ref=f8e194] [cursor=pointer]: 손지혜
+                  - button "00:23" [ref=f8e195] [cursor=pointer]
+                - paragraph [ref=f8e196]: 애들 봐주는 일, 놀아주는 일. 애들 봐주는 게 구체적으로 어떤 일인데?
+              - generic [ref=f8e197]:
+                - generic [ref=f8e199]:
+                  - generic "클릭하여 이름 변경" [ref=f8e200] [cursor=pointer]: 손재락
+                  - button "00:28" [ref=f8e201] [cursor=pointer]
+                - paragraph [ref=f8e202]: 애들 그림 잘 그리나 못 그리나 봐주고 질문 있으면 알려주고 얘기하고
+              - generic [ref=f8e203]:
+                - generic [ref=f8e205]:
+                  - generic "클릭하여 이름 변경" [ref=f8e206] [cursor=pointer]: 손재락
+                  - button "00:37" [ref=f8e207] [cursor=pointer]
+                - paragraph [ref=f8e208]: 특히 인상 남은 질문이 뭐야?
+              - generic [ref=f8e209]:
+                - generic [ref=f8e211]:
+                  - generic "클릭하여 이름 변경" [ref=f8e212] [cursor=pointer]: 손지혜
+                  - button "00:53" [ref=f8e213] [cursor=pointer]
+                - paragraph [ref=f8e214]: 기억이 잘 안 나는데?
+              - generic [ref=f8e215]:
+                - generic [ref=f8e217]:
+                  - generic "클릭하여 이름 변경" [ref=f8e218] [cursor=pointer]: 손재락
+                  - button "00:55" [ref=f8e219] [cursor=pointer]
+                - paragraph [ref=f8e220]: 인터뷰 끝.
+          - generic [ref=f8e133]:
+            - generic [ref=f8e134]:
+              - generic [ref=f8e135]:
+                - button "핵심 요약" [ref=f8e136] [cursor=pointer]
+                - button "주요 논의" [ref=f8e137] [cursor=pointer]
+                - button "결정 사항" [ref=f8e138] [cursor=pointer]
+                - button "액션 아이템" [ref=f8e139] [cursor=pointer]
+              - generic [ref=f8e140]:
+                - button "편집" [ref=f8e141] [cursor=pointer]
+                - button "다운로드" [ref=f8e142] [cursor=pointer]
+            - paragraph [ref=f8e145]: 손재락이 손지혜의 학원 알바 경험을 짧게 인터뷰했으나, 손지혜가 피로감과 기억 부족을 이유로 상세한 답변을 하지 못한 채 인터뷰가 마무리되었다.
+  - alert [ref=f8e34]
+  - button "Open Next.js Dev Tools" [ref=f8e40] [cursor=pointer]

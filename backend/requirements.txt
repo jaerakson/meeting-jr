@@ -1,0 +1,11 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.12
+python-dotenv==1.0.1
+notion-client==2.2.1
+ffmpeg-python==0.2.0
+pyannote.audio==3.3.2
+mlx-whisper==0.4.1
+aiofiles==24.1.0
+torch>=2.0.0
+cryptography>=42.0.0

@@ -1,0 +1,81 @@
+- generic [ref=f7e1]:
+  - generic [ref=f7e2]:
+    - complementary [ref=f7e4]:
+      - heading "Meeting Jr." [level=1] [ref=f7e6]
+      - button "새 회의 녹음" [ref=f7e8] [cursor=pointer]
+      - generic [ref=f7e10]:
+        - generic [ref=f7e22] [cursor=pointer]:
+          - generic [ref=f7e23]: 회의 2026-08-22 19:32
+          - generic [ref=f7e26]: 2026-08-22
+        - generic [ref=f7e28] [cursor=pointer]:
+          - generic [ref=f7e29]: 회의 2026-08-22 19:09
+          - generic [ref=f7e32]: 2026-08-22
+    - generic [ref=f7e12]:
+      - generic [ref=f7e13]:
+        - heading "회의 2026-08-22 19:32" [level=1] [ref=f7e44] [cursor=pointer]
+        - button "Notion" [ref=f7e45] [cursor=pointer]
+      - generic [ref=f7e46]:
+        - generic [ref=f7e47]:
+          - button [ref=f7e48] [cursor=pointer]
+          - slider [disabled] [ref=f7e51] [cursor=pointer]: "0"
+          - generic [ref=f7e52]: 00:00
+        - generic [ref=f7e53]:
+          - generic [ref=f7e54]:
+            - generic [ref=f7e55]:
+              - generic [ref=f7e56]: 대화 스크립트
+              - button "편집" [ref=f7e58] [cursor=pointer]
+            - generic [ref=f7e59]:
+              - generic [ref=f7e60]:
+                - generic [ref=f7e61]:
+                  - generic [ref=f7e62]: 아빠
+                  - button "00:00" [ref=f7e63] [cursor=pointer]
+                - paragraph [ref=f7e64]: ㄷㄷ ㄷㄷ ㄷㄷ 주완아 뭐해? 얘기해봐 유튜브 봐? 말을 해야지 엄마 어디 간 거 같아?
+              - generic [ref=f7e65]:
+                - generic [ref=f7e66]:
+                  - generic [ref=f7e67]: 손주환
+                  - button "00:17" [ref=f7e68] [cursor=pointer]
+                - paragraph [ref=f7e69]: 어.. 출...
+              - generic [ref=f7e70]:
+                - generic [ref=f7e71]:
+                  - generic [ref=f7e72]: 손주환
+                  - button "00:21" [ref=f7e73] [cursor=pointer]
+                - paragraph [ref=f7e74]: 마트! 어느 마트? 럭키마트 엄마 럭키가 마트 가서 뭐 할까?
+              - generic [ref=f7e75]:
+                - generic [ref=f7e76]:
+                  - generic [ref=f7e77]: 아빠
+                  - button "00:30" [ref=f7e78] [cursor=pointer]
+                - paragraph [ref=f7e79]: 말해야지 모르겠어요
+              - generic [ref=f7e80]:
+                - generic [ref=f7e81]:
+                  - generic [ref=f7e82]: 손주환
+                  - button "00:32" [ref=f7e83] [cursor=pointer]
+                - paragraph [ref=f7e84]: 모르겠어?
+              - generic [ref=f7e85]:
+                - generic [ref=f7e86]:
+                  - generic [ref=f7e87]: 아빠
+                  - button "00:34" [ref=f7e88] [cursor=pointer]
+                - paragraph [ref=f7e89]: 주완이는 어느 유튜브가 제일 재밌어?
+              - generic [ref=f7e90]:
+                - generic [ref=f7e91]:
+                  - generic [ref=f7e92]: 손주환
+                  - button "00:37" [ref=f7e93] [cursor=pointer]
+                - paragraph [ref=f7e94]: 어... 어... 어... 어... 모든 거 이런 거 다요 그래?
+              - generic [ref=f7e95]:
+                - generic [ref=f7e96]:
+                  - generic [ref=f7e97]: 손주환
+                  - button "00:48" [ref=f7e98] [cursor=pointer]
+                - paragraph [ref=f7e99]: 어... 어...
+              - generic [ref=f7e100]:
+                - generic [ref=f7e101]:
+                  - generic [ref=f7e102]: 손주환
+                  - button "00:49" [ref=f7e103] [cursor=pointer]
+                - paragraph [ref=f7e104]: 어... 어... 어... 어... 어... 어... 어... 어...
+          - generic [ref=f7e106]:
+            - generic [ref=f7e107]:
+              - generic [ref=f7e119]: 마크다운 전체 편집 중
+              - generic [ref=f7e113]:
+                - button "취소" [active] [ref=f7e120] [cursor=pointer]
+                - button "저장" [ref=f7e121] [cursor=pointer]
+            - textbox [ref=f7e122]: "# 가족 일상 대화 — 주완이와 아빠의 저녁 대화 - 일시: 날짜 미상 (저녁 추정) - 참석자: 아빠, 손주환 (주완) - 회의 목적: 가족 간 일상 대화 (엄마의 외출 확인, 주완이 근황 파악) ## 핵심 요약 (TL;DR) 아빠가 집에 혼자 있는 주완이에게 엄마의 행방과 요즘 관심사를 물었으며, 주완이는 엄마가 럭키마트에 간 것 같다고 답했다. ## 주요 논의 및 안건 - 안건 1: 엄마의 외출 행방 — 주완이 추정으로 럭키마트에 간 것으로 보임 - 안건 2: 주완이 현재 활동 — 유튜브 시청 중 - 안건 3: 선호 유튜브 콘텐츠 — \"모든 거 다\"라고 응답 ## 주요 결정 사항 - 엄마는 럭키마트에 간 것으로 추정 (미확인) ## 액션 아이템 (To-Do) - [ ] @아빠 - 엄마 귀가 여부 확인 (기한: 당일) ## 이슈 및 리스크 - 이슈 1: 주완이의 발화가 다소 짧고 불명확하여 의사소통 내용 파악에 제한이 있음 - 이슈 2: 엄마의 마트 방문 목적 미확인 --- > **참고:** 이 스크립트는 비즈니스 회의가 아닌 가족 일상 대화입니다. 회의록 형식으로 작성되었으나, 실제 업무 결정 사항이나 공식 안건은 없습니다."
+  - alert [ref=f7e34]
+  - button "Open Next.js Dev Tools" [ref=f7e40] [cursor=pointer]

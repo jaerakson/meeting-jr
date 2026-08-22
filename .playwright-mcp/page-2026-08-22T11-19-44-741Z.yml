@@ -1,0 +1,11 @@
+- generic [ref=f4e2]:
+  - complementary [ref=f4e4]:
+    - heading "Meeting Jr." [level=1] [ref=f4e6]
+    - button "새 회의 녹음" [ref=f4e8] [cursor=pointer]
+    - paragraph [ref=f4e11]: 아직 회의가 없습니다.
+  - generic [ref=f4e12]:
+    - heading "Meeting Jr." [level=1] [ref=f4e14]
+    - generic [ref=f4e16]:
+      - generic [ref=f4e17]: 00:00:00
+      - button [ref=f4e19] [cursor=pointer]
+      - paragraph [ref=f4e21]: 버튼을 눌러 녹음을 시작하세요

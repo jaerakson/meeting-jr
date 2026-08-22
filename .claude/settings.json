@@ -1,0 +1,16 @@
+{
+  "enabledPlugins": {
+    "harness@harness-marketplace": true
+  },
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "allow": [
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
+      "Glob(*)",
+      "Grep(*)"
+    ]
+  }
+}

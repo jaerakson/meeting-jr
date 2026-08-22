@@ -1,0 +1,88 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - heading "Meeting Jr." [level=1] [ref=e6]
+        - button "닫기" [ref=e7] [cursor=pointer]
+      - button "새 회의 녹음" [ref=e11] [cursor=pointer]
+      - generic [ref=e13]:
+        - generic [ref=e28] [cursor=pointer]:
+          - generic [ref=e29]: 회의 2026-08-22 19:32
+          - generic [ref=e32]: 2026-08-22
+        - generic [ref=e34] [cursor=pointer]:
+          - generic [ref=e35]: 회의 2026-08-22 19:09
+          - generic [ref=e38]: 2026-08-22
+    - generic [ref=e15]:
+      - generic [ref=e16]:
+        - button "메뉴 열기" [ref=e17] [cursor=pointer]
+        - heading "회의 2026-08-22 19:32" [level=1] [ref=e51] [cursor=pointer]
+        - button "Notion" [ref=e52] [cursor=pointer]
+      - generic [ref=e53]:
+        - generic [ref=e54]:
+          - button [ref=e55] [cursor=pointer]
+          - slider [ref=e58] [cursor=pointer]: "0"
+          - generic [ref=e59]: 00:00 / Infinity:NaN
+        - generic [ref=e60]:
+          - generic [ref=e61]:
+            - generic [ref=e62]:
+              - generic [ref=e63]: 대화 스크립트
+              - button "편집" [ref=e65] [cursor=pointer]
+            - generic [ref=e66]:
+              - generic [ref=e67]:
+                - generic [ref=e68]:
+                  - generic [ref=e69]: SPEAKER_00
+                  - button "00:00" [ref=e70] [cursor=pointer]
+                - paragraph [ref=e71]: ㄷㄷ ㄷㄷ ㄷㄷ 주완아 뭐해? 얘기해봐 유튜브 봐? 말을 해야지 엄마 어디 간 거 같아?
+              - generic [ref=e72]:
+                - generic [ref=e73]:
+                  - generic [ref=e74]: SPEAKER_02
+                  - button "00:17" [ref=e75] [cursor=pointer]
+                - paragraph [ref=e76]: 어.. 출...
+              - generic [ref=e77]:
+                - generic [ref=e78]:
+                  - generic [ref=e79]: SPEAKER_03
+                  - button "00:21" [ref=e80] [cursor=pointer]
+                - paragraph [ref=e81]: 마트! 어느 마트? 럭키마트 엄마 럭키가 마트 가서 뭐 할까?
+              - generic [ref=e82]:
+                - generic [ref=e83]:
+                  - generic [ref=e84]: SPEAKER_00
+                  - button "00:30" [ref=e85] [cursor=pointer]
+                - paragraph [ref=e86]: 말해야지 모르겠어요
+              - generic [ref=e87]:
+                - generic [ref=e88]:
+                  - generic [ref=e89]: SPEAKER_01
+                  - button "00:32" [ref=e90] [cursor=pointer]
+                - paragraph [ref=e91]: 모르겠어?
+              - generic [ref=e92]:
+                - generic [ref=e93]:
+                  - generic [ref=e94]: SPEAKER_00
+                  - button "00:34" [ref=e95] [cursor=pointer]
+                - paragraph [ref=e96]: 주완이는 어느 유튜브가 제일 재밌어?
+              - generic [ref=e97]:
+                - generic [ref=e98]:
+                  - generic [ref=e99]: SPEAKER_03
+                  - button "00:37" [ref=e100] [cursor=pointer]
+                - paragraph [ref=e101]: 어... 어... 어... 어... 모든 거 이런 거 다요 그래?
+              - generic [ref=e102]:
+                - generic [ref=e103]:
+                  - generic [ref=e104]: SPEAKER_01
+                  - button "00:48" [ref=e105] [cursor=pointer]
+                - paragraph [ref=e106]: 어... 어...
+              - generic [ref=e107]:
+                - generic [ref=e108]:
+                  - generic [ref=e109]: SPEAKER_03
+                  - button "00:49" [ref=e110] [cursor=pointer]
+                - paragraph [ref=e111]: 어... 어... 어... 어... 어... 어... 어... 어...
+          - generic [ref=e113]:
+            - generic [ref=e114]:
+              - generic [ref=e115]:
+                - button "핵심 요약" [ref=e116] [cursor=pointer]
+                - button "주요 논의" [ref=e117] [cursor=pointer]
+                - button "결정 사항" [ref=e118] [cursor=pointer]
+                - button "액션 아이템" [ref=e119] [cursor=pointer]
+              - generic [ref=e120]:
+                - button "편집" [ref=e121] [cursor=pointer]
+                - button "다운로드" [ref=e122] [cursor=pointer]
+            - paragraph [ref=e125]: 가족 구성원들이 엄마의 외출(럭키마트) 여부와 주완(어린이 추정)의 유튜브 시청에 대해 가볍게 나눈 일상 대화. 실질적인 안건이나 의사결정이 없는 비공식 대화임.
+  - alert [ref=e40]
+  - button "Open Next.js Dev Tools" [ref=e46] [cursor=pointer]

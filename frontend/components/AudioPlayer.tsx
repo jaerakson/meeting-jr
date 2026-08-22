@@ -1,0 +1,121 @@
+'use client'
+
+import { useRef, useState, useEffect, useCallback } from 'react'
+
+interface AudioPlayerProps {
+  audioSrc: string
+  onTimeUpdate: (sec: number) => void
+}
+
+function formatTime(sec: number): string {
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60)
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
+export default function AudioPlayer({ audioSrc, onTimeUpdate }: AudioPlayerProps) {
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+
+  const handleTimeUpdate = useCallback(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    setCurrentTime(audio.currentTime)
+    onTimeUpdate(audio.currentTime)
+  }, [onTimeUpdate])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    const onLoaded = () => setDuration(audio.duration || 0)
+    const onEnded = () => setIsPlaying(false)
+
+    audio.addEventListener('loadedmetadata', onLoaded)
+    audio.addEventListener('timeupdate', handleTimeUpdate)
+    audio.addEventListener('ended', onEnded)
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', onLoaded)
+      audio.removeEventListener('timeupdate', handleTimeUpdate)
+      audio.removeEventListener('ended', onEnded)
+    }
+  }, [handleTimeUpdate])
+
+  const togglePlay = () => {
+    const audio = audioRef.current
+    if (!audio) return
+    if (isPlaying) {
+      audio.pause()
+    } else {
+      audio.play()
+    }
+    setIsPlaying(!isPlaying)
+  }
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const audio = audioRef.current
+    if (!audio) return
+    const time = Number(e.target.value)
+    audio.currentTime = time
+    setCurrentTime(time)
+  }
+
+  // 외부에서 시크 (ref를 통해)
+  useEffect(() => {
+    const handler = (e: CustomEvent<{ time: number }>) => {
+      const audio = audioRef.current
+      if (!audio) return
+      audio.currentTime = e.detail.time
+      setCurrentTime(e.detail.time)
+      if (!isPlaying) {
+        audio.play()
+        setIsPlaying(true)
+      }
+    }
+    window.addEventListener('audio-seek' as string, handler as EventListener)
+    return () => window.removeEventListener('audio-seek' as string, handler as EventListener)
+  }, [isPlaying])
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200">
+      <audio ref={audioRef} src={audioSrc} preload="metadata" />
+
+      {/* 재생/일시정지 버튼 */}
+      <button
+        onClick={togglePlay}
+        className="w-10 h-10 flex items-center justify-center rounded-full bg-accent hover:bg-blue-700 text-white transition-colors flex-shrink-0"
+      >
+        {isPlaying ? (
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+            <rect x="6" y="4" width="4" height="16" />
+            <rect x="14" y="4" width="4" height="16" />
+          </svg>
+        ) : (
+          <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+            <polygon points="5,3 19,12 5,21" />
+          </svg>
+        )}
+      </button>
+
+      {/* 시크바 */}
+      <input
+        type="range"
+        min={0}
+        max={isFinite(duration) && duration > 0 ? duration : 100}
+        step={0.1}
+        value={currentTime}
+        onChange={handleSeek}
+        disabled={!isFinite(duration) || duration === 0}
+        className="flex-1 h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer accent-accent disabled:opacity-40"
+      />
+
+      {/* 시간 */}
+      <span className="text-sm text-gray-500 font-mono whitespace-nowrap flex-shrink-0">
+        {formatTime(currentTime)}{isFinite(duration) && duration > 0 ? ` / ${formatTime(duration)}` : ''}
+      </span>
+    </div>
+  )
+}
