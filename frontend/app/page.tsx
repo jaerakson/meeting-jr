@@ -10,6 +10,16 @@ export default function Home() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  // /meetings 에서 카드 클릭 시 /?job=<id> 로 이동 — 해당 job 자동 선택
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const jobId = params.get('job')
+    if (jobId) {
+      setSelectedJobId(jobId)
+      window.history.replaceState({}, '', '/')
+    }
+  }, [])
+
   const fetchJobs = useCallback(async () => {
     try {
       const res = await fetch('/api/jobs')
