@@ -13,7 +13,7 @@ import uuid
 
 import aiofiles
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException
+from fastapi import FastAPI, File, Form, Request, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 
@@ -141,13 +141,15 @@ async def record_audio(
 # ---------------------------------------------------------------------------
 
 @app.get("/api/progress/{job_id}")
-async def progress_stream(job_id: str):
+async def progress_stream(job_id: str, request: Request):
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
 
     async def event_generator():
         while True:
+            if await request.is_disconnected():
+                break
             data = progress_store.get(job_id)
             if data:
                 yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -642,6 +644,7 @@ async def patch_settings(body: dict):
 
 @app.get("/api/meetings")
 async def list_meetings(q: str = "", page: int = 1, limit: int = 12):
+    limit = min(limit, 100)
     """제목+요약 검색 + 페이지네이션. 기존 /api/jobs 와 독립적으로 동작."""
     return search_jobs(q=q, page=page, limit=limit)
 

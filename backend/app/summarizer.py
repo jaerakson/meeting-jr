@@ -80,7 +80,7 @@ def _save_speaker_names(speaker_map: dict) -> None:
             existing = {}
 
     for speaker_id, name in speaker_map.items():
-        if name and name.strip():
+        if name and name.strip() and name.strip() != speaker_id:
             existing[speaker_id] = name.strip()
 
     SPEAKERS_FILE.write_text(
