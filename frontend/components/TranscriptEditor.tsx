@@ -1,11 +1,13 @@
 'use client'
 import { useState, useRef, useEffect, useCallback } from 'react'
+import CategorySelect from './CategorySelect'
 
 interface Props {
   jobId: string
   initialTranscript: string
   initialSpeakers: string[]
   suggestedNames: Record<string, string>
+  initialCategoryId?: string
   onComplete: () => void
 }
 
@@ -44,8 +46,9 @@ const C: Record<Color, { dot: string; text: string; ring: string; bg: string; ro
   cyan:    { dot: 'bg-cyan-500',    text: 'text-cyan-600',    ring: 'ring-cyan-300',    bg: 'bg-cyan-50',    rowBg: 'bg-cyan-50' },
 }
 
-export default function TranscriptEditor({ jobId, initialTranscript, initialSpeakers, suggestedNames, onComplete }: Props) {
+export default function TranscriptEditor({ jobId, initialTranscript, initialSpeakers, suggestedNames, initialCategoryId = 'meeting', onComplete }: Props) {
   const [lines, setLines] = useState<TLine[]>(() => parseTranscript(initialTranscript))
+  const [categoryId, setCategoryId] = useState(initialCategoryId)
   const [names, setNames] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {}
     initialSpeakers.forEach(s => { m[s] = suggestedNames[s] || '' })
@@ -103,7 +106,7 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
       await fetch(`/api/jobs/${jobId}/finalize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript, speaker_map }),
+        body: JSON.stringify({ transcript, speaker_map, category_id: categoryId }),
       })
       onComplete()
     } catch {
@@ -280,13 +283,17 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
       </div>
 
       {/* ── 하단 버튼 ── */}
-      <div className="px-4 py-3 border-t bg-white flex-shrink-0">
+      <div className="px-4 py-3 border-t bg-white flex-shrink-0 space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 flex-shrink-0">카테고리:</span>
+          <CategorySelect value={categoryId} onChange={setCategoryId} className="flex-1" />
+        </div>
         <button
           onClick={handleSubmit}
           disabled={submitting}
           className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-colors"
         >
-          {submitting ? '처리 중...' : '회의록 생성'}
+          {submitting ? '처리 중...' : '문서 생성'}
         </button>
       </div>
     </div>

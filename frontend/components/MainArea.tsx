@@ -62,6 +62,17 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
     window.dispatchEvent(new CustomEvent('audio-seek', { detail: { time: sec } }))
   }, [])
 
+  const downloadTranscript = () => {
+    if (!job?.transcript) return
+    const blob = new Blob([job.transcript], { type: 'text/plain;charset=utf-8' })
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob),
+      download: `${job.title || '스크립트'}_스크립트.txt`,
+    })
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
   const handleStartEditTranscript = () => {
     setLocalTranscript(job?.transcript || '')
     setIsEditingTranscript(true)
@@ -149,7 +160,9 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   }
 
   const handleAwaitingEdit = (transcript: string, speakers: string[], suggestedNames: Record<string, string>) => {
-    setEditData({ transcript, speakers, suggestedNames })
+    if (transcript) {
+      setEditData({ transcript, speakers, suggestedNames })
+    }
     onJobsChange()
   }
 
@@ -175,6 +188,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             initialTranscript={editData.transcript}
             initialSpeakers={editData.speakers}
             suggestedNames={editData.suggestedNames}
+            initialCategoryId={job.category_id || 'meeting'}
             onComplete={() => { setEditData(null); onJobsChange() }}
           />
         )
@@ -186,6 +200,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             initialTranscript={job.transcript}
             initialSpeakers={Object.keys(job.speakers || {})}
             suggestedNames={job.speakers || {}}
+            initialCategoryId={job.category_id || 'meeting'}
             onComplete={() => { setEditData(null); onJobsChange() }}
           />
         )
@@ -257,12 +272,27 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
                       </button>
                     </>
                   ) : (
-                    <button
-                      onClick={handleStartEditTranscript}
-                      className="text-xs px-2 py-1 border rounded hover:bg-white text-gray-600 transition-colors"
-                    >
-                      편집
-                    </button>
+                    <>
+                      <button
+                        onClick={downloadTranscript}
+                        className="text-xs px-2 py-1 border rounded hover:bg-white text-gray-600 transition-colors"
+                      >
+                        ↓ TXT
+                      </button>
+                      <a
+                        href={`/api/jobs/${job.id}/audio`}
+                        download
+                        className="text-xs px-2 py-1 border rounded hover:bg-white text-gray-600 transition-colors"
+                      >
+                        ↓ 음성
+                      </a>
+                      <button
+                        onClick={handleStartEditTranscript}
+                        className="text-xs px-2 py-1 border rounded hover:bg-white text-gray-600 transition-colors"
+                      >
+                        편집
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

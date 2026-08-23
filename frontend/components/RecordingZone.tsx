@@ -1,14 +1,23 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { ClaudeStatus } from '@/types'
+import CategorySelect from './CategorySelect'
 
 interface Props {
   onRecordingComplete: (jobId: string) => void
 }
 
+const CATEGORY_KEY = 'meeting-jr-last-category'
+
 export default function RecordingZone({ onRecordingComplete }: Props) {
   const [claudeStatus, setClaudeStatus] = useState<ClaudeStatus | null>(null)
   const [isRecording, setIsRecording] = useState(false)
+  const [categoryId, setCategoryId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(CATEGORY_KEY) || 'meeting'
+    }
+    return 'meeting'
+  })
   const [seconds, setSeconds] = useState(0)
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -19,6 +28,11 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
   const analyserRef = useRef<AnalyserNode | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animFrameRef = useRef<number>(0)
+
+  const handleCategoryChange = (id: string) => {
+    setCategoryId(id)
+    localStorage.setItem(CATEGORY_KEY, id)
+  }
 
   const formatTime = (s: number) => {
     const h = Math.floor(s / 3600).toString().padStart(2, '0')
@@ -110,6 +124,7 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
     setUploading(true)
     const formData = new FormData()
     formData.append('audio', blob, 'recording.webm')
+    formData.append('category_id', categoryId)
     try {
       const res = await fetch('/api/record', { method: 'POST', body: formData })
       const data = await res.json()
@@ -213,6 +228,13 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
         )}
         {!isRecording && !audioBlob && (
           <>
+            <div className="mb-4">
+              <CategorySelect
+                value={categoryId}
+                onChange={handleCategoryChange}
+                className="w-full"
+              />
+            </div>
             <button onClick={startRecording} className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center mx-auto mb-4 transition-colors shadow-lg">
               <span className="w-5 h-5 rounded-full bg-white" />
             </button>
