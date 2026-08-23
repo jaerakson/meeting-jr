@@ -43,16 +43,34 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
 def _migrate(conn: sqlite3.Connection) -> None:
     """기존 DB에 누락된 컬럼을 추가한다."""
     existing = {row[1] for row in conn.execute("PRAGMA table_info(meetings)")}
-    for col, definition in [("notion_url", "TEXT"), ("notion_page_id", "TEXT")]:
+    for col, definition in [
+        ("notion_url", "TEXT"),
+        ("notion_page_id", "TEXT"),
+        ("category_id", "TEXT"),
+    ]:
         if col not in existing:
             conn.execute(f"ALTER TABLE meetings ADD COLUMN {col} {definition}")
     conn.commit()
 
 
 def init_db() -> None:
-    """meetings 테이블이 없으면 생성한다. 앱 시작 시 호출."""
+    """meetings/categories 테이블이 없으면 생성한다. 앱 시작 시 호출."""
+    from .categories import seed_categories
     conn = _get_conn()
     try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS categories (
+                id          TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                icon        TEXT NOT NULL DEFAULT '📋',
+                description TEXT NOT NULL DEFAULT '',
+                prompt      TEXT NOT NULL,
+                is_builtin  INTEGER NOT NULL DEFAULT 0,
+                sort_order  INTEGER NOT NULL DEFAULT 99,
+                created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+                updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+            )
+        """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS meetings (
                 id          TEXT PRIMARY KEY,
@@ -66,10 +84,10 @@ def init_db() -> None:
                 speakers    TEXT,
                 error_msg   TEXT,
                 notion_url  TEXT,
-                notion_page_id TEXT
+                notion_page_id TEXT,
+                category_id TEXT REFERENCES categories(id)
             )
         """)
-        _migrate(conn)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS settings (
                 key        TEXT PRIMARY KEY,
@@ -77,6 +95,8 @@ def init_db() -> None:
                 updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
             )
         """)
+        _migrate(conn)
+        seed_categories(conn)
         conn.commit()
     finally:
         conn.close()
@@ -90,6 +110,7 @@ def create_job(
     job_id: str,
     filename: str,
     title: Optional[str] = None,
+    category_id: Optional[str] = None,
 ) -> dict:
     """새 Job 레코드를 생성하고 dict로 반환."""
     now = datetime.now(timezone.utc).isoformat()
@@ -97,10 +118,10 @@ def create_job(
     try:
         conn.execute(
             """
-            INSERT INTO meetings (id, title, filename, status, created_at)
-            VALUES (?, ?, ?, 'pending', ?)
+            INSERT INTO meetings (id, title, filename, status, created_at, category_id)
+            VALUES (?, ?, ?, 'pending', ?, ?)
             """,
-            (job_id, title or filename, filename, now),
+            (job_id, title or filename, filename, now, category_id),
         )
         conn.commit()
         return get_job(job_id)
@@ -277,5 +298,101 @@ def search_jobs(q: str = "", page: int = 1, limit: int = 12) -> dict:
             "page": page,
             "pages": pages,
         }
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Categories CRUD
+# ---------------------------------------------------------------------------
+
+def get_categories() -> list[dict]:
+    """전체 카테고리 목록을 sort_order 오름차순으로 반환."""
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM categories ORDER BY sort_order ASC, created_at ASC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_category(cat_id: str) -> Optional[dict]:
+    """단일 카테고리 조회. 없으면 None."""
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM categories WHERE id = ?", (cat_id,)
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def create_category(
+    cat_id: str,
+    name: str,
+    icon: str,
+    description: str,
+    prompt: str,
+) -> dict:
+    """사용자 카테고리를 생성하고 반환."""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            """
+            INSERT INTO categories (id, name, icon, description, prompt, is_builtin, sort_order)
+            VALUES (?, ?, ?, ?, ?, 0, 99)
+            """,
+            (cat_id, name, icon, description, prompt),
+        )
+        conn.commit()
+        return get_category(cat_id)
+    finally:
+        conn.close()
+
+
+def update_category(cat_id: str, **kwargs) -> Optional[dict]:
+    """카테고리 필드를 선택적으로 갱신한다."""
+    allowed = {"name", "icon", "description", "prompt"}
+    fields = [(k, v) for k, v in kwargs.items() if k in allowed]
+    if not fields:
+        return get_category(cat_id)
+
+    set_clause = ", ".join(f"{k} = ?" for k, _ in fields)
+    values = [v for _, v in fields] + [cat_id]
+    conn = _get_conn()
+    try:
+        conn.execute(
+            f"UPDATE categories SET {set_clause}, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?",
+            values,
+        )
+        conn.commit()
+        return get_category(cat_id)
+    finally:
+        conn.close()
+
+
+def delete_category(cat_id: str) -> bool:
+    """카테고리 삭제. 성공 시 True."""
+    conn = _get_conn()
+    try:
+        cursor = conn.execute("DELETE FROM categories WHERE id = ?", (cat_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def update_job_category(job_id: str, category_id: str) -> None:
+    """job의 category_id를 갱신한다."""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE meetings SET category_id = ? WHERE id = ?",
+            (category_id, job_id),
+        )
+        conn.commit()
     finally:
         conn.close()
