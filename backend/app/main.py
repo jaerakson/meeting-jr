@@ -27,6 +27,13 @@ from .database import (
     update_job_title,
     update_job_notion,
     delete_job,
+    search_jobs,
+    get_categories,
+    get_category,
+    create_category,
+    update_category,
+    delete_category,
+    update_job_category,
 )
 from .job_queue import job_queue, start_worker, progress_store, update_progress
 from .settings_manager import get_settings_status, get_setting, set_setting, SETTING_KEYS
@@ -608,8 +615,85 @@ async def patch_settings(body: dict):
 @app.get("/api/meetings")
 async def list_meetings(q: str = "", page: int = 1, limit: int = 12):
     """제목+요약 검색 + 페이지네이션. 기존 /api/jobs 와 독립적으로 동작."""
-    from .database import search_jobs
     return search_jobs(q=q, page=page, limit=limit)
+
+
+# ---------------------------------------------------------------------------
+# Categories API
+# ---------------------------------------------------------------------------
+
+@app.get("/api/categories")
+async def list_categories():
+    """카테고리 목록 반환 (sort_order 오름차순)."""
+    return get_categories()
+
+
+@app.post("/api/categories")
+async def create_category_endpoint(body: dict):
+    """사용자 카테고리 생성."""
+    name = (body.get("name") or "").strip()
+    icon = (body.get("icon") or "📋").strip()
+    description = (body.get("description") or "").strip()
+    prompt = (body.get("prompt") or "").strip()
+
+    if not name:
+        raise HTTPException(status_code=422, detail="name이 비어 있습니다.")
+    if "{script}" not in prompt:
+        raise HTTPException(status_code=422, detail="prompt에 {script} 플레이스홀더가 필요합니다.")
+
+    cat_id = str(uuid.uuid4())
+    return create_category(cat_id, name, icon, description, prompt)
+
+
+@app.patch("/api/categories/{cat_id}")
+async def update_category_endpoint(cat_id: str, body: dict):
+    """카테고리 이름/아이콘/설명/프롬프트 수정."""
+    cat = get_category(cat_id)
+    if not cat:
+        raise HTTPException(status_code=404, detail="카테고리를 찾을 수 없습니다.")
+
+    kwargs = {}
+    if "name" in body:
+        kwargs["name"] = body["name"]
+    if "icon" in body:
+        kwargs["icon"] = body["icon"]
+    if "description" in body:
+        kwargs["description"] = body["description"]
+    if "prompt" in body:
+        p = body["prompt"]
+        if "{script}" not in p:
+            raise HTTPException(status_code=422, detail="prompt에 {script} 플레이스홀더가 필요합니다.")
+        kwargs["prompt"] = p
+
+    return update_category(cat_id, **kwargs)
+
+
+@app.delete("/api/categories/{cat_id}")
+async def delete_category_endpoint(cat_id: str):
+    """카테고리 삭제. is_builtin=1이면 거부."""
+    cat = get_category(cat_id)
+    if not cat:
+        raise HTTPException(status_code=404, detail="카테고리를 찾을 수 없습니다.")
+    if cat.get("is_builtin"):
+        raise HTTPException(status_code=422, detail="내장 카테고리는 삭제할 수 없습니다.")
+
+    delete_category(cat_id)
+    return {"status": "deleted", "id": cat_id}
+
+
+@app.post("/api/categories/{cat_id}/reset")
+async def reset_category_prompt(cat_id: str):
+    """내장 카테고리 프롬프트를 DEFAULT로 복원."""
+    from .categories import DEFAULT_PROMPTS
+    cat = get_category(cat_id)
+    if not cat:
+        raise HTTPException(status_code=404, detail="카테고리를 찾을 수 없습니다.")
+    if not cat.get("is_builtin"):
+        raise HTTPException(status_code=422, detail="사용자 카테고리는 초기화할 수 없습니다.")
+    if cat_id not in DEFAULT_PROMPTS:
+        raise HTTPException(status_code=422, detail="해당 카테고리의 기본 프롬프트가 없습니다.")
+
+    return update_category(cat_id, prompt=DEFAULT_PROMPTS[cat_id])
 
 
 # ---------------------------------------------------------------------------
@@ -617,7 +701,8 @@ async def list_meetings(q: str = "", page: int = 1, limit: int = 12):
 # ---------------------------------------------------------------------------
 
 def _save_speakers(speaker_map: dict) -> None:
-    """speaker_map의 이름들을 speakers.json에 병합 저장한다."""
+    """speaker_map의 이름들을 speakers.json에 병합 저장한다.
+    key == value인 항목(UNKNOWN → UNKNOWN 등)은 저장하지 않는다."""
     existing: dict = {}
     if SPEAKERS_FILE.exists():
         try:
@@ -625,7 +710,10 @@ def _save_speakers(speaker_map: dict) -> None:
         except (json.JSONDecodeError, IOError):
             existing = {}
 
-    existing.update(speaker_map)
+    for speaker_id, name in speaker_map.items():
+        if name and name.strip() and name.strip() != speaker_id:
+            existing[speaker_id] = name.strip()
+
     SPEAKERS_FILE.write_text(
         json.dumps(existing, ensure_ascii=False, indent=2),
         encoding="utf-8",
