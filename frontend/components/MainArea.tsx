@@ -381,6 +381,15 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
                   Notion에서 보기 ↗
                 </a>
               )}
+              {job.status === 'done' && (
+                <button
+                  onClick={() => window.open(`/print/${job.id}`, '_blank')}
+                  className="text-xs md:text-sm px-2 md:px-3 py-1.5 border rounded-lg hover:bg-gray-50 text-gray-600 flex items-center gap-1.5 transition-colors"
+                  title="PDF로 저장"
+                >
+                  PDF
+                </button>
+              )}
               <button
                 onClick={handleExportNotion}
                 disabled={notionLoading}
