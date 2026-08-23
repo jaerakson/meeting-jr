@@ -16,6 +16,8 @@ function markdownToHtml(md: string): string {
     .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
     .replace(/^(\|.+\|)$/gm, (line) => {
       const cells = line.split('|').filter(Boolean).map(c => c.trim())
+      // 구분자 행 (| --- | --- |) 건너뜀
+      if (cells.every(c => /^[-: ]+$/.test(c))) return ''
       return '<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>'
     })
     .replace(/(<tr>[\s\S]*?<\/tr>\n?)+/gm, (block) => `<table>${block}</table>`)
@@ -64,7 +66,7 @@ export default function PrintPage({ params }: { params: Promise<{ id: string }> 
   }, [id])
 
   useEffect(() => {
-    if (!loading && job) {
+    if (!loading && job && job.status === 'done') {
       setTimeout(() => window.print(), 500)
     }
   }, [loading, job])
