@@ -1,9 +1,0 @@
-- generic [ref=f2e2]:
-  - complementary [ref=f2e3]:
-    - heading "Meeting Jr." [level=1] [ref=f2e5]
-    - button "새 회의 녹음" [ref=f2e7] [cursor=pointer]
-    - paragraph [ref=f2e10]: 아직 회의가 없습니다.
-  - generic [ref=f2e13]:
-    - generic [ref=f2e14]: 00:00:00
-    - button [ref=f2e16] [cursor=pointer]
-    - paragraph [ref=f2e18]: 버튼을 눌러 녹음을 시작하세요

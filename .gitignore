@@ -33,3 +33,13 @@ backend/speakers.json
 # IDE
 .vscode/
 .idea/
+
+# Playwright MCP 임시 파일
+.playwright-mcp/
+test-*.png
+
+# TypeScript 빌드 캐시
+*.tsbuildinfo
+
+# Superpowers 임시 파일
+.superpowers/
