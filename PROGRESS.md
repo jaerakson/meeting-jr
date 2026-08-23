@@ -13,8 +13,8 @@
     - 수정: children을 table 오브젝트 내부로 이동 (`table.children`)
     - 영향: 설교요약 등 표가 포함된 카테고리 Notion 업데이트 정상 동작
   - `backend/tests/test_notion_sync.py`: 테이블 구조 변경에 맞게 테스트 수정
-- 관련 커밋: be79908..0a13a26 (3개)
-- 푸시 여부: 미푸시 (git remote 미설정)
+- 관련 커밋: be79908..2ff5450 (gitignore 포함)
+- 푸시 여부: origin/main 푸시 완료 (https://github.com/jaerakson/meeting-jr)
 
 ## 2026-08-23 (작업 PC: 로컬) — 세션 4
 - 브랜치: main
