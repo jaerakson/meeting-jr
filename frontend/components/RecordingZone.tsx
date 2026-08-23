@@ -8,9 +8,12 @@ interface Props {
 }
 
 const CATEGORY_KEY = 'meeting-jr-last-category'
+const ALLOWED_EXTENSIONS = '.mp3,.m4a,.wav,.mp4,.webm,.ogg,.txt'
+const ALLOWED_DISPLAY = 'mp3, m4a, wav, mp4, webm, ogg, txt'
 
 export default function RecordingZone({ onRecordingComplete }: Props) {
   const [claudeStatus, setClaudeStatus] = useState<ClaudeStatus | null>(null)
+  const [activeTab, setActiveTab] = useState<'record' | 'upload'>('record')
   const [isRecording, setIsRecording] = useState(false)
   const [categoryId, setCategoryId] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -22,12 +25,16 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadDone, setUploadDone] = useState(false)
+  const [fileUploading, setFileUploading] = useState(false)
+  const [fileError, setFileError] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animFrameRef = useRef<number>(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleCategoryChange = (id: string) => {
     setCategoryId(id)
@@ -147,6 +154,40 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
     URL.revokeObjectURL(url)
   }
 
+  const uploadFile = async (file: File) => {
+    setFileUploading(true)
+    setFileError(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('category_id', categoryId)
+      const res = await fetch('/api/upload', { method: 'POST', body: formData })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || '업로드 실패')
+      }
+      const data = await res.json()
+      onRecordingComplete(data.job_id)
+    } catch (e: any) {
+      setFileError(e.message)
+    } finally {
+      setFileUploading(false)
+    }
+  }
+
+  const handleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file) uploadFile(file)
+  }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) uploadFile(file)
+    e.target.value = ''
+  }
+
   useEffect(() => {
     fetch('/api/settings/claude-status')
       .then(r => r.json())
@@ -219,14 +260,74 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
   return (
     <div className="flex-1 flex items-center justify-center bg-gray-50 p-4">
       <div className="bg-white rounded-2xl shadow-sm border p-6 md:p-10 w-full max-w-lg text-center">
-        <div className="flex items-center justify-center gap-3 mb-6">
-          {isRecording && <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse flex-shrink-0" />}
-          <span className="text-4xl md:text-5xl font-mono font-light text-gray-800 tracking-widest">{formatTime(seconds)}</span>
+        {/* Tab switcher */}
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-6">
+          <button
+            onClick={() => setActiveTab('record')}
+            className={`flex-1 py-2 px-4 rounded-md text-sm transition-colors ${
+              activeTab === 'record'
+                ? 'bg-white shadow-sm text-gray-800 font-medium'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            녹음
+          </button>
+          <button
+            onClick={() => setActiveTab('upload')}
+            className={`flex-1 py-2 px-4 rounded-md text-sm transition-colors ${
+              activeTab === 'upload'
+                ? 'bg-white shadow-sm text-gray-800 font-medium'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            파일 업로드
+          </button>
         </div>
-        {isRecording && (
-          <canvas ref={canvasRef} width={400} height={60} className="w-full mb-6 rounded-lg bg-gray-50" />
+
+        {/* Recording tab */}
+        {activeTab === 'record' && (
+          <>
+            <div className="flex items-center justify-center gap-3 mb-6">
+              {isRecording && <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse flex-shrink-0" />}
+              <span className="text-4xl md:text-5xl font-mono font-light text-gray-800 tracking-widest">{formatTime(seconds)}</span>
+            </div>
+            {isRecording && (
+              <canvas ref={canvasRef} width={400} height={60} className="w-full mb-6 rounded-lg bg-gray-50" />
+            )}
+            {!isRecording && !audioBlob && (
+              <>
+                <div className="mb-4">
+                  <CategorySelect
+                    value={categoryId}
+                    onChange={handleCategoryChange}
+                    className="w-full"
+                  />
+                </div>
+                <button onClick={startRecording} className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center mx-auto mb-4 transition-colors shadow-lg">
+                  <span className="w-5 h-5 rounded-full bg-white" />
+                </button>
+                <p className="text-sm text-gray-400">버튼을 눌러 녹음을 시작하세요</p>
+              </>
+            )}
+            {isRecording && (
+              <button onClick={stopRecording} className="w-16 h-16 rounded-full bg-gray-700 hover:bg-gray-800 text-white flex items-center justify-center mx-auto mb-4 transition-colors shadow-lg">
+                <span className="w-5 h-5 rounded bg-white" />
+              </button>
+            )}
+            {audioBlob && (
+              <div className="space-y-3 mt-2">
+                {uploading && <p className="text-blue-500 text-sm animate-pulse">서버로 전송 중...</p>}
+                {uploadDone && <p className="text-green-600 text-sm font-medium">전송 완료 -- 처리 중...</p>}
+                <button onClick={downloadAudio} className="text-sm px-4 py-2 border rounded-lg hover:bg-gray-50 text-gray-600 transition-colors">
+                  ↓ 음성 다운로드 (.webm)
+                </button>
+              </div>
+            )}
+          </>
         )}
-        {!isRecording && !audioBlob && (
+
+        {/* File upload tab */}
+        {activeTab === 'upload' && (
           <>
             <div className="mb-4">
               <CategorySelect
@@ -235,25 +336,45 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
                 className="w-full"
               />
             </div>
-            <button onClick={startRecording} className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center mx-auto mb-4 transition-colors shadow-lg">
-              <span className="w-5 h-5 rounded-full bg-white" />
-            </button>
-            <p className="text-sm text-gray-400">버튼을 눌러 녹음을 시작하세요</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ALLOWED_EXTENSIONS}
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <div
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleFileDrop}
+              onClick={() => !fileUploading && fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-xl p-8 cursor-pointer transition-colors ${
+                isDragging
+                  ? 'border-blue-400 bg-blue-50'
+                  : 'border-gray-300 hover:border-gray-400 bg-gray-50'
+              }`}
+            >
+              {fileUploading ? (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-sm text-blue-600 font-medium">업로드 중...</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-3">
+                  <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">파일을 여기에 끌어다 놓거나 클릭하세요</p>
+                    <p className="text-xs text-gray-400 mt-1">지원 형식: {ALLOWED_DISPLAY}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+            {fileError && (
+              <p className="text-sm text-red-500 mt-3">{fileError}</p>
+            )}
           </>
-        )}
-        {isRecording && (
-          <button onClick={stopRecording} className="w-16 h-16 rounded-full bg-gray-700 hover:bg-gray-800 text-white flex items-center justify-center mx-auto mb-4 transition-colors shadow-lg">
-            <span className="w-5 h-5 rounded bg-white" />
-          </button>
-        )}
-        {audioBlob && (
-          <div className="space-y-3 mt-2">
-            {uploading && <p className="text-blue-500 text-sm animate-pulse">서버로 전송 중...</p>}
-            {uploadDone && <p className="text-green-600 text-sm font-medium">전송 완료 -- 처리 중...</p>}
-            <button onClick={downloadAudio} className="text-sm px-4 py-2 border rounded-lg hover:bg-gray-50 text-gray-600 transition-colors">
-              ↓ 음성 다운로드 (.webm)
-            </button>
-          </div>
         )}
       </div>
     </div>

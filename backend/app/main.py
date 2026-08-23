@@ -50,6 +50,8 @@ OUTPUT_DIR = BASE_DIR / "output"
 SPEAKERS_FILE = BASE_DIR / "speakers.json"
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "500"))
 AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".webm", ".mp4", ".ogg"}
+TEXT_EXTENSIONS = {".txt"}
+ALLOWED_EXTENSIONS = AUDIO_EXTENSIONS | TEXT_EXTENSIONS
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +134,71 @@ async def record_audio(
     effective_category_id = category_id if valid_cat else "meeting"
     create_job(job_id, filename, title=title, category_id=effective_category_id)
     await job_queue.put(job_id)
+
+    return {"job_id": job_id, "filename": filename}
+
+
+# ---------------------------------------------------------------------------
+# 1-b) POST /api/upload  — 오디오/텍스트 파일 업로드
+# ---------------------------------------------------------------------------
+
+@app.post("/api/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    category_id: str = Form("meeting"),
+):
+    """오디오 또는 텍스트 파일을 업로드하여 처리 큐에 등록한다."""
+    original_filename = file.filename or "unknown"
+    ext = Path(original_filename).suffix.lower()
+
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=422,
+            detail="지원하지 않는 파일 형식입니다. 허용: mp3, m4a, wav, mp4, webm, ogg, txt",
+        )
+
+    max_bytes = MAX_UPLOAD_MB * 1024 * 1024
+    total_size = 0
+
+    job_id = str(uuid.uuid4())
+    filename = f"{job_id}{ext}"
+    save_path = INPUT_DIR / filename
+
+    async with aiofiles.open(save_path, "wb") as f:
+        while chunk := await file.read(1024 * 1024):
+            total_size += len(chunk)
+            if total_size > max_bytes:
+                save_path.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"파일 크기가 {MAX_UPLOAD_MB}MB를 초과합니다.",
+                )
+            await f.write(chunk)
+
+    if total_size == 0:
+        save_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=422, detail="파일이 비어 있습니다.")
+
+    _custom = get_setting("DEFAULT_MEETING_TITLE")
+    title = _custom if _custom else "회의록"
+    valid_cat = get_category(category_id) if category_id else None
+    effective_category_id = category_id if valid_cat else "meeting"
+
+    if ext in AUDIO_EXTENSIONS:
+        create_job(job_id, filename, title=title, category_id=effective_category_id)
+        await job_queue.put(job_id)
+    elif ext in TEXT_EXTENSIONS:
+        transcript_content = save_path.read_text(encoding="utf-8")
+        create_job(job_id, filename, title=title, category_id=effective_category_id)
+        update_job_result(job_id, transcript=transcript_content)
+        update_job_status(job_id, "awaiting_edit")
+        update_progress(job_id, {
+            "stage": "awaiting_edit",
+            "progress": 100,
+            "message": "편집 대기 중",
+            "transcript": transcript_content,
+            "speakers": {},
+        })
 
     return {"job_id": job_id, "filename": filename}
 
