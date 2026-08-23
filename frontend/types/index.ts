@@ -8,6 +8,16 @@ export type JobStatus =
   | 'done'
   | 'error'
 
+export interface Category {
+  id: string
+  name: string
+  icon: string
+  description: string
+  prompt: string
+  is_builtin: number
+  sort_order: number
+}
+
 export interface Job {
   id: string
   title: string
@@ -21,6 +31,9 @@ export interface Job {
   error_msg?: string
   notion_url?: string
   notion_page_id?: string
+  category_id?: string
+  category_icon?: string
+  category_name?: string
 }
 
 export interface ProgressEvent {
