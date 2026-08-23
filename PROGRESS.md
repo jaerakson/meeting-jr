@@ -1,13 +1,26 @@
+## 2026-08-24 (작업 PC: 로컬) — 세션 7
+- 브랜치: main
+- 완료: 파일 업로드 기능 E2E 테스트 완료
+- 현재 상태: 전체 기능 정상, 서버 실행 중 (백엔드 8000, 프론트 3000)
+- 다음 할 일: 새 기능 논의 or 배포
+- E2E 테스트 결과:
+  - txt 파일 업로드 → awaiting_edit 직진입 → TranscriptEditor 정상 렌더링 ✅
+  - 화자 분리 (SPEAKER_00/01) + 타임스탬프 파싱 정상 ✅
+  - 사이드바 "편집 대기 중" 뱃지 표시 ✅
+  - 백엔드 테스트 56/56 PASS ✅
+- 관련 커밋: 6e231ee (파일 업로드), ede4423 (PROGRESS 세션 6)
+- 푸시 여부: origin/main 푸시 완료
+
 ## 2026-08-24 (작업 PC: 로컬) — 세션 6
 - 브랜치: main
-- 완료: 파일 업로드 기능 (오디오/txt)
+- 완료: 파일 업로드 기능 (오디오/txt) + 코드 리뷰 버그 3개 수정
 - 현재 상태: 서버 미실행 (코드만 수정), 모든 테스트 통과 (56/56)
-- 다음 할 일: 서버 실행 후 E2E 테스트
 - 구현 내용:
-  - backend/app/main.py: POST /api/upload 엔드포인트 (오디오→STT파이프라인, txt→awaiting_edit 직진입)
+  - backend/app/main.py: POST /api/upload 엔드포인트 (오디오→STT파이프라인, txt→awaiting_edit 직진입), limit 상한 100, SSE 연결 해제 감지
+  - backend/app/summarizer.py: self-referential 화자 매핑 필터링 버그 수정
   - backend/tests/test_upload.py: 업로드 테스트 4개 (56개 전체 통과)
   - frontend/components/RecordingZone.tsx: 녹음/파일업로드 탭 UI, 드래그앤드롭 + 클릭 업로드
-- 관련 커밋: 6e231ee
+- 관련 커밋: 6e231ee, e699d80
 - 푸시 여부: origin/main 푸시 완료
 
 ## 2026-08-24 (작업 PC: 로컬) — 세션 5
