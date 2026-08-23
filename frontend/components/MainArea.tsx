@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Job } from '@/types'
+import { Job, Category } from '@/types'
 import RecordingZone from './RecordingZone'
+import CategorySelect from './CategorySelect'
 import ProgressCard from './ProgressCard'
 import TranscriptEditor from './TranscriptEditor'
 import AudioPlayer from './AudioPlayer'
@@ -30,15 +31,23 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   const [isEditingTranscript, setIsEditingTranscript] = useState(false)
   const [localTranscript, setLocalTranscript] = useState('')
   const [resummaryLoading, setResummaryLoading] = useState(false)
+  const [showResummarizeModal, setShowResummarizeModal] = useState(false)
+  const [resummarizeCategory, setResummarizeCategory] = useState<string>('meeting')
+  const [categories, setCategories] = useState<Category[]>([])
 
   useEffect(() => {
     if (job) setTitleValue(job.title || '')
   }, [job?.id, job?.title])
 
   useEffect(() => {
+    fetch('/api/categories').then(r => r.json()).then(setCategories).catch(() => {})
+  }, [])
+
+  useEffect(() => {
     setIsEditingTranscript(false)
     setLocalTranscript('')
     setNotionUrl(job?.notion_url ?? null)
+    setResummarizeCategory(job?.category_id || 'meeting')
   }, [job?.id])
 
   useEffect(() => {
@@ -102,7 +111,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
     }
   }
 
-  const handleResummarize = async () => {
+  const handleResummarize = async (categoryId?: string) => {
     if (!job) return
     setResummaryLoading(true)
     try {
@@ -110,10 +119,15 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
       await fetch(`/api/jobs/${job.id}/finalize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript: localTranscript || job.transcript, speaker_map }),
+        body: JSON.stringify({
+          transcript: localTranscript || job.transcript,
+          speaker_map,
+          category_id: categoryId || job.category_id || 'meeting',
+        }),
       })
       setIsEditingTranscript(false)
       setLocalTranscript('')
+      setShowResummarizeModal(false)
       onJobsChange()
     } catch {
       alert('재요약 요청에 실패했습니다.')
@@ -264,7 +278,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
                         {resummaryLoading ? '저장 중...' : '저장'}
                       </button>
                       <button
-                        onClick={handleResummarize}
+                        onClick={() => { setResummarizeCategory(job?.category_id || 'meeting'); setShowResummarizeModal(true) }}
                         disabled={resummaryLoading}
                         className="text-xs px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md font-medium transition-colors"
                       >
@@ -348,6 +362,14 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
                 {titleValue || '회의'}
               </h1>
             )}
+            {job.status === 'done' && (() => {
+              const cat = categories.find(c => c.id === (job.category_id || 'meeting'))
+              return cat ? (
+                <span className="hidden md:inline-flex text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full flex-shrink-0 items-center gap-1">
+                  {cat.icon} {cat.name}
+                </span>
+              ) : null
+            })()}
             <div className="flex items-center gap-2 flex-shrink-0">
               {notionUrl && (
                 <a
@@ -383,6 +405,34 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
         )}
       </div>
       {renderContent()}
+      {showResummarizeModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-80 space-y-4">
+            <h3 className="font-semibold text-gray-800">재요약 카테고리 선택</h3>
+            <p className="text-sm text-gray-500">재요약에 사용할 카테고리를 선택하세요.</p>
+            <CategorySelect
+              value={resummarizeCategory}
+              onChange={setResummarizeCategory}
+              className="w-full"
+            />
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => handleResummarize(resummarizeCategory)}
+                disabled={resummaryLoading}
+                className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg text-sm font-medium"
+              >
+                {resummaryLoading ? '처리 중...' : '재요약 실행'}
+              </button>
+              <button
+                onClick={() => setShowResummarizeModal(false)}
+                className="w-full py-2 text-sm text-gray-400 hover:text-gray-600"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showNotionConfirm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl p-6 w-80 space-y-4">
