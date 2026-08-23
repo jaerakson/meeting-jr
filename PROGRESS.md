@@ -1,3 +1,16 @@
+## 2026-08-24 (작업 PC: 로컬) — 세션 8
+- 브랜치: main
+- 완료: 회의 목록 카테고리/날짜 필터 기능
+- 현재 상태: 서버 실행 중, 테스트 59/59 PASS
+- 다음 할 일: 새 기능 논의
+- 구현 내용:
+  - backend/app/database.py: search_jobs()에 category_id, date_from, date_to 필터 추가 (SQLite DATE() 함수 사용)
+  - backend/app/main.py: /api/meetings에 필터 쿼리 파라미터 추가
+  - backend/tests/test_search_jobs.py: 카테고리 필터, 날짜 필터, 복합 필터 테스트 3개 추가
+  - frontend/app/meetings/page.tsx: 카테고리 드롭다운 + 날짜 범위(from/to) 필터 UI, URL 쿼리 동기화, 필터 초기화 버튼
+- 관련 커밋: 7cdd585
+- 푸시 여부: origin/main 푸시 완료
+
 ## 2026-08-24 (작업 PC: 로컬) — 세션 7
 - 브랜치: main
 - 완료: 파일 업로드 기능 E2E 테스트 완료
