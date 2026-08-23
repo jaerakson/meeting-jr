@@ -710,10 +710,17 @@ async def patch_settings(body: dict):
 # ---------------------------------------------------------------------------
 
 @app.get("/api/meetings")
-async def list_meetings(q: str = "", page: int = 1, limit: int = 12):
+async def list_meetings(
+    q: str = "",
+    page: int = 1,
+    limit: int = 12,
+    category_id: str = "",
+    date_from: str = "",
+    date_to: str = "",
+):
+    """제목+요약 검색 + 카테고리/날짜 필터 + 페이지네이션."""
     limit = min(limit, 100)
-    """제목+요약 검색 + 페이지네이션. 기존 /api/jobs 와 독립적으로 동작."""
-    return search_jobs(q=q, page=page, limit=limit)
+    return search_jobs(q=q, page=page, limit=limit, category_id=category_id, date_from=date_from, date_to=date_to)
 
 
 # ---------------------------------------------------------------------------

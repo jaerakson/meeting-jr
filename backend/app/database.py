@@ -259,8 +259,15 @@ def delete_job(job_id: str) -> bool:
         conn.close()
 
 
-def search_jobs(q: str = "", page: int = 1, limit: int = 12) -> dict:
-    """제목+요약 LIKE 검색 + 페이지네이션.
+def search_jobs(
+    q: str = "",
+    page: int = 1,
+    limit: int = 12,
+    category_id: str = "",
+    date_from: str = "",
+    date_to: str = "",
+) -> dict:
+    """제목+요약 LIKE 검색 + 카테고리/날짜 필터 + 페이지네이션.
 
     반환: {"items": list[dict], "total": int, "page": int, "pages": int}
     """
@@ -269,27 +276,37 @@ def search_jobs(q: str = "", page: int = 1, limit: int = 12) -> dict:
     offset = (page - 1) * limit
     conn = _get_conn()
     try:
+        conditions: list[str] = []
+        params: list = []
+
         if q:
+            conditions.append("(title LIKE ? OR summary LIKE ?)")
             pattern = f"%{q}%"
-            rows = conn.execute(
-                """
-                SELECT * FROM meetings
-                WHERE (title LIKE ? OR summary LIKE ?)
-                ORDER BY created_at DESC
-                LIMIT ? OFFSET ?
-                """,
-                (pattern, pattern, limit, offset),
-            ).fetchall()
-            total: int = conn.execute(
-                "SELECT COUNT(*) FROM meetings WHERE (title LIKE ? OR summary LIKE ?)",
-                (pattern, pattern),
-            ).fetchone()[0]
-        else:
-            rows = conn.execute(
-                "SELECT * FROM meetings ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                (limit, offset),
-            ).fetchall()
-            total = conn.execute("SELECT COUNT(*) FROM meetings").fetchone()[0]
+            params.extend([pattern, pattern])
+
+        if category_id:
+            conditions.append("category_id = ?")
+            params.append(category_id)
+
+        if date_from:
+            # DATE() 함수로 ISO 8601 timezone suffix 무관하게 날짜만 비교
+            conditions.append("DATE(created_at) >= ?")
+            params.append(date_from[:10])
+
+        if date_to:
+            conditions.append("DATE(created_at) <= ?")
+            params.append(date_to[:10])
+
+        where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+        rows = conn.execute(
+            f"SELECT * FROM meetings {where_clause} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            params + [limit, offset],
+        ).fetchall()
+        total: int = conn.execute(
+            f"SELECT COUNT(*) FROM meetings {where_clause}",
+            params,
+        ).fetchone()[0]
 
         pages = max(1, (total + limit - 1) // limit)
         return {
