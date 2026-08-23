@@ -1,3 +1,21 @@
+## 2026-08-24 (작업 PC: 로컬) — 세션 5
+- 브랜치: main
+- 완료: 카테고리 시스템 E2E 테스트 + 버그 2개 수정
+- 현재 상태: 서버 실행 중 (백엔드 8000, 프론트 3000), 모든 기능 정상
+- 다음 할 일: 추가 테스트 또는 새 기능 논의
+- 구현 내용:
+  - Playwright로 UI E2E 검증 (RecordingZone 카테고리 드롭다운 5개, 설정 모달 3탭, 카테고리 인라인 편집)
+  - `frontend/components/TranscriptEditor.tsx`: suggestedNames 버그 수정
+    - 기존: speakers.json 이전 매핑이 이름 입력란에 자동 채워져 의도치 않게 적용됨
+    - 수정: names 초기값 빈 문자열, suggestedNames는 placeholder 힌트로만 표시
+  - `backend/app/notion_sync.py`: Notion 테이블 블록 구조 버그 수정
+    - 기존: table_row children을 블록 최상위 children에 넣어 Notion API 422 오류
+    - 수정: children을 table 오브젝트 내부로 이동 (`table.children`)
+    - 영향: 설교요약 등 표가 포함된 카테고리 Notion 업데이트 정상 동작
+  - `backend/tests/test_notion_sync.py`: 테이블 구조 변경에 맞게 테스트 수정
+- 관련 커밋: be79908..0a13a26 (3개)
+- 푸시 여부: 미푸시 (git remote 미설정)
+
 ## 2026-08-23 (작업 PC: 로컬) — 세션 4
 - 브랜치: main
 - 완료: 카테고리 시스템 전체 구현 (8개 Task, SDD 방식)
