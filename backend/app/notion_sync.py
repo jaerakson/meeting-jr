@@ -23,9 +23,11 @@ logger = logging.getLogger(__name__)
 # 섹션 키워드 → (h2 색상, 이모지)
 _SECTION_STYLES: dict[str, tuple[str, str]] = {
     "핵심 요약":      ("blue",   "💡"),
+    "핵심 메시지":    ("blue",   "💡"),
     "주요 논의":      ("blue",   "🗣️"),
     "주요 결정":      ("green",  "✅"),
     "액션 아이템":    ("orange", "📌"),
+    "실행 계획":      ("orange", "📌"),
     "이슈":           ("red",    "⚠️"),
     "리스크":         ("red",    "⚠️"),
 }
@@ -39,8 +41,22 @@ def _get_section_style(title: str) -> tuple[str, str]:
 
 
 def _rich_text(text: str) -> list[dict]:
-    """Notion rich_text 배열을 생성한다."""
-    return [{"type": "text", "text": {"content": text}}]
+    """Notion rich_text 배열 생성. **bold** 인라인 변환 지원."""
+    result: list[dict] = []
+    bold_re = re.compile(r'\*\*(.+?)\*\*')
+    last = 0
+    for m in bold_re.finditer(text):
+        if m.start() > last:
+            result.append({"type": "text", "text": {"content": text[last:m.start()]}})
+        result.append({
+            "type": "text",
+            "text": {"content": m.group(1)},
+            "annotations": {"bold": True},
+        })
+        last = m.end()
+    if last < len(text):
+        result.append({"type": "text", "text": {"content": text[last:]}})
+    return result if result else [{"type": "text", "text": {"content": text}}]
 
 
 def _spacer() -> dict:
@@ -52,22 +68,71 @@ def md_to_notion_blocks(md_text: str) -> list[dict]:
     마크다운 문자열을 Notion API 블록 배열로 변환한다.
 
     지원 문법:
-      - # heading   -> heading_1
-      - ## heading  -> heading_2 (섹션별 색상 + 이모지)
-      - ### heading -> heading_3
-      - - [ ] text  -> to_do (unchecked)
-      - - [x] text  -> to_do (checked)
-      - - text      -> bulleted_list_item
-      - 일반 텍스트  -> paragraph (핵심 요약 섹션 내에서는 callout)
-      - 빈 줄       -> 무시
-      - ---         -> divider
+      # heading   -> heading_1
+      ## heading  -> heading_2 (섹션별 색상 + 이모지)
+      ### heading -> heading_3
+      - [ ] text  -> to_do (unchecked)
+      - [x] text  -> to_do (checked)
+      - text      -> bulleted_list_item
+      1. text     -> numbered_list_item
+      > text      -> quote
+      | col |...| -> table (여러 줄 연속)
+      ---         -> divider
+      일반 텍스트  -> paragraph (핵심 요약/메시지 섹션 내에서는 callout)
     """
     blocks: list[dict] = []
     lines = md_text.split("\n")
     current_section: str = ""
+    table_lines: list[str] = []
+
+    def flush_table() -> None:
+        """누적된 테이블 라인을 Notion table 블록으로 변환."""
+        nonlocal table_lines
+        if not table_lines:
+            return
+        rows: list[list[str]] = []
+        for row_line in table_lines:
+            stripped = row_line.strip()
+            # 구분선 행 (|---|---| 패턴) 건너뜀
+            if re.match(r'^\|[-:\s|]+\|$', stripped):
+                continue
+            cells = [c.strip() for c in stripped.strip("|").split("|")]
+            rows.append(cells)
+        table_lines = []
+        if not rows:
+            return
+        col_count = max(len(r) for r in rows)
+        children = []
+        for cells in rows:
+            padded = cells + [""] * (col_count - len(cells))
+            children.append({
+                "object": "block",
+                "type": "table_row",
+                "table_row": {
+                    "cells": [[{"type": "text", "text": {"content": c}}] for c in padded],
+                },
+            })
+        blocks.append({
+            "object": "block",
+            "type": "table",
+            "table": {
+                "table_width": col_count,
+                "has_column_header": True,
+                "has_row_header": False,
+            },
+            "children": children,
+        })
 
     for line in lines:
         stripped = line.strip()
+
+        # 테이블 행: | 로 시작하고 끝남
+        if stripped.startswith("|") and stripped.endswith("|"):
+            table_lines.append(stripped)
+            continue
+
+        # 비테이블 행 → 누적된 테이블 플러시
+        flush_table()
 
         # 빈 줄 무시
         if not stripped:
@@ -77,6 +142,16 @@ def md_to_notion_blocks(md_text: str) -> list[dict]:
         if re.match(r"^-{3,}$", stripped):
             blocks.append({"object": "block", "type": "divider", "divider": {}})
             current_section = ""
+            continue
+
+        # 인용 (> text)
+        quote_match = re.match(r"^>\s+(.+)$", stripped)
+        if quote_match:
+            blocks.append({
+                "object": "block",
+                "type": "quote",
+                "quote": {"rich_text": _rich_text(quote_match.group(1))},
+            })
             continue
 
         # 헤딩 (### 먼저 검사)
@@ -115,7 +190,7 @@ def md_to_notion_blocks(md_text: str) -> list[dict]:
             })
             continue
 
-        # 체크박스 (to_do) — checked
+        # 체크박스 — checked
         todo_checked = re.match(r"^-\s+\[x\]\s+(.+)$", stripped, re.IGNORECASE)
         if todo_checked:
             blocks.append({
@@ -128,7 +203,7 @@ def md_to_notion_blocks(md_text: str) -> list[dict]:
             })
             continue
 
-        # 체크박스 (to_do) — unchecked
+        # 체크박스 — unchecked
         todo_unchecked = re.match(r"^-\s+\[\s?\]\s+(.+)$", stripped)
         if todo_unchecked:
             blocks.append({
@@ -153,8 +228,20 @@ def md_to_notion_blocks(md_text: str) -> list[dict]:
             })
             continue
 
-        # 일반 텍스트: 핵심 요약 섹션 → callout, 나머지 → paragraph
-        if "핵심 요약" in current_section:
+        # 번호 리스트 (1. / 2. / ...)
+        numbered_match = re.match(r"^\d+\.\s+(.+)$", stripped)
+        if numbered_match:
+            blocks.append({
+                "object": "block",
+                "type": "numbered_list_item",
+                "numbered_list_item": {
+                    "rich_text": _rich_text(numbered_match.group(1)),
+                },
+            })
+            continue
+
+        # 일반 텍스트: 핵심 요약/핵심 메시지 섹션 → callout, 나머지 → paragraph
+        if "핵심 요약" in current_section or "핵심 메시지" in current_section:
             blocks.append({
                 "object": "block",
                 "type": "callout",
@@ -171,6 +258,7 @@ def md_to_notion_blocks(md_text: str) -> list[dict]:
                 "paragraph": {"rich_text": _rich_text(stripped)},
             })
 
+    flush_table()  # 파일 마지막이 테이블인 경우 처리
     return blocks
 
 
@@ -178,16 +266,25 @@ def md_to_notion_blocks(md_text: str) -> list[dict]:
 # Notion 페이지 생성
 # ---------------------------------------------------------------------------
 
-async def export_to_notion(title: str, summary_md: str) -> dict:
+async def export_to_notion(
+    title: str,
+    summary_md: str,
+    upload_ts: str = "",
+    category_icon: str = "📋",
+    category_name: str = "회의록",
+) -> dict:
     """
     마크다운 회의록을 Notion 데이터베이스에 등록한다.
 
     Args:
         title: 페이지 제목.
         summary_md: 마크다운 형식 회의록 문자열.
+        upload_ts: 업로드 일시 문자열 (YYYY-MM-DD HH:MM).
+        category_icon: 카테고리 이모지 아이콘.
+        category_name: 카테고리 이름.
 
     Returns:
-        {"url": "생성된 Notion 페이지 URL"}.
+        {"url": "생성된 Notion 페이지 URL", "page_id": "..."}.
 
     Raises:
         ValueError: NOTION_API_KEY 또는 NOTION_DATABASE_ID 미설정 시.
@@ -209,11 +306,15 @@ async def export_to_notion(title: str, summary_md: str) -> dict:
 
     notion = AsyncClient(auth=api_key)
 
-    # 마크다운 -> Notion 블록 변환
-    children = md_to_notion_blocks(summary_md)
+    # 카테고리 헤더 prepend
+    header = (
+        f"📤 업로드 일시: {upload_ts}\n"
+        f"📂 카테고리: {category_icon} {category_name}\n\n"
+        f"────────────────────────────────────\n\n"
+    )
+    full_md = header + summary_md
+    children = md_to_notion_blocks(full_md)
 
-    # Notion API는 한 번에 최대 100개 블록만 추가 가능
-    # 초과 시 분할 처리
     first_batch = children[:100]
     remaining = children[100:]
 
@@ -228,7 +329,7 @@ async def export_to_notion(title: str, summary_md: str) -> dict:
 
         page = await notion.pages.create(
             parent={"database_id": database_id},
-            icon={"type": "emoji", "emoji": "📋"},
+            icon={"type": "emoji", "emoji": category_icon or "📋"},
             properties={
                 title_prop_name: {
                     "title": [{"text": {"content": title}}],
@@ -268,7 +369,14 @@ async def export_to_notion(title: str, summary_md: str) -> dict:
         raise
 
 
-async def update_notion_page(page_id: str, title: str, summary_md: str) -> dict:
+async def update_notion_page(
+    page_id: str,
+    title: str,
+    summary_md: str,
+    upload_ts: str = "",
+    category_icon: str = "📋",
+    category_name: str = "회의록",
+) -> dict:
     """기존 Notion 페이지의 내용을 교체한다."""
     from .settings_manager import get_setting
     api_key = get_setting("NOTION_API_KEY")
@@ -305,8 +413,14 @@ async def update_notion_page(page_id: str, title: str, summary_md: str) -> dict:
         },
     )
 
-    # 3. 새 블록 추가
-    new_blocks = md_to_notion_blocks(summary_md)
+    # 3. 카테고리 헤더 + 새 블록 추가
+    header = (
+        f"📤 업로드 일시: {upload_ts}\n"
+        f"📂 카테고리: {category_icon} {category_name}\n\n"
+        f"────────────────────────────────────\n\n"
+    )
+    full_md = header + summary_md
+    new_blocks = md_to_notion_blocks(full_md)
     remaining = new_blocks
     while remaining:
         batch = remaining[:100]

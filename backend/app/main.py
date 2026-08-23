@@ -13,7 +13,7 @@ import uuid
 
 import aiofiles
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 
@@ -90,7 +90,10 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 
 @app.post("/api/record")
-async def record_audio(audio: UploadFile = File(...)):
+async def record_audio(
+    audio: UploadFile = File(...),
+    category_id: str = Form("meeting"),
+):
     """브라우저에서 녹음된 webm Blob을 받아 처리 큐에 등록한다."""
     max_bytes = MAX_UPLOAD_MB * 1024 * 1024
     total_size = 0
@@ -124,7 +127,10 @@ async def record_audio(audio: UploadFile = File(...)):
 
     _custom = get_setting("DEFAULT_MEETING_TITLE")
     title = _custom if _custom else "회의록"
-    create_job(job_id, filename, title=title)
+    # category_id 유효성 확인, 없으면 "meeting" 폴백
+    valid_cat = get_category(category_id) if category_id else None
+    effective_category_id = category_id if valid_cat else "meeting"
+    create_job(job_id, filename, title=title, category_id=effective_category_id)
     await job_queue.put(job_id)
 
     return {"job_id": job_id, "filename": filename}
@@ -209,11 +215,16 @@ async def finalize_job(job_id: str, body: dict):
 
     transcript: str = body.get("transcript", "").strip()
     speaker_map: dict = body.get("speaker_map", {})
+    body_category_id: str | None = body.get("category_id")
 
     if not transcript:
         raise HTTPException(status_code=422, detail="transcript가 비어 있습니다.")
 
-    # DB에 저장
+    # category_id 결정: body → job → "meeting" 폴백
+    category_id = body_category_id or job.get("category_id") or "meeting"
+    if body_category_id:
+        update_job_category(job_id, category_id)
+
     update_job_result(job_id, transcript=transcript, speakers=speaker_map)
 
     # speakers.json 업데이트 (이름 기억)
@@ -234,12 +245,12 @@ async def finalize_job(job_id: str, body: dict):
     progress_store.pop(job_id, None)
 
     # 백그라운드 요약 실행
-    asyncio.create_task(run_summary(job_id, str(script_path), speaker_map))
+    asyncio.create_task(run_summary(job_id, str(script_path), speaker_map, category_id=category_id))
 
     return {"status": "summarizing", "job_id": job_id}
 
 
-async def run_summary(job_id: str, script_path: str, speaker_map: dict):
+async def run_summary(job_id: str, script_path: str, speaker_map: dict, category_id: str = "meeting"):
     """백그라운드에서 Claude 요약을 실행한다."""
     try:
         update_progress(job_id, {
@@ -251,7 +262,12 @@ async def run_summary(job_id: str, script_path: str, speaker_map: dict):
         from .summarizer import generate_summary
 
         _model = get_setting("CLAUDE_MODEL") or "claude-sonnet-4-6"
-        _prompt = get_setting("CLAUDE_PROMPT") or None
+        # 프롬프트 우선순위: 카테고리 prompt → CLAUDE_PROMPT 설정 → DEFAULT_PROMPT (None으로 위임)
+        cat = get_category(category_id)
+        if cat:
+            _prompt = cat["prompt"]
+        else:
+            _prompt = get_setting("CLAUDE_PROMPT") or None
 
         summary = await generate_summary(
             script_path,
@@ -485,14 +501,26 @@ async def export_notion(job_id: str, body: dict = {}):
             base_title = "회의록"
         notion_title = f"[{meeting_ts}] {base_title}"
 
+        # 카테고리 정보 조회
+        job_cat_id = job.get("category_id") or "meeting"
+        cat = get_category(job_cat_id)
+        cat_icon = cat["icon"] if cat else "📋"
+        cat_name = cat["name"] if cat else "회의록"
+
         # 업로드 일시 (내보내기 실행 시점, KST)
         upload_ts = datetime.now(_KST).strftime("%Y-%m-%d %H:%M")
-        summary_with_meta = f"📤 업로드 일시: {upload_ts}\n\n" + (job["summary"] or "")
+        summary_md = job["summary"] or ""
 
         if existing_page_id and mode == "update":
-            result = await update_notion_page(existing_page_id, notion_title, summary_with_meta)
+            result = await update_notion_page(
+                existing_page_id, notion_title, summary_md,
+                upload_ts=upload_ts, category_icon=cat_icon, category_name=cat_name,
+            )
         else:
-            result = await export_to_notion(notion_title, summary_with_meta)
+            result = await export_to_notion(
+                notion_title, summary_md,
+                upload_ts=upload_ts, category_icon=cat_icon, category_name=cat_name,
+            )
             update_job_notion(job_id, result["url"], result["page_id"])
 
         return {"status": "exported", "job_id": job_id, **result}
