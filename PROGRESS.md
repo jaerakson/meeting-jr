@@ -1,3 +1,15 @@
+## 2026-08-24 (작업 PC: 로컬) — 세션 6
+- 브랜치: main
+- 완료: 파일 업로드 기능 (오디오/txt)
+- 현재 상태: 서버 미실행 (코드만 수정), 모든 테스트 통과 (56/56)
+- 다음 할 일: 서버 실행 후 E2E 테스트
+- 구현 내용:
+  - backend/app/main.py: POST /api/upload 엔드포인트 (오디오→STT파이프라인, txt→awaiting_edit 직진입)
+  - backend/tests/test_upload.py: 업로드 테스트 4개 (56개 전체 통과)
+  - frontend/components/RecordingZone.tsx: 녹음/파일업로드 탭 UI, 드래그앤드롭 + 클릭 업로드
+- 관련 커밋: 6e231ee
+- 푸시 여부: origin/main 푸시 완료
+
 ## 2026-08-24 (작업 PC: 로컬) — 세션 5
 - 브랜치: main
 - 완료: 카테고리 시스템 E2E 테스트 + 버그 2개 수정
