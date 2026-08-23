@@ -51,7 +51,7 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
   const [categoryId, setCategoryId] = useState(initialCategoryId)
   const [names, setNames] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {}
-    initialSpeakers.forEach(s => { m[s] = suggestedNames[s] || '' })
+    initialSpeakers.forEach(s => { m[s] = '' })
     return m
   })
   const [selected, setSelected] = useState<string | null>(null)
@@ -199,7 +199,7 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
                   </div>
                   <input
                     type="text"
-                    placeholder="이름 입력"
+                    placeholder={suggestedNames[sp] || '이름 입력'}
                     value={names[sp] || ''}
                     onChange={e => setNames(prev => ({ ...prev, [sp]: e.target.value }))}
                     onClick={e => e.stopPropagation()}
