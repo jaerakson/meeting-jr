@@ -243,11 +243,16 @@ async def run_summary(job_id: str, script_path: str, speaker_map: dict):
 
         from .summarizer import generate_summary
 
+        _model = get_setting("CLAUDE_MODEL") or "claude-sonnet-4-6"
+        _prompt = get_setting("CLAUDE_PROMPT") or None
+
         summary = await generate_summary(
             script_path,
             speaker_map,
             job_id,
             lambda jid, data: update_progress(jid, data),
+            model=_model,
+            prompt_template=_prompt,
         )
 
         output_path = OUTPUT_DIR / f"{job_id}_요약.md"
@@ -559,6 +564,22 @@ async def claude_logout():
 async def get_default_title():
     """기본 회의 제목을 반환한다. 미설정 시 빈 문자열."""
     return {"value": get_setting("DEFAULT_MEETING_TITLE") or ""}
+
+
+@app.get("/api/settings/claude-model")
+async def get_claude_model():
+    """현재 설정된 Claude 모델 반환. 미설정 시 기본값."""
+    return {"value": get_setting("CLAUDE_MODEL") or "claude-sonnet-4-6"}
+
+
+@app.get("/api/settings/claude-prompt")
+async def get_claude_prompt():
+    """현재 설정된 프롬프트 반환. 미설정 시 빈 문자열. default도 함께 반환."""
+    from .summarizer import DEFAULT_PROMPT
+    return {
+        "value": get_setting("CLAUDE_PROMPT") or "",
+        "default": DEFAULT_PROMPT,
+    }
 
 
 @app.get("/api/settings")

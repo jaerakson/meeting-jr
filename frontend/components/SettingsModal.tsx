@@ -15,6 +15,12 @@ const KEY_LABELS: Record<string, string> = {
 
 const KEYS = ['HF_TOKEN', 'NOTION_API_KEY', 'NOTION_DATABASE_ID'] as const
 
+const CLAUDE_MODELS = [
+  { value: "claude-sonnet-4-6",         label: "Claude Sonnet 4.6 (기본, 권장)" },
+  { value: "claude-opus-4-6",           label: "Claude Opus 4.6 (고품질, 느림)" },
+  { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 (빠름, 경량)" },
+]
+
 export default function SettingsModal({ onClose }: Props) {
   const [status, setStatus] = useState<SettingsStatus | null>(null)
   const [values, setValues] = useState<Record<string, string>>({
@@ -33,6 +39,11 @@ export default function SettingsModal({ onClose }: Props) {
   const [loggingOut, setLoggingOut] = useState(false)
   const [defaultTitle, setDefaultTitle] = useState('')
   const [initialDefaultTitle, setInitialDefaultTitle] = useState('')
+  const [claudeModel, setClaudeModel] = useState('claude-sonnet-4-6')
+  const [initialClaudeModel, setInitialClaudeModel] = useState('claude-sonnet-4-6')
+  const [claudePrompt, setClaudePrompt] = useState('')
+  const [initialClaudePrompt, setInitialClaudePrompt] = useState('')
+  const [defaultPrompt, setDefaultPrompt] = useState('')
 
   useEffect(() => {
     fetch('/api/settings')
@@ -48,6 +59,18 @@ export default function SettingsModal({ onClose }: Props) {
       .then(d => {
         setDefaultTitle(d.value ?? '')
         setInitialDefaultTitle(d.value ?? '')
+      })
+      .catch(console.error)
+    fetch('/api/settings/claude-model')
+      .then(r => r.json())
+      .then(d => { setClaudeModel(d.value); setInitialClaudeModel(d.value) })
+      .catch(console.error)
+    fetch('/api/settings/claude-prompt')
+      .then(r => r.json())
+      .then(d => {
+        setClaudePrompt(d.value)
+        setInitialClaudePrompt(d.value)
+        setDefaultPrompt(d.default)
       })
       .catch(console.error)
   }, [])
@@ -74,7 +97,11 @@ export default function SettingsModal({ onClose }: Props) {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const body: Record<string, string> = { DEFAULT_MEETING_TITLE: defaultTitle }
+      const body: Record<string, string> = {
+        DEFAULT_MEETING_TITLE: defaultTitle,
+        CLAUDE_MODEL: claudeModel,
+        CLAUDE_PROMPT: claudePrompt,
+      }
       for (const key of KEYS) {
         if (values[key] !== '') body[key] = values[key]
       }
@@ -88,6 +115,8 @@ export default function SettingsModal({ onClose }: Props) {
       setStatus(newStatus)
       setValues({ HF_TOKEN: '', NOTION_API_KEY: '', NOTION_DATABASE_ID: '' })
       setInitialDefaultTitle(defaultTitle)
+      setInitialClaudeModel(claudeModel)
+      setInitialClaudePrompt(claudePrompt)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
@@ -124,7 +153,7 @@ export default function SettingsModal({ onClose }: Props) {
         )}
 
         {/* 본문 */}
-        <div className="px-6 py-5 space-y-5">
+        <div className="px-6 py-5 space-y-5 overflow-y-auto max-h-[70vh]">
 
             {/* 기본 회의 제목 섹션 */}
           <div>
@@ -139,6 +168,49 @@ export default function SettingsModal({ onClose }: Props) {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             <p className="mt-1 text-xs text-gray-400">새 녹음 시작 시 이 제목이 자동으로 설정됩니다.</p>
+          </div>
+
+          {/* 모델 선택 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              회의록 생성 모델
+            </label>
+            <select
+              value={claudeModel}
+              onChange={e => setClaudeModel(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              {CLAUDE_MODELS.map(m => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-400">회의록 요약 시 사용할 Claude 모델을 선택합니다.</p>
+          </div>
+
+          {/* 프롬프트 커스터마이징 */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-sm font-medium text-gray-700">
+                요약 프롬프트
+              </label>
+              <button
+                type="button"
+                onClick={() => setClaudePrompt(defaultPrompt)}
+                className="text-xs text-gray-400 hover:text-blue-600 transition-colors"
+              >
+                초기화
+              </button>
+            </div>
+            <textarea
+              value={claudePrompt || defaultPrompt}
+              onChange={e => setClaudePrompt(e.target.value)}
+              rows={10}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs text-gray-800 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+              placeholder="프롬프트를 입력하세요. {script} 위치에 회의 스크립트가 삽입됩니다."
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              <code className="bg-gray-100 px-1 rounded">{'{script}'}</code> 플레이스홀더 위치에 회의 스크립트가 삽입됩니다. 미포함 시 자동으로 끝에 추가됩니다.
+            </p>
           </div>
 
           {/* Claude CLI 섹션 */}
@@ -254,7 +326,7 @@ export default function SettingsModal({ onClose }: Props) {
           </button>
           <button
             onClick={handleSave}
-            disabled={saving || saved || (KEYS.every(k => values[k] === '') && defaultTitle === initialDefaultTitle)}
+            disabled={saving || saved || (KEYS.every(k => values[k] === '') && defaultTitle === initialDefaultTitle && claudeModel === initialClaudeModel && claudePrompt === initialClaudePrompt)}
             className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-all duration-300 flex items-center gap-1.5 ${
               saved
                 ? 'bg-green-500'

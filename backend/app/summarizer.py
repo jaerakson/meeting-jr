@@ -24,6 +24,40 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = BASE_DIR / "output"
 SPEAKERS_FILE = BASE_DIR / "speakers.json"
 
+DEFAULT_PROMPT = """다음 회의 스크립트를 분석하여 한국어로 회의록을 작성해주세요.
+
+반드시 아래 마크다운 형식을 정확히 따르세요:
+
+# [회의 주제 / 제목]
+
+- 일시: (날짜 추정)
+- 참석자: (화자 목록)
+- 회의 목적: ...
+
+## 핵심 요약
+
+1~2줄 핵심 요약
+
+## 주요 논의 및 안건
+
+- 안건 1: ...
+
+## 주요 결정 사항
+
+- 결정 1
+
+## 액션 아이템 (To-Do)
+
+- [ ] @담당자 - 작업 내용 (기한: MM/DD)
+
+## 이슈 및 리스크
+
+- 이슈 1
+
+---
+회의 스크립트:
+{script}"""
+
 
 def _replace_speakers(script_content: str, speaker_map: dict) -> str:
     """스크립트 내 SPEAKER_XX를 실제 이름으로 치환한다."""
@@ -60,6 +94,8 @@ async def generate_summary(
     speaker_map: dict,
     job_id: str,
     progress_callback=None,
+    model: str = "claude-sonnet-4-6",
+    prompt_template: str | None = None,
 ) -> str:
     """
     화자 이름이 매핑된 스크립트를 Claude CLI로 요약한다.
@@ -101,42 +137,14 @@ async def generate_summary(
         })
 
     # 4. Claude CLI로 요약 생성
-    prompt = f"""다음 회의 스크립트를 분석하여 한국어로 회의록을 작성해주세요.
-
-반드시 아래 마크다운 형식을 정확히 따르세요:
-
-# [회의 주제 / 제목]
-
-- 일시: (날짜 추정)
-- 참석자: (화자 목록)
-- 회의 목적: ...
-
-## 핵심 요약
-
-1~2줄 핵심 요약
-
-## 주요 논의 및 안건
-
-- 안건 1: ...
-
-## 주요 결정 사항
-
-- 결정 1
-
-## 액션 아이템 (To-Do)
-
-- [ ] @담당자 - 작업 내용 (기한: MM/DD)
-
-## 이슈 및 리스크
-
-- 이슈 1
-
----
-회의 스크립트:
-{script_content}"""
+    template = prompt_template if prompt_template else DEFAULT_PROMPT
+    if "{script}" in template:
+        prompt = template.replace("{script}", script_content)
+    else:
+        prompt = template + "\n\n---\n회의 스크립트:\n" + script_content
 
     proc = await asyncio.create_subprocess_exec(
-        "claude", "-p", prompt,
+        "claude", "-p", prompt, "--model", model,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
