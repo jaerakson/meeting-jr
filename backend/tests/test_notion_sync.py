@@ -69,7 +69,7 @@ def test_table_basic():
     assert tbl["type"] == "table"
     assert tbl["table"]["table_width"] == 2
     assert tbl["table"]["has_column_header"] is True
-    rows = tbl["children"]
+    rows = tbl["table"]["children"]
     assert len(rows) == 2  # 헤더행 + 데이터행 (구분자 행 제외)
     assert rows[0]["table_row"]["cells"][0][0]["text"]["content"] == "항목"
     assert rows[1]["table_row"]["cells"][0][0]["text"]["content"] == "일시"

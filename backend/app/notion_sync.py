@@ -119,8 +119,8 @@ def md_to_notion_blocks(md_text: str) -> list[dict]:
                 "table_width": col_count,
                 "has_column_header": True,
                 "has_row_header": False,
+                "children": children,
             },
-            "children": children,
         })
 
     for line in lines:
