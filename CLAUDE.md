@@ -35,11 +35,37 @@ director 에이전트는 아키텍처·UX·기술 세부사항에 대해 자율�
 
 ---
 
+## 브랜치 전략
+
+- `main` — 항상 배포 가능한 상태 유지. 직접 커밋 금지.
+- `feature/<기능명>` — 새 기능 개발 브랜치 (예: `feature/pdf-export`)
+- `fix/<버그명>` — 버그 수정 브랜치 (예: `fix/sse-disconnect`)
+
+**개발 플로우:**
+1. `git checkout -b feature/<기능명>` 으로 브랜치 생성
+2. 기능 구현 + 테스트 완료
+3. `git push origin feature/<기능명>` 후 PR 생성
+4. `/code-review:code-review` 스킬로 코드 리뷰
+5. 리뷰 통과 후 `main`에 머지
+
+**코드 리뷰 전 PR 생성 명령어:**
+```bash
+gh pr create --base main --title "<제목>" --body "<설명>"
+```
+
+---
+
 ## 개발 명령어
 
 ```bash
 # 서버 실행
-python -m uvicorn app.main:app --reload --port 8000
+cd backend && /opt/homebrew/bin/python3.11 -m uvicorn app.main:app --reload --port 8000
+
+# 프론트엔드
+cd frontend && npm run dev
+
+# 테스트
+cd backend && /opt/homebrew/bin/python3.11 -m pytest tests/ -v
 
 # 의존성 설치
 pip install -r requirements.txt
