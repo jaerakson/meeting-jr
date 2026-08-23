@@ -1,3 +1,47 @@
+## 2026-08-23 (작업 PC: 로컬) — 세션 4
+- 브랜치: main
+- 완료: 카테고리 시스템 전체 구현 (8개 Task, SDD 방식)
+- 현재 상태: 서버 미실행 (코드만 수정), 모든 테스트 통과
+- 다음 할 일: 서버 재시작 후 E2E 테스트
+- 구현 내용:
+  - `backend/app/categories.py`: 5개 기본 카테고리 (meeting/lecture/sermon/interview/brainstorm) + DEFAULT_PROMPTS
+  - `backend/app/database.py`: categories 테이블 + seed, Job에 category_id 필드
+  - `backend/app/main.py`: Category CRUD API (GET/POST/PATCH/DELETE/reset), record/finalize에 category_id 통합, run_summary 카테고리별 프롬프트 적용
+  - `backend/app/notion_sync.py`: table/quote/numbered/bold 블록 지원, 카테고리 헤더 자동 삽입
+  - `frontend/types/index.ts`: Category 인터페이스, Job에 category 필드 추가
+  - `frontend/components/CategorySelect.tsx`: 카테고리 드롭다운 컴포넌트
+  - `frontend/components/RecordingZone.tsx`: 카테고리 선택 + localStorage 저장
+  - `frontend/components/TranscriptEditor.tsx`: 카테고리 선택 + finalize에 전달
+  - `frontend/components/MainArea.tsx`: 카테고리 뱃지 + 재요약 카테고리 모달
+  - `frontend/components/SettingsModal.tsx`: 일반/Claude/카테고리 3탭, 카테고리 CRUD UI
+  - `backend/tests/`: 52개 전체 통과 (0.45s)
+- QA 검증 결과:
+  - 백엔드 테스트: 52/52 PASS
+  - 프론트엔드 빌드: PASS (Next.js 15, static 5페이지)
+  - 카테고리 API: 5개 카테고리, 전체 {script} 플레이스홀더 포함 확인
+- 관련 커밋: 91c84ed..98e416c (Task 1~7)
+- 푸시 여부: 미푸시 (git remote 미설정)
+
+## 2026-08-23 (작업 PC: 로컬) — 세션 3
+- 브랜치: main
+- 완료: Claude 모델/프롬프트 설정 기능 구현 + 화자 매핑 버그 2개 수정
+- 현재 상태: 서버 미실행 (코드만 수정), 기능 정상
+- 다음 할 일: 서버 재시작 후 테스트
+- 구현 내용:
+  - `backend/app/settings_manager.py`: `CLAUDE_MODEL`, `CLAUDE_PROMPT` 키 추가
+  - `backend/app/summarizer.py`: `DEFAULT_PROMPT` 상수 추가, `generate_summary(model, prompt_template)` 파라미터 추가
+  - `backend/app/main.py`: `GET /api/settings/claude-model`, `GET /api/settings/claude-prompt` 엔드포인트 추가, `run_summary`에서 설정값 읽어 모델/프롬프트 전달
+  - `backend/app/main.py`: `_save_speakers()` 수정 — key==value 무의미한 매핑(UNKNOWN→UNKNOWN 등) 저장 안 함
+  - `frontend/components/SettingsModal.tsx`: Claude 모델 선택 드롭다운 + 프롬프트 textarea (10행, 초기화 버튼) 추가
+  - `frontend/components/MainArea.tsx`: `handleAwaitingEdit` 수정 — transcript 없는 SSE fallback 시 editData 설정 안 함 (페이지 새로고침 시 빈 TranscriptEditor 방지)
+  - `backend/speakers.json`: "UNKNOWN": "UNKNOWN" 오염 항목 제거
+  - `backend/tests/test_model_prompt_setting.py`: 4개 테스트 추가
+- 버그 수정 내역:
+  1. 페이지 새로고침 시 awaiting_edit 상태에서 빈 TranscriptEditor 표시 → transcript 빈 경우 editData 미설정으로 수정
+  2. speakers.json에 "UNKNOWN": "UNKNOWN" 같은 self-referential 항목 축적 → 필터링 추가
+- 관련 커밋: 4118915.. (미커밋)
+- 푸시 여부: 미푸시 (git remote 미설정)
+
 ## 2026-08-23 (작업 PC: 로컬) — 세션 2
 - 브랜치: main
 - 완료: Notion UX 개선 + 기본 회의 제목 설정 + 문서 전체 업데이트
@@ -39,4 +83,5 @@
   - limit 파라미터 상한 검증 추가
 - 관련 커밋: c857701..5ffbf02 (6개)
 - 푸시 여부: 미푸시 (git remote 미설정)
+
 
