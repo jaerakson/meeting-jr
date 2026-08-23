@@ -32,8 +32,6 @@ export interface Job {
   notion_url?: string
   notion_page_id?: string
   category_id?: string
-  category_icon?: string
-  category_name?: string
 }
 
 export interface ProgressEvent {
