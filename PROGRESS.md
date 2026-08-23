@@ -1,3 +1,18 @@
+## 2026-08-24 (작업 PC: 로컬) — 세션 9
+- 브랜치: main (feature/pdf-export → PR #1 → squash 머지)
+- 완료: PDF 내보내기 기능 + 브랜치 개발 워크플로우 확립
+- 현재 상태: main 최신, 서버 실행 중
+- 다음 할 일: 새 기능 논의
+- 구현 내용:
+  - frontend/app/print/[id]/page.tsx: 인쇄 최적화 전용 페이지 (A4, 요약+스크립트)
+  - frontend/components/MainArea.tsx: done 상태에 PDF 버튼 추가
+- 코드 리뷰 이슈 수정:
+  - 테이블 구분자 행(| --- |) 필터링 추가
+  - window.print() 트리거에 job.status === 'done' 조건 추가
+- 브랜치 전략 확립: feature/* → PR → /code-review → 머지
+- 관련 커밋: a22ba66 (main, squash 머지), PR #1
+- 푸시 여부: origin/main 푸시 완료
+
 ## 2026-08-24 (작업 PC: 로컬) — 세션 8
 - 브랜치: main
 - 완료: 회의 목록 카테고리/날짜 필터 기능
