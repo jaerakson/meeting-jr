@@ -1,3 +1,13 @@
+## 2026-08-24 (작업 PC: 로컬) — 세션 10
+- 브랜치: main (feature/playback-speed → PR #2 → squash 머지)
+- 완료: 오디오 재생 속도 조절 버튼 (0.75x/1x/1.25x/1.5x/2x 순환)
+- 현재 상태: main 최신 (83b711a), 서버 실행 중 (백엔드 8000, 프론트 3000)
+- 다음 할 일: 새 기능 논의
+- 구현 내용:
+  - frontend/components/AudioPlayer.tsx: SPEEDS 배열, speed state, handleSpeedChange(), 속도 버튼 UI
+- 관련 커밋: 83b711a (main, squash 머지), PR #2
+- 푸시 여부: origin/main 푸시 완료
+
 ## 2026-08-24 (작업 PC: 로컬) — 세션 9
 - 브랜치: main (feature/pdf-export → PR #1 → squash 머지)
 - 완료: PDF 내보내기 기능 + 브랜치 개발 워크플로우 확립
