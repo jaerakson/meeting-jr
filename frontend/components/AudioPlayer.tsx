@@ -7,6 +7,8 @@ interface AudioPlayerProps {
   onTimeUpdate: (sec: number) => void
 }
 
+const SPEEDS = [0.75, 1, 1.25, 1.5, 2]
+
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60)
   const s = Math.floor(sec % 60)
@@ -18,6 +20,7 @@ export default function AudioPlayer({ audioSrc, onTimeUpdate }: AudioPlayerProps
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [speed, setSpeed] = useState(1)
 
   const handleTimeUpdate = useCallback(() => {
     const audio = audioRef.current
@@ -63,7 +66,16 @@ export default function AudioPlayer({ audioSrc, onTimeUpdate }: AudioPlayerProps
     setCurrentTime(time)
   }
 
-  // 외부에서 시크 (ref를 통해)
+  const handleSpeedChange = () => {
+    const audio = audioRef.current
+    if (!audio) return
+    const nextIdx = (SPEEDS.indexOf(speed) + 1) % SPEEDS.length
+    const nextSpeed = SPEEDS[nextIdx]
+    audio.playbackRate = nextSpeed
+    setSpeed(nextSpeed)
+  }
+
+  // 외부에서 시크
   useEffect(() => {
     const handler = (e: CustomEvent<{ time: number }>) => {
       const audio = audioRef.current
@@ -116,6 +128,15 @@ export default function AudioPlayer({ audioSrc, onTimeUpdate }: AudioPlayerProps
       <span className="text-sm text-gray-500 font-mono whitespace-nowrap flex-shrink-0">
         {formatTime(currentTime)}{isFinite(duration) && duration > 0 ? ` / ${formatTime(duration)}` : ''}
       </span>
+
+      {/* 재생 속도 버튼 (클릭마다 순환: 0.75→1→1.25→1.5→2→0.75) */}
+      <button
+        onClick={handleSpeedChange}
+        className="text-xs font-semibold text-gray-500 hover:text-blue-600 transition-colors flex-shrink-0 w-10 text-center border border-gray-200 rounded px-1 py-0.5 hover:border-blue-400"
+        title="재생 속도 변경"
+      >
+        {speed === 1 ? '1x' : `${speed}x`}
+      </button>
     </div>
   )
 }
