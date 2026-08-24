@@ -1,3 +1,17 @@
+## 2026-08-24 (작업 PC: 로컬) — 세션 11
+- 브랜치: main (feature/sidebar-delete-button → PR #3, feature/summary-patch-test → PR #4)
+- 완료: 기능 a~f 검증 및 보강
+  - a. Browser Notification: 이미 구현됨 (ProgressCard.tsx + MainArea.tsx)
+  - b. 음파 시각화: 이미 구현됨 (RecordingZone.tsx AnalyserNode + canvas)
+  - c. 음성 다운로드: 이미 구현됨 (MainArea.tsx `<a download>`)
+  - d. 회의 삭제: 사이드바 hover 시 휴지통 삭제 버튼 추가 (PR #3)
+  - e. 요약 편집+저장: 이미 구현됨 + 백엔드 테스트 3개 추가 (PR #4)
+  - f. 재요약: 이미 구현됨 (카테고리 변경 모달 포함)
+- 현재 상태: main 최신 (11c2f58)
+- 다음 할 일: 새 기능 논의
+- 관련 커밋: 80f5eed (PR #3), 11c2f58 (PR #4)
+- 푸시 여부: origin/main 푸시 완료
+
 ## 2026-08-24 (작업 PC: 로컬) — 세션 10
 - 브랜치: main (feature/playback-speed → PR #2 → squash 머지)
 - 완료: 오디오 재생 속도 조절 버튼 (0.75x/1x/1.25x/1.5x/2x 순환)
