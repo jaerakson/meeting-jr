@@ -124,7 +124,7 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
             key={job.id}
             onClick={() => onSelectJob(job.id)}
             onContextMenu={(e) => handleContextMenu(e, job.id)}
-            className={`px-4 py-3 cursor-pointer border-b border-slate-700 hover:bg-slate-700 transition-colors ${
+            className={`group px-4 py-3 cursor-pointer border-b border-slate-700 hover:bg-slate-700 transition-colors ${
               selectedJobId === job.id ? 'bg-slate-600' : ''
             }`}
           >
@@ -144,7 +144,19 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               )}
-              <span className="text-sm font-medium truncate">{job.title || job.filename}</span>
+              <span className="text-sm font-medium truncate flex-1">{job.title || job.filename}</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDelete(job.id)
+                }}
+                className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-slate-500 text-slate-400 hover:text-red-300 transition-all flex-shrink-0"
+                title="삭제"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
               {job.notion_url && (
                 <a
                   href={job.notion_url}
