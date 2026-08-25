@@ -9,6 +9,7 @@ interface SummaryPanelProps {
   onSummaryUpdate?: (newSummary: string) => void
   speakers?: Record<string, string>
   actionItems?: ActionItem[]
+  categoryId?: string
 }
 
 const TABS = ['핵심 요약', '주요 논의', '결정 사항', '액션 아이템'] as const
@@ -141,7 +142,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
   return nodes
 }
 
-export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers, actionItems: initialActionItems }: SummaryPanelProps) {
+export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers, actionItems: initialActionItems, categoryId: initialCategoryId }: SummaryPanelProps) {
   const [activeTab, setActiveTab] = useState<typeof TABS[number]>('핵심 요약')
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(summary)
@@ -149,6 +150,14 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
   const [nameMap, setNameMap] = useState<Record<string, string>>({})
   const [copyFeedback, setCopyFeedback] = useState(false)
   const [actionItems, setActionItems] = useState<ActionItem[]>(initialActionItems || [])
+  const [regenerating, setRegenerating] = useState(false)
+  const [showRegenModal, setShowRegenModal] = useState(false)
+  const [regenCategoryId, setRegenCategoryId] = useState(initialCategoryId || 'meeting')
+  const [categories, setCategories] = useState<{ id: string; name: string; icon: string }[]>([])
+
+  useEffect(() => {
+    fetch('/api/categories').then(r => r.json()).then(setCategories).catch(() => {})
+  }, [])
 
   // Bug fix: jobId가 바뀌면 편집 상태 리셋
   useEffect(() => {
@@ -156,6 +165,7 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
     setEditContent(summary)
     setNameMap({})
     setActionItems(initialActionItems || [])
+    setRegenCategoryId(initialCategoryId || 'meeting')
   }, [jobId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // initialActionItems가 외부에서 바뀌면 동기화
@@ -243,6 +253,28 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
     }
   }
 
+  const handleRegenerate = async () => {
+    setRegenerating(true)
+    setShowRegenModal(false)
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/regenerate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category_id: regenCategoryId }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(`재생성 실패: ${data.detail || '알 수 없는 오류'}`)
+        return
+      }
+      onSummaryUpdate?.('')
+    } catch {
+      alert('재생성 요청에 실패했습니다.')
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
   return (
     <div className="h-full flex flex-col bg-white rounded-lg border border-gray-200 overflow-hidden">
       {/* 헤더: 탭 + 버튼 */}
@@ -311,6 +343,14 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
               >
                 다운로드
               </button>
+              <button
+                onClick={() => { setRegenCategoryId(initialCategoryId || 'meeting'); setShowRegenModal(true) }}
+                disabled={regenerating}
+                className="px-2.5 py-1.5 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors disabled:opacity-50 font-medium"
+                title="다른 카테고리로 요약 재생성"
+              >
+                {regenerating ? '재생성 중...' : '↻ 재생성'}
+              </button>
             </>
           )}
         </div>
@@ -368,6 +408,37 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
           <div>{renderMarkdown(currentContent)}</div>
         )}
       </div>
+      {showRegenModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-80 space-y-4">
+            <h3 className="font-semibold text-gray-800 dark:text-gray-100">요약 재생성</h3>
+            <p className="text-sm text-gray-500">재생성에 사용할 카테고리를 선택하세요.</p>
+            <select
+              value={regenCategoryId}
+              onChange={e => setRegenCategoryId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
+              ))}
+            </select>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleRegenerate}
+                className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+              >
+                재생성 실행
+              </button>
+              <button
+                onClick={() => setShowRegenModal(false)}
+                className="w-full py-2 text-sm text-gray-400 hover:text-gray-600"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
