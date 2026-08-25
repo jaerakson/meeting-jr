@@ -314,7 +314,20 @@ function MeetingsContent() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {data?.items
               .filter(job => !bookmarkOnly || job.bookmarked === 1)
-              .map(job => <MeetingCard key={job.id} job={job} searchQuery={query} />)}
+              .map(job => (
+                <MeetingCard
+                  key={job.id}
+                  job={job}
+                  searchQuery={query}
+                  onBookmark={async (id) => {
+                    await fetch(`/api/jobs/${id}/bookmark`, { method: 'PATCH' })
+                    setData(prev => prev ? {
+                      ...prev,
+                      items: prev.items.map(j => j.id === id ? { ...j, bookmarked: j.bookmarked ? 0 : 1 } : j)
+                    } : prev)
+                  }}
+                />
+              ))}
           </div>
         )}
 

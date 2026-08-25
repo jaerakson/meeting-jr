@@ -7,6 +7,7 @@ import { Job } from '@/types'
 interface MeetingCardProps {
   job: Job
   searchQuery?: string
+  onBookmark?: (jobId: string) => void
 }
 
 function escapeRegExp(str: string): string {
@@ -59,7 +60,7 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   error:         { label: '실패',      cls: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-400' },
 }
 
-export default function MeetingCard({ job, searchQuery }: MeetingCardProps) {
+export default function MeetingCard({ job, searchQuery, onBookmark }: MeetingCardProps) {
   const router = useRouter()
   const badge = STATUS_BADGE[job.status] ?? { label: job.status, cls: 'bg-gray-100 text-gray-800' }
   const actionCount = job.summary ? countActionItems(job.summary) : 0
@@ -73,14 +74,25 @@ export default function MeetingCard({ job, searchQuery }: MeetingCardProps) {
       onClick={() => router.push(`/meetings/${job.id}`)}
       className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-sm transition-all flex flex-col gap-2 min-h-[140px]"
     >
-      {/* 제목 + 상태 뱃지 */}
+      {/* 제목 + 상태 뱃지 + 북마크 */}
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold text-gray-800 dark:text-gray-100 text-sm leading-snug line-clamp-2 flex-1">
           {highlightText(job.title, searchQuery)}
         </h3>
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${badge.cls}`}>
-          {badge.label}
-        </span>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badge.cls}`}>
+            {badge.label}
+          </span>
+          {onBookmark && (
+            <button
+              onClick={e => { e.stopPropagation(); onBookmark(job.id) }}
+              className={`text-base leading-none transition-colors ${job.bookmarked ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600 hover:text-yellow-400'}`}
+              title={job.bookmarked ? '북마크 해제' : '북마크'}
+            >
+              {job.bookmarked ? '★' : '☆'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 날짜 + 시간 */}
