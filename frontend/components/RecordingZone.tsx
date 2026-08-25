@@ -1,7 +1,8 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { ClaudeStatus } from '@/types'
 import CategorySelect from './CategorySelect'
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 
 interface Props {
   onRecordingComplete: (jobId: string) => void
@@ -203,6 +204,19 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
     cancelAnimationFrame(animFrameRef.current)
   }, [])
 
+  const toggleRecording = useCallback(() => {
+    if (isRecording) {
+      stopRecording()
+    } else if (!audioBlob) {
+      startRecording()
+    }
+  }, [isRecording, audioBlob])
+
+  useKeyboardShortcuts({
+    onSpaceRecord: toggleRecording,
+    enabled: activeTab === 'record' && !uploading && !uploadDone,
+  })
+
   // Claude 상태 확인 중
   if (!claudeStatus) {
     return (
@@ -322,6 +336,7 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
                   <span className="w-5 h-5 rounded-full bg-white" />
                 </button>
                 <p className="text-sm text-gray-400">버튼을 눌러 녹음을 시작하세요</p>
+                <p className="text-xs text-gray-300 mt-2">Space: 녹음 시작/중지</p>
               </>
             )}
             {isRecording && (

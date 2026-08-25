@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useCallback } from 'react'
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 
 interface AudioPlayerProps {
   audioSrc: string
@@ -75,6 +76,30 @@ export default function AudioPlayer({ audioSrc, onTimeUpdate }: AudioPlayerProps
     setSpeed(nextSpeed)
   }
 
+  useKeyboardShortcuts({
+    onSpaceAudio: useCallback(() => {
+      const audio = audioRef.current
+      if (!audio) return
+      if (audio.paused) {
+        audio.play()
+        setIsPlaying(true)
+      } else {
+        audio.pause()
+        setIsPlaying(false)
+      }
+    }, []),
+    onSeekBack: useCallback(() => {
+      const audio = audioRef.current
+      if (!audio) return
+      audio.currentTime = Math.max(0, audio.currentTime - 5)
+    }, []),
+    onSeekForward: useCallback(() => {
+      const audio = audioRef.current
+      if (!audio) return
+      audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 5)
+    }, []),
+  })
+
   // 외부에서 시크
   useEffect(() => {
     const handler = (e: CustomEvent<{ time: number }>) => {
@@ -137,6 +162,10 @@ export default function AudioPlayer({ audioSrc, onTimeUpdate }: AudioPlayerProps
       >
         {speed === 1 ? '1x' : `${speed}x`}
       </button>
+
+      <span className="text-[10px] text-gray-400 hidden md:inline flex-shrink-0">
+        Space: 재생/일시정지 &nbsp; ←→: 5초
+      </span>
     </div>
   )
 }
