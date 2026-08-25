@@ -56,6 +56,12 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
 
 def _migrate(conn: sqlite3.Connection) -> None:
     """기존 DB에 누락된 컬럼을 추가한다."""
+    # categories 테이블에 model 컬럼 추가
+    try:
+        conn.execute("ALTER TABLE categories ADD COLUMN model TEXT DEFAULT 'claude-sonnet-4-6'")
+    except sqlite3.OperationalError:
+        pass  # 이미 존재
+
     existing = {row[1] for row in conn.execute("PRAGMA table_info(meetings)")}
     for col, definition in [
         ("notion_url", "TEXT"),
@@ -86,6 +92,7 @@ def init_db() -> None:
                 prompt      TEXT NOT NULL,
                 is_builtin  INTEGER NOT NULL DEFAULT 0,
                 sort_order  INTEGER NOT NULL DEFAULT 99,
+                model       TEXT DEFAULT 'claude-sonnet-4-6',
                 created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
                 updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
             )
@@ -407,16 +414,17 @@ def create_category(
     icon: str,
     description: str,
     prompt: str,
+    model: str = "claude-sonnet-4-6",
 ) -> dict:
     """사용자 카테고리를 생성하고 반환."""
     conn = _get_conn()
     try:
         conn.execute(
             """
-            INSERT INTO categories (id, name, icon, description, prompt, is_builtin, sort_order)
-            VALUES (?, ?, ?, ?, ?, 0, 99)
+            INSERT INTO categories (id, name, icon, description, prompt, is_builtin, sort_order, model)
+            VALUES (?, ?, ?, ?, ?, 0, 99, ?)
             """,
-            (cat_id, name, icon, description, prompt),
+            (cat_id, name, icon, description, prompt, model),
         )
         conn.commit()
         return get_category(cat_id)
@@ -426,7 +434,7 @@ def create_category(
 
 def update_category(cat_id: str, **kwargs) -> Optional[dict]:
     """카테고리 필드를 선택적으로 갱신한다."""
-    allowed = {"name", "icon", "description", "prompt"}
+    allowed = {"name", "icon", "description", "prompt", "model"}
     fields = [(k, v) for k, v in kwargs.items() if k in allowed]
     if not fields:
         return get_category(cat_id)

@@ -138,8 +138,7 @@ async def record_audio(
         save_path.unlink(missing_ok=True)
         raise HTTPException(status_code=422, detail="오디오 데이터가 없습니다.")
 
-    _custom = get_setting("DEFAULT_MEETING_TITLE")
-    title = _custom if _custom else "회의록"
+    title = "회의록"
     # category_id 유효성 확인, 없으면 "meeting" 폴백
     valid_cat = get_category(category_id) if category_id else None
     effective_category_id = category_id if valid_cat else "meeting"
@@ -193,8 +192,7 @@ async def upload_file(
         save_path.unlink(missing_ok=True)
         raise HTTPException(status_code=422, detail="파일이 비어 있습니다.")
 
-    _custom = get_setting("DEFAULT_MEETING_TITLE")
-    title = _custom if _custom else "회의록"
+    title = "회의록"
     valid_cat = get_category(category_id) if category_id else None
     effective_category_id = category_id if valid_cat else "meeting"
 
@@ -345,13 +343,9 @@ async def run_summary(job_id: str, script_path: str, speaker_map: dict, category
 
         from .summarizer import generate_summary
 
-        _model = get_setting("CLAUDE_MODEL") or "claude-sonnet-4-6"
-        # 프롬프트 우선순위: 카테고리 prompt → CLAUDE_PROMPT 설정 → DEFAULT_PROMPT (None으로 위임)
         cat = get_category(category_id)
-        if cat:
-            _prompt = cat["prompt"]
-        else:
-            _prompt = get_setting("CLAUDE_PROMPT") or None
+        _model = (cat.get("model") if cat else None) or get_setting("CLAUDE_MODEL") or "claude-sonnet-4-6"
+        _prompt = cat["prompt"] if cat else (get_setting("CLAUDE_PROMPT") or None)
 
         summary = await generate_summary(
             script_path,
@@ -1107,8 +1101,9 @@ async def create_category_endpoint(body: dict):
     if "{script}" not in prompt:
         raise HTTPException(status_code=422, detail="prompt에 {script} 플레이스홀더가 필요합니다.")
 
+    model = (body.get("model") or "claude-sonnet-4-6").strip()
     cat_id = str(uuid.uuid4())
-    return create_category(cat_id, name, icon, description, prompt)
+    return create_category(cat_id, name, icon, description, prompt, model=model)
 
 
 @app.patch("/api/categories/{cat_id}")
@@ -1130,6 +1125,8 @@ async def update_category_endpoint(cat_id: str, body: dict):
         if "{script}" not in p:
             raise HTTPException(status_code=422, detail="prompt에 {script} 플레이스홀더가 필요합니다.")
         kwargs["prompt"] = p
+    if "model" in body:
+        kwargs["model"] = body["model"]
 
     return update_category(cat_id, **kwargs)
 
