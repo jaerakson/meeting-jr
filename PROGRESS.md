@@ -1,3 +1,14 @@
+## 2026-08-25 (작업 PC: 로컬) — 세션 20 (신규 기능 3개 완료)
+- 브랜치: main (PR #13~#17 squash 머지)
+- 완료: product-manager + director 협의 후 3개 기능 개발
+  - 액션 아이템 체크리스트: DB action_items 컬럼, Claude 요약 파싱, PATCH API, 인터랙티브 UI (PR #13, #15)
+  - 키보드 단축키: useKeyboardShortcuts 훅, Space/←→/Esc, input 포커스 시 비활성화 (PR #14)
+  - 연관 회의 검색: 키워드 추출 API, done 화면 하단 관련 회의 섹션 UI (PR #16, #17)
+- 현재 상태: main 최신 (a468deb), 서버 실행 중
+- 다음 할 일: 없음 (신규 기획 기능 모두 완료)
+- 관련 PR: #13, #14, #15, #16, #17
+- 푸시 여부: origin/main 푸시 완료
+
 ## 2026-08-25 (작업 PC: 로컬) — 세션 19 (A, C, G 완료)
 - 브랜치: main (feature/multilang-stt → PR #12 → squash 머지)
 - 완료: A, C, G 전체 완료
