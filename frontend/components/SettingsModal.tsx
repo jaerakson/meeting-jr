@@ -17,12 +17,12 @@ const KEY_LABELS: Record<string, string> = {
 const KEYS = ['HF_TOKEN', 'NOTION_API_KEY', 'NOTION_DATABASE_ID'] as const
 
 const CLAUDE_MODELS = [
-  { value: "claude-sonnet-4-6",         label: "Claude Sonnet 4.6 (기본, 권장)" },
-  { value: "claude-opus-4-6",           label: "Claude Opus 4.6 (고품질, 느림)" },
-  { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 (빠름, 경량)" },
+  { value: "claude-sonnet-4-6",         label: "Sonnet 4.6 (기본, 권장)" },
+  { value: "claude-opus-4-6",           label: "Opus 4.6 (고품질, 느림)" },
+  { value: "claude-haiku-4-5-20251001", label: "Haiku 4.5 (빠름, 경량)" },
 ]
 
-type Tab = 'general' | 'claude' | 'categories' | 'speakers'
+type Tab = 'general' | 'categories' | 'speakers'
 
 export default function SettingsModal({ onClose }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('general')
@@ -41,13 +41,6 @@ export default function SettingsModal({ onClose }: Props) {
   const [saved, setSaved] = useState(false)
   const [claudeStatus, setClaudeStatus] = useState<ClaudeStatus | null>(null)
   const [loggingOut, setLoggingOut] = useState(false)
-  const [defaultTitle, setDefaultTitle] = useState('')
-  const [initialDefaultTitle, setInitialDefaultTitle] = useState('')
-  const [claudeModel, setClaudeModel] = useState('claude-sonnet-4-6')
-  const [initialClaudeModel, setInitialClaudeModel] = useState('claude-sonnet-4-6')
-  const [claudePrompt, setClaudePrompt] = useState('')
-  const [initialClaudePrompt, setInitialClaudePrompt] = useState('')
-  const [defaultPrompt, setDefaultPrompt] = useState('')
 
   // 화자 관련 상태
   const [speakers, setSpeakers] = useState<string[]>([])
@@ -91,10 +84,10 @@ export default function SettingsModal({ onClose }: Props) {
   // 카테고리 관련 상태
   const [categories, setCategories] = useState<Category[]>([])
   const [editingCatId, setEditingCatId] = useState<string | null>(null)
-  const [editCatForm, setEditCatForm] = useState({ name: '', icon: '', description: '', prompt: '' })
+  const [editCatForm, setEditCatForm] = useState({ name: '', icon: '', description: '', prompt: '', model: 'claude-sonnet-4-6' })
   const [catSaving, setCatSaving] = useState(false)
   const [showNewCatForm, setShowNewCatForm] = useState(false)
-  const [newCatForm, setNewCatForm] = useState({ name: '', icon: '📋', description: '', prompt: '{script}' })
+  const [newCatForm, setNewCatForm] = useState({ name: '', icon: '📋', description: '', prompt: '{script}', model: 'claude-sonnet-4-6' })
   const [previewPrompt, setPreviewPrompt] = useState<string | null>(null)
 
   const loadCategories = () => {
@@ -109,25 +102,6 @@ export default function SettingsModal({ onClose }: Props) {
     fetch('/api/settings/claude-status')
       .then(r => r.json())
       .then(setClaudeStatus)
-      .catch(console.error)
-    fetch('/api/settings/default-title')
-      .then(r => r.json())
-      .then(d => {
-        setDefaultTitle(d.value ?? '')
-        setInitialDefaultTitle(d.value ?? '')
-      })
-      .catch(console.error)
-    fetch('/api/settings/claude-model')
-      .then(r => r.json())
-      .then(d => { setClaudeModel(d.value); setInitialClaudeModel(d.value) })
-      .catch(console.error)
-    fetch('/api/settings/claude-prompt')
-      .then(r => r.json())
-      .then(d => {
-        setClaudePrompt(d.value)
-        setInitialClaudePrompt(d.value)
-        setDefaultPrompt(d.default)
-      })
       .catch(console.error)
     loadCategories()
     loadSpeakers()
@@ -170,21 +144,8 @@ export default function SettingsModal({ onClose }: Props) {
         setRestoreResult(`복원 실패: ${data.detail}`)
       } else {
         setRestoreResult('설정이 복원되었습니다.')
-        // 설정 다시 로드
-        const [newStatus, newTitle, newModel, newPrompt] = await Promise.all([
-          fetch('/api/settings').then(r => r.json()),
-          fetch('/api/settings/default-title').then(r => r.json()),
-          fetch('/api/settings/claude-model').then(r => r.json()),
-          fetch('/api/settings/claude-prompt').then(r => r.json()),
-        ])
+        const newStatus = await fetch('/api/settings').then(r => r.json())
         setStatus(newStatus)
-        setDefaultTitle(newTitle.value ?? '')
-        setInitialDefaultTitle(newTitle.value ?? '')
-        setClaudeModel(newModel.value)
-        setInitialClaudeModel(newModel.value)
-        setClaudePrompt(newPrompt.value)
-        setInitialClaudePrompt(newPrompt.value)
-        setDefaultPrompt(newPrompt.default)
         loadCategories()
         loadSpeakers()
         setTimeout(() => setRestoreResult(null), 3000)
@@ -200,11 +161,7 @@ export default function SettingsModal({ onClose }: Props) {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const body: Record<string, string> = {
-        DEFAULT_MEETING_TITLE: defaultTitle,
-        CLAUDE_MODEL: claudeModel,
-        CLAUDE_PROMPT: claudePrompt,
-      }
+      const body: Record<string, string> = {}
       for (const key of KEYS) {
         if (values[key] !== '') body[key] = values[key]
       }
@@ -217,9 +174,6 @@ export default function SettingsModal({ onClose }: Props) {
       const newStatus = await fetch('/api/settings').then(r => r.json())
       setStatus(newStatus)
       setValues({ HF_TOKEN: '', NOTION_API_KEY: '', NOTION_DATABASE_ID: '' })
-      setInitialDefaultTitle(defaultTitle)
-      setInitialClaudeModel(claudeModel)
-      setInitialClaudePrompt(claudePrompt)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch {
@@ -231,7 +185,7 @@ export default function SettingsModal({ onClose }: Props) {
 
   const handleEditCat = (cat: Category) => {
     setEditingCatId(cat.id)
-    setEditCatForm({ name: cat.name, icon: cat.icon, description: cat.description, prompt: cat.prompt })
+    setEditCatForm({ name: cat.name, icon: cat.icon, description: cat.description, prompt: cat.prompt, model: cat.model || 'claude-sonnet-4-6' })
     setShowNewCatForm(false)
   }
 
@@ -282,7 +236,7 @@ export default function SettingsModal({ onClose }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newCatForm),
       })
-      setNewCatForm({ name: '', icon: '📋', description: '', prompt: '{script}' })
+      setNewCatForm({ name: '', icon: '📋', description: '', prompt: '{script}', model: 'claude-sonnet-4-6' })
       setShowNewCatForm(false)
       loadCategories()
     } catch {
@@ -293,24 +247,24 @@ export default function SettingsModal({ onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-xl">
+    <div className="flex-1 overflow-y-auto">
+      <div className="max-w-2xl mx-auto p-6">
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">설정</h2>
+        <div className="flex items-center gap-3 mb-6">
           <button
             onClick={onClose}
-            className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-colors"
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">설정</h2>
         </div>
 
         {/* 저장 성공 배너 */}
         {saved && (
-          <div className="px-6 py-2 bg-green-50 border-b border-green-100 text-green-700 text-sm flex items-center gap-2">
+          <div className="mb-4 px-4 py-2 bg-green-50 dark:bg-green-900/30 border border-green-100 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 text-sm flex items-center gap-2">
             <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
             </svg>
@@ -319,8 +273,8 @@ export default function SettingsModal({ onClose }: Props) {
         )}
 
         {/* 탭 바 */}
-        <div className="flex border-b border-gray-200 dark:border-gray-700 px-2">
-          {([['general', '일반'], ['claude', 'Claude'], ['categories', '카테고리'], ['speakers', '화자']] as [Tab, string][]).map(([id, label]) => (
+        <div className="flex border-b border-gray-200 dark:border-gray-700 mb-5">
+          {([['general', '일반'], ['categories', '카테고리'], ['speakers', '화자']] as [Tab, string][]).map(([id, label]) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
@@ -336,24 +290,9 @@ export default function SettingsModal({ onClose }: Props) {
         </div>
 
         {/* 본문 */}
-        <div className="px-6 py-5 overflow-y-auto max-h-[60vh]">
+        <div>
           {activeTab === 'general' && (
             <div className="space-y-5">
-              {/* 기본 회의 제목 섹션 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  기본 회의 제목
-                </label>
-                <input
-                  type="text"
-                  value={defaultTitle}
-                  onChange={e => setDefaultTitle(e.target.value)}
-                  placeholder="회의록 (미입력 시 기본값)"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <p className="mt-1 text-xs text-gray-400">새 녹음 시작 시 이 제목이 자동으로 설정됩니다.</p>
-              </div>
-
               {/* Claude CLI 섹션 */}
               <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
@@ -394,15 +333,15 @@ export default function SettingsModal({ onClose }: Props) {
                     </p>
                   )}
                   {claudeStatus && !claudeStatus.installed && (
-                    <div className="text-sm text-gray-600 space-y-1">
-                      <p className="font-medium text-gray-700">Claude CLI 설치 방법</p>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                      <p className="font-medium text-gray-700 dark:text-gray-300">Claude CLI 설치 방법</p>
                       <code className="block bg-gray-100 dark:bg-gray-600 rounded px-3 py-2 text-xs font-mono text-gray-800 dark:text-gray-200">
                         npm install -g @anthropic-ai/claude-code
                       </code>
                     </div>
                   )}
                   {claudeStatus?.installed && !claudeStatus.logged_in && (
-                    <div className="text-sm text-gray-600 space-y-2">
+                    <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
                       <p>터미널에서 아래 명령어를 실행하면 브라우저가 열려 로그인할 수 있습니다:</p>
                       <code className="block bg-gray-100 dark:bg-gray-600 rounded px-3 py-2 text-xs font-mono text-gray-800 dark:text-gray-200">
                         claude auth login
@@ -466,11 +405,11 @@ export default function SettingsModal({ onClose }: Props) {
                 <div className="px-4 py-3 flex items-center gap-2">
                   <button
                     onClick={handleBackup}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 transition-colors"
+                    className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
                   >
                     내보내기
                   </button>
-                  <label className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 transition-colors cursor-pointer">
+                  <label className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors cursor-pointer">
                     {restoring ? '복원 중...' : '가져오기'}
                     <input
                       type="file"
@@ -489,52 +428,35 @@ export default function SettingsModal({ onClose }: Props) {
                   </div>
                 )}
               </div>
-            </div>
-          )}
 
-          {activeTab === 'claude' && (
-            <div className="space-y-5">
-              {/* 모델 선택 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  회의록 생성 모델
-                </label>
-                <select
-                  value={claudeModel}
-                  onChange={e => setClaudeModel(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              {/* 저장 버튼 */}
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={handleSave}
+                  disabled={saving || saved}
+                  className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-all duration-300 flex items-center gap-1.5 ${
+                    saved
+                      ? 'bg-green-500'
+                      : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-50'
+                  }`}
                 >
-                  {CLAUDE_MODELS.map(m => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </select>
-                <p className="mt-1 text-xs text-gray-400">회의록 요약 시 사용할 Claude 모델을 선택합니다.</p>
-              </div>
-
-              {/* 프롬프트 커스터마이징 */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-sm font-medium text-gray-700">
-                    요약 프롬프트
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setClaudePrompt(defaultPrompt)}
-                    className="text-xs text-gray-400 hover:text-blue-600 transition-colors"
-                  >
-                    초기화
-                  </button>
-                </div>
-                <textarea
-                  value={claudePrompt || defaultPrompt}
-                  onChange={e => setClaudePrompt(e.target.value)}
-                  rows={10}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-700 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
-                  placeholder="프롬프트를 입력하세요. {script} 위치에 회의 스크립트가 삽입됩니다."
-                />
-                <p className="mt-1 text-xs text-gray-400">
-                  <code className="bg-gray-100 px-1 rounded">{'{script}'}</code> 플레이스홀더 위치에 회의 스크립트가 삽입됩니다. 미포함 시 자동으로 끝에 추가됩니다.
-                </p>
+                  {saved ? (
+                    <>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                      저장됨
+                    </>
+                  ) : saving ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                      </svg>
+                      저장 중...
+                    </>
+                  ) : '저장'}
+                </button>
               </div>
             </div>
           )}
@@ -560,7 +482,7 @@ export default function SettingsModal({ onClose }: Props) {
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => editingCatId === cat.id ? setEditingCatId(null) : handleEditCat(cat)}
-                        className="text-xs px-2.5 py-1 border rounded hover:bg-white text-gray-600 transition-colors"
+                        className="text-xs px-2.5 py-1 border rounded hover:bg-white dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors"
                       >
                         {editingCatId === cat.id ? '접기' : '편집'}
                       </button>
@@ -584,14 +506,14 @@ export default function SettingsModal({ onClose }: Props) {
                           value={editCatForm.icon}
                           onChange={e => setEditCatForm(p => ({ ...p, icon: e.target.value }))}
                           placeholder="아이콘"
-                          className="w-16 px-2 py-1.5 border rounded text-sm text-center"
+                          className="w-16 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-center text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700"
                         />
                         <input
                           type="text"
                           value={editCatForm.name}
                           onChange={e => setEditCatForm(p => ({ ...p, name: e.target.value }))}
                           placeholder="이름"
-                          className="flex-1 px-2 py-1.5 border rounded text-sm"
+                          className="flex-1 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700"
                         />
                       </div>
                       <input
@@ -599,11 +521,21 @@ export default function SettingsModal({ onClose }: Props) {
                         value={editCatForm.description}
                         onChange={e => setEditCatForm(p => ({ ...p, description: e.target.value }))}
                         placeholder="설명 (선택)"
-                        className="w-full px-2 py-1.5 border rounded text-sm"
+                        className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700"
                       />
                       <div>
+                        <label className="text-xs text-gray-500 dark:text-gray-400">요약 모델</label>
+                        <select
+                          value={editCatForm.model}
+                          onChange={e => setEditCatForm(p => ({ ...p, model: e.target.value }))}
+                          className="w-full mt-1 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700"
+                        >
+                          {CLAUDE_MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
                         <div className="flex items-center justify-between mb-1">
-                          <label className="text-xs text-gray-500">프롬프트</label>
+                          <label className="text-xs text-gray-500 dark:text-gray-400">프롬프트</label>
                           {cat.is_builtin === 1 && (
                             <button
                               onClick={() => handleResetCatPrompt(cat.id)}
@@ -617,7 +549,7 @@ export default function SettingsModal({ onClose }: Props) {
                           value={editCatForm.prompt}
                           onChange={e => setEditCatForm(p => ({ ...p, prompt: e.target.value }))}
                           rows={8}
-                          className="w-full px-2 py-1.5 border rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                          className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs font-mono text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
                           placeholder="{script} 위치에 스크립트가 삽입됩니다."
                         />
                       </div>
@@ -631,7 +563,7 @@ export default function SettingsModal({ onClose }: Props) {
                         </button>
                         <button
                           onClick={() => setPreviewPrompt(editCatForm.prompt)}
-                          className="px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                          className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                         >
                           미리보기
                         </button>
@@ -643,21 +575,21 @@ export default function SettingsModal({ onClose }: Props) {
 
               {/* 새 카테고리 추가 */}
               {showNewCatForm ? (
-                <div className="border border-dashed border-gray-300 rounded-lg p-3 space-y-2 bg-gray-50">
+                <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-3 space-y-2 bg-gray-50 dark:bg-gray-800">
                   <div className="flex gap-2">
                     <input
                       type="text"
                       value={newCatForm.icon}
                       onChange={e => setNewCatForm(p => ({ ...p, icon: e.target.value }))}
                       placeholder="아이콘"
-                      className="w-16 px-2 py-1.5 border rounded text-sm text-center bg-white"
+                      className="w-16 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-center text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700"
                     />
                     <input
                       type="text"
                       value={newCatForm.name}
                       onChange={e => setNewCatForm(p => ({ ...p, name: e.target.value }))}
                       placeholder="이름"
-                      className="flex-1 px-2 py-1.5 border rounded text-sm bg-white"
+                      className="flex-1 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700"
                     />
                   </div>
                   <input
@@ -665,13 +597,23 @@ export default function SettingsModal({ onClose }: Props) {
                     value={newCatForm.description}
                     onChange={e => setNewCatForm(p => ({ ...p, description: e.target.value }))}
                     placeholder="설명 (선택)"
-                    className="w-full px-2 py-1.5 border rounded text-sm bg-white"
+                    className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700"
                   />
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400">요약 모델</label>
+                    <select
+                      value={newCatForm.model}
+                      onChange={e => setNewCatForm(p => ({ ...p, model: e.target.value }))}
+                      className="w-full mt-1 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700"
+                    >
+                      {CLAUDE_MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select>
+                  </div>
                   <textarea
                     value={newCatForm.prompt}
                     onChange={e => setNewCatForm(p => ({ ...p, prompt: e.target.value }))}
                     rows={6}
-                    className="w-full px-2 py-1.5 border rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y bg-white"
+                    className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs font-mono text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
                     placeholder="{script} 위치에 스크립트가 삽입됩니다."
                   />
                   <div className="flex gap-2">
@@ -684,13 +626,13 @@ export default function SettingsModal({ onClose }: Props) {
                     </button>
                     <button
                       onClick={() => setPreviewPrompt(newCatForm.prompt)}
-                      className="px-3 py-1.5 border rounded text-sm text-gray-600 hover:bg-gray-50"
+                      className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                     >
                       미리보기
                     </button>
                     <button
                       onClick={() => setShowNewCatForm(false)}
-                      className="px-3 py-1.5 border rounded text-sm text-gray-600 hover:bg-gray-100"
+                      className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
                       취소
                     </button>
@@ -699,7 +641,7 @@ export default function SettingsModal({ onClose }: Props) {
               ) : (
                 <button
                   onClick={() => { setShowNewCatForm(true); setEditingCatId(null) }}
-                  className="w-full py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                  className="w-full py-2 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-400 transition-colors"
                 >
                   + 새 카테고리 추가
                 </button>
@@ -717,7 +659,7 @@ export default function SettingsModal({ onClose }: Props) {
                   onChange={e => setNewSpeakerName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleAddSpeaker()}
                   placeholder="화자 이름 입력"
-                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <button
                   onClick={handleAddSpeaker}
@@ -750,56 +692,11 @@ export default function SettingsModal({ onClose }: Props) {
             </div>
           )}
         </div>
-
-        {/* 푸터 */}
-        {activeTab !== 'categories' && activeTab !== 'speakers' && (
-          <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-b-xl">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 font-medium transition-colors"
-            >
-              취소
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving || saved || (KEYS.every(k => values[k] === '') && defaultTitle === initialDefaultTitle && claudeModel === initialClaudeModel && claudePrompt === initialClaudePrompt)}
-              className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-all duration-300 flex items-center gap-1.5 ${
-                saved
-                  ? 'bg-green-500'
-                  : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-50'
-              }`}
-            >
-              {saved ? (
-                <>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  저장됨
-                </>
-              ) : saving ? (
-                <>
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                  </svg>
-                  저장 중...
-                </>
-              ) : '저장'}
-            </button>
-          </div>
-        )}
-        {(activeTab === 'categories' || activeTab === 'speakers') && (
-          <div className="flex justify-end px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-b-xl">
-            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 font-medium">
-              닫기
-            </button>
-          </div>
-        )}
       </div>
 
       {/* 프롬프트 미리보기 모달 */}
       {previewPrompt !== null && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">프롬프트 미리보기</h3>
@@ -820,7 +717,7 @@ export default function SettingsModal({ onClose }: Props) {
                   : previewPrompt + '\n\n---\n회의 스크립트:\n[SPEAKER_00] 안녕하세요, 오늘 회의를 시작하겠습니다.\n[SPEAKER_01] 네, 준비되었습니다.'}
               </pre>
             </div>
-            <div className="flex justify-end px-5 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-b-xl">
+            <div className="flex justify-end px-5 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
               <button
                 onClick={() => setPreviewPrompt(null)}
                 className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 font-medium"
