@@ -95,6 +95,7 @@ export default function SettingsModal({ onClose }: Props) {
   const [catSaving, setCatSaving] = useState(false)
   const [showNewCatForm, setShowNewCatForm] = useState(false)
   const [newCatForm, setNewCatForm] = useState({ name: '', icon: '📋', description: '', prompt: '{script}' })
+  const [previewPrompt, setPreviewPrompt] = useState<string | null>(null)
 
   const loadCategories = () => {
     fetch('/api/categories').then(r => r.json()).then(setCategories).catch(() => {})
@@ -620,13 +621,21 @@ export default function SettingsModal({ onClose }: Props) {
                           placeholder="{script} 위치에 스크립트가 삽입됩니다."
                         />
                       </div>
-                      <button
-                        onClick={() => handleSaveCat(cat.id)}
-                        disabled={catSaving}
-                        className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors"
-                      >
-                        {catSaving ? '저장 중...' : '저장'}
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleSaveCat(cat.id)}
+                          disabled={catSaving}
+                          className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors"
+                        >
+                          {catSaving ? '저장 중...' : '저장'}
+                        </button>
+                        <button
+                          onClick={() => setPreviewPrompt(editCatForm.prompt)}
+                          className="px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                        >
+                          미리보기
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -672,6 +681,12 @@ export default function SettingsModal({ onClose }: Props) {
                       className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-sm font-medium"
                     >
                       {catSaving ? '생성 중...' : '추가'}
+                    </button>
+                    <button
+                      onClick={() => setPreviewPrompt(newCatForm.prompt)}
+                      className="px-3 py-1.5 border rounded text-sm text-gray-600 hover:bg-gray-50"
+                    >
+                      미리보기
                     </button>
                     <button
                       onClick={() => setShowNewCatForm(false)}
@@ -781,6 +796,41 @@ export default function SettingsModal({ onClose }: Props) {
           </div>
         )}
       </div>
+
+      {/* 프롬프트 미리보기 모달 */}
+      {previewPrompt !== null && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b">
+              <h3 className="text-sm font-semibold text-gray-800">프롬프트 미리보기</h3>
+              <button
+                onClick={() => setPreviewPrompt(null)}
+                className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5">
+              <p className="text-xs text-gray-400 mb-3">Claude에게 전송될 실제 프롬프트입니다. <code className="bg-gray-100 px-1 rounded">{'{script}'}</code> 위치에 회의 스크립트가 삽입됩니다.</p>
+              <pre className="text-xs text-gray-700 font-mono whitespace-pre-wrap bg-gray-50 border border-gray-200 rounded-lg p-4 leading-relaxed">
+                {previewPrompt.includes('{script}')
+                  ? previewPrompt.replace('{script}', '[SPEAKER_00] 안녕하세요, 오늘 회의를 시작하겠습니다.\n[SPEAKER_01] 네, 준비되었습니다.\n[SPEAKER_00] 첫 번째 안건은 프로젝트 일정 검토입니다.\n[SPEAKER_01] 현재 진행률은 70%이고 다음 주까지 완료 예정입니다.\n[SPEAKER_00] 좋습니다. 두 번째 안건으로 넘어가겠습니다.')
+                  : previewPrompt + '\n\n---\n회의 스크립트:\n[SPEAKER_00] 안녕하세요, 오늘 회의를 시작하겠습니다.\n[SPEAKER_01] 네, 준비되었습니다.'}
+              </pre>
+            </div>
+            <div className="flex justify-end px-5 py-3 border-t bg-gray-50 rounded-b-xl">
+              <button
+                onClick={() => setPreviewPrompt(null)}
+                className="px-4 py-1.5 text-sm text-gray-600 hover:text-gray-800 font-medium"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
