@@ -1,6 +1,15 @@
-## 진행 중 — feature/speaker-profile
+## 진행 중 — feature/stats-dashboard
 - 시작: 2026-08-25
-- 목표: 화자 프로필 관리 (POST/DELETE /api/speakers + 설정 모달 UI)
+- 목표: /meetings 페이지 상단 통계 카드 (총 회의, 이번주, 카테고리별)
+
+## 2026-08-25 (작업 PC: 로컬) — 세션 13
+- 브랜치: main (feature/speaker-profile → PR #7 → squash 머지)
+- 완료: 화자 프로필 관리
+  - 백엔드: POST /api/speakers, DELETE /api/speakers/{name}
+  - 프론트: 설정 모달 '화자' 탭 (이름 추가/삭제, Enter 지원)
+- 현재 상태: main 최신 (04bdded)
+- 관련 커밋: PR #7
+- 푸시 여부: origin/main 푸시 완료
 
 ## 2026-08-25 (작업 PC: 로컬) — 세션 12
 - 브랜치: main (feature/dark-mode → PR #6 → squash 머지)
