@@ -314,10 +314,13 @@ function MeetingsContent() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {data?.items
               .filter(job => !bookmarkOnly || job.bookmarked === 1)
-              .map(job => (
+              .map(job => {
+                const cat = job.category_id ? categories.find(c => c.id === job.category_id) : undefined
+                const enrichedJob = cat ? { ...job, category: cat.name } : job
+                return (
                 <MeetingCard
                   key={job.id}
-                  job={job}
+                  job={enrichedJob}
                   searchQuery={query}
                   onBookmark={async (id) => {
                     await fetch(`/api/jobs/${id}/bookmark`, { method: 'PATCH' })
@@ -334,7 +337,7 @@ function MeetingsContent() {
                     } : prev)
                   }}
                 />
-              ))}
+              )})}
           </div>
         )}
 
