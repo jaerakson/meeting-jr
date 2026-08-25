@@ -145,6 +145,7 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
   const [editContent, setEditContent] = useState(summary)
   const [isSaving, setIsSaving] = useState(false)
   const [nameMap, setNameMap] = useState<Record<string, string>>({})
+  const [copyFeedback, setCopyFeedback] = useState(false)
 
   // Bug fix: jobId가 바뀌면 편집 상태 리셋
   useEffect(() => {
@@ -269,6 +270,18 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
                 className="px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
               >
                 편집
+              </button>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(summary).then(() => {
+                    setCopyFeedback(true)
+                    setTimeout(() => setCopyFeedback(false), 2000)
+                  })
+                }}
+                className="px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                title="클립보드에 복사"
+              >
+                {copyFeedback ? '복사됨' : '복사'}
               </button>
               <button
                 onClick={handleDownload}
