@@ -56,6 +56,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("category_id", "TEXT"),
         ("language", "TEXT"),
         ("action_items", "TEXT"),
+        ("bookmarked", "INTEGER NOT NULL DEFAULT 0"),
     ]:
         if col not in existing:
             conn.execute(f"ALTER TABLE meetings ADD COLUMN {col} {definition}")
@@ -152,11 +153,11 @@ def get_job(job_id: str) -> Optional[dict]:
 
 
 def get_all_jobs() -> list[dict]:
-    """전체 Job 목록을 최신순(created_at DESC)으로 반환."""
+    """전체 Job 목록을 북마크 우선, 최신순으로 반환."""
     conn = _get_conn()
     try:
         rows = conn.execute(
-            "SELECT * FROM meetings ORDER BY created_at DESC"
+            "SELECT * FROM meetings ORDER BY bookmarked DESC, created_at DESC"
         ).fetchall()
         return [_row_to_dict(r) for r in rows]
     finally:
@@ -421,6 +422,20 @@ def update_job_action_items(job_id: str, action_items: list[dict]) -> None:
             (json.dumps(action_items, ensure_ascii=False), job_id),
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def toggle_bookmark(job_id: str) -> Optional[dict]:
+    """bookmarked 값을 토글(0↔1)하고 갱신된 Job을 반환한다."""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE meetings SET bookmarked = CASE WHEN bookmarked = 1 THEN 0 ELSE 1 END WHERE id = ?",
+            (job_id,),
+        )
+        conn.commit()
+        return get_job(job_id)
     finally:
         conn.close()
 
