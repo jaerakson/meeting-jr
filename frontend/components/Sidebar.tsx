@@ -196,6 +196,14 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
               <span>{formatDate(job.created_at)}</span>
               {job.duration_sec != null && <span>{formatDuration(job.duration_sec)}</span>}
             </div>
+            {job.tags && job.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {job.tags.slice(0, 3).map(tag => (
+                  <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-slate-600 text-slate-300 rounded-full">{tag}</span>
+                ))}
+                {job.tags.length > 3 && <span className="text-[10px] text-slate-500">+{job.tags.length - 3}</span>}
+              </div>
+            )}
             {job.status === 'error' && (
               <button
                 onClick={(e) => {

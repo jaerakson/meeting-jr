@@ -39,6 +39,8 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   const [relatedMeetings, setRelatedMeetings] = useState<RelatedMeeting[]>([])
   const [memo, setMemo] = useState('')
   const [memoSaved, setMemoSaved] = useState(false)
+  const [tags, setTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState('')
 
   useEffect(() => {
     if (job?.status === 'done' && job.id) {
@@ -66,6 +68,8 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
     setResummarizeCategory(job?.category_id || 'meeting')
     setMemo(job?.memo || '')
     setMemoSaved(false)
+    setTags(job?.tags || [])
+    setTagInput('')
   }, [job?.id])
 
   useEffect(() => {
@@ -73,6 +77,30 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
       Notification.requestPermission()
     }
   }, [])
+
+  const saveTags = async (newTags: string[]) => {
+    if (!job) return
+    setTags(newTags)
+    try {
+      await fetch(`/api/jobs/${job.id}/tags`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: newTags }),
+      })
+    } catch {
+      // silent fail
+    }
+  }
+
+  const addTag = (raw: string) => {
+    const tag = raw.trim()
+    if (!tag || tags.includes(tag)) return
+    saveTags([...tags, tag])
+  }
+
+  const removeTag = (tag: string) => {
+    saveTags(tags.filter(t => t !== tag))
+  }
 
   const saveMemo = async () => {
     if (!job) return
@@ -378,6 +406,31 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             </div>
             <div className="md:w-[45%] flex flex-col min-h-0 p-4 h-1/2 md:h-auto">
               <SummaryPanel summary={job.summary || ''} jobId={job.id} onSummaryUpdate={onJobsChange} speakers={job.speakers} actionItems={job.action_items} categoryId={job.category_id} />
+              <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">태그</h3>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {tags.map(tag => (
+                    <span key={tag} className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full">
+                      {tag}
+                      <button onClick={() => removeTag(tag)} className="hover:text-red-500 transition-colors">&times;</button>
+                    </span>
+                  ))}
+                  <input
+                    value={tagInput}
+                    onChange={e => setTagInput(e.target.value)}
+                    onKeyDown={e => {
+                      if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
+                        e.preventDefault()
+                        addTag(tagInput.replace(',', ''))
+                        setTagInput('')
+                      }
+                    }}
+                    onBlur={() => { if (tagInput.trim()) { addTag(tagInput); setTagInput('') } }}
+                    placeholder="태그 추가..."
+                    className="text-xs px-2 py-1 bg-transparent border-b border-gray-200 dark:border-gray-600 focus:border-blue-400 outline-none text-gray-600 dark:text-gray-300 w-24"
+                  />
+                </div>
+              </div>
               <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
                 <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">메모</h3>
                 <textarea

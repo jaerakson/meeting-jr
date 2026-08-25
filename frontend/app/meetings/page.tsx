@@ -40,6 +40,8 @@ function MeetingsContent() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [bookmarkOnly, setBookmarkOnly] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [tagFilter, setTagFilter] = useState(searchParams.get('tag') || '')
+  const [allTags, setAllTags] = useState<string[]>([])
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -51,19 +53,24 @@ function MeetingsContent() {
       .then(r => r.ok ? r.json() : null)
       .then(setStats)
       .catch(() => {})
+    fetch('/api/tags')
+      .then(r => r.ok ? r.json() : [])
+      .then(setAllTags)
+      .catch(() => {})
   }, [])
 
-  const buildUrl = (q: string, p: number, cat: string, from: string, to: string) => {
+  const buildUrl = (q: string, p: number, cat: string, from: string, to: string, t: string = '') => {
     const params = new URLSearchParams()
     if (q) params.set('q', q)
     if (p > 1) params.set('page', String(p))
     if (cat) params.set('category', cat)
     if (from) params.set('from', from)
     if (to) params.set('to', to)
+    if (t) params.set('tag', t)
     return `/meetings${params.toString() ? '?' + params.toString() : ''}`
   }
 
-  const fetchMeetings = useCallback(async (q: string, p: number, cat: string, from: string, to: string) => {
+  const fetchMeetings = useCallback(async (q: string, p: number, cat: string, from: string, to: string, t: string = '') => {
     setLoading(true)
     try {
       const params = new URLSearchParams({ page: String(p), limit: '12' })
@@ -71,6 +78,7 @@ function MeetingsContent() {
       if (cat) params.set('category_id', cat)
       if (from) params.set('date_from', from)
       if (to) params.set('date_to', to)
+      if (t) params.set('tag', t)
       const res = await fetch(`/api/meetings?${params.toString()}`)
       if (res.ok) setData(await res.json())
     } finally {
@@ -83,8 +91,8 @@ function MeetingsContent() {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       setPage(1)
-      router.replace(buildUrl(query, 1, categoryId, dateFrom, dateTo))
-      fetchMeetings(query, 1, categoryId, dateFrom, dateTo)
+      router.replace(buildUrl(query, 1, categoryId, dateFrom, dateTo, tagFilter))
+      fetchMeetings(query, 1, categoryId, dateFrom, dateTo, tagFilter)
     }, 300)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
   }, [query]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -92,14 +100,14 @@ function MeetingsContent() {
   // 필터 변경 시 즉시
   useEffect(() => {
     setPage(1)
-    router.replace(buildUrl(query, 1, categoryId, dateFrom, dateTo))
-    fetchMeetings(query, 1, categoryId, dateFrom, dateTo)
-  }, [categoryId, dateFrom, dateTo]) // eslint-disable-line react-hooks/exhaustive-deps
+    router.replace(buildUrl(query, 1, categoryId, dateFrom, dateTo, tagFilter))
+    fetchMeetings(query, 1, categoryId, dateFrom, dateTo, tagFilter)
+  }, [categoryId, dateFrom, dateTo, tagFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 페이지 변경 시 즉시 fetch
   useEffect(() => {
-    fetchMeetings(query, page, categoryId, dateFrom, dateTo)
-    router.replace(buildUrl(query, page, categoryId, dateFrom, dateTo))
+    fetchMeetings(query, page, categoryId, dateFrom, dateTo, tagFilter)
+    router.replace(buildUrl(query, page, categoryId, dateFrom, dateTo, tagFilter))
   }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePageChange = (newPage: number) => {
@@ -125,12 +133,13 @@ function MeetingsContent() {
     }
   }
 
-  const hasFilters = query || categoryId || dateFrom || dateTo
+  const hasFilters = query || categoryId || dateFrom || dateTo || tagFilter
   const clearFilters = () => {
     setQuery('')
     setCategoryId('')
     setDateFrom('')
     setDateTo('')
+    setTagFilter('')
   }
 
   return (
@@ -244,6 +253,20 @@ function MeetingsContent() {
             >
               ★ 북마크만
             </button>
+
+            {/* 태그 필터 */}
+            {allTags.length > 0 && (
+              <select
+                value={tagFilter}
+                onChange={e => setTagFilter(e.target.value)}
+                className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white cursor-pointer"
+              >
+                <option value="">전체 태그</option>
+                {allTags.map(tag => (
+                  <option key={tag} value={tag}>{tag}</option>
+                ))}
+              </select>
+            )}
 
             {/* 필터 초기화 */}
             {hasFilters && (

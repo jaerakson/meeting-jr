@@ -42,6 +42,8 @@ from .database import (
     update_job_action_items,
     toggle_bookmark,
     update_job_memo,
+    update_job_tags,
+    get_all_tags,
 )
 from .job_queue import job_queue, start_worker, progress_store, update_progress
 from .settings_manager import get_settings_status, get_setting, set_setting, SETTING_KEYS
@@ -527,6 +529,21 @@ async def update_memo(job_id: str, body: dict):
 
 
 # ---------------------------------------------------------------------------
+# 8-d) PATCH /api/jobs/{job_id}/tags
+# ---------------------------------------------------------------------------
+
+@app.patch("/api/jobs/{job_id}/tags")
+async def patch_tags(job_id: str, body: dict):
+    tags = body.get("tags")
+    if tags is None or not isinstance(tags, list):
+        raise HTTPException(status_code=422, detail="tags 리스트가 필요합니다.")
+    job = update_job_tags(job_id, tags)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+    return job
+
+
+# ---------------------------------------------------------------------------
 # 9-a) PATCH /api/jobs/{job_id}/transcript  — 재요약 없이 transcript만 저장
 # ---------------------------------------------------------------------------
 
@@ -900,10 +917,21 @@ async def list_meetings(
     category_id: str = "",
     date_from: str = "",
     date_to: str = "",
+    tag: str = "",
 ):
-    """제목+요약 검색 + 카테고리/날짜 필터 + 페이지네이션."""
+    """제목+요약 검색 + 카테고리/날짜/태그 필터 + 페이지네이션."""
     limit = min(limit, 100)
-    return search_jobs(q=q, page=page, limit=limit, category_id=category_id, date_from=date_from, date_to=date_to)
+    return search_jobs(q=q, page=page, limit=limit, category_id=category_id, date_from=date_from, date_to=date_to, tag=tag)
+
+
+# ---------------------------------------------------------------------------
+# Tags API
+# ---------------------------------------------------------------------------
+
+@app.get("/api/tags")
+async def list_tags():
+    """전체 사용된 태그 목록 반환."""
+    return get_all_tags()
 
 
 # ---------------------------------------------------------------------------
