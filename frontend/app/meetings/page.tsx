@@ -39,6 +39,7 @@ function MeetingsContent() {
   const [categories, setCategories] = useState<Category[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [bookmarkOnly, setBookmarkOnly] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -106,6 +107,24 @@ function MeetingsContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const res = await fetch('/api/export')
+      if (res.ok) {
+        const blob = await res.blob()
+        const a = Object.assign(document.createElement('a'), {
+          href: URL.createObjectURL(blob),
+          download: `meetings-export-${new Date().toISOString().slice(0, 10)}.zip`,
+        })
+        a.click()
+        URL.revokeObjectURL(a.href)
+      }
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const hasFilters = query || categoryId || dateFrom || dateTo
   const clearFilters = () => {
     setQuery('')
@@ -126,7 +145,14 @@ function MeetingsContent() {
           >
             ← 돌아가기
           </Link>
-          <h1 className="text-xl font-semibold text-gray-800">회의 목록</h1>
+          <h1 className="text-xl font-semibold text-gray-800 flex-1">회의 목록</h1>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 disabled:opacity-50 transition-colors"
+          >
+            {exporting ? '내보내는 중...' : '⬇ 전체 내보내기'}
+          </button>
         </div>
 
         {/* 통계 카드 */}
