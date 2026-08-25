@@ -87,6 +87,16 @@ export default function MeetingCard({ job }: MeetingCardProps) {
         </p>
       )}
 
+      {/* 태그 */}
+      {job.tags && job.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {job.tags.slice(0, 3).map(tag => (
+            <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full">{tag}</span>
+          ))}
+          {job.tags.length > 3 && <span className="text-[10px] text-gray-400">+{job.tags.length - 3}</span>}
+        </div>
+      )}
+
       {/* 액션 아이템 수 */}
       {actionCount > 0 && (
         <p className="text-xs text-blue-600 font-medium">액션 아이템 {actionCount}건</p>

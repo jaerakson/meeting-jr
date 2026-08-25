@@ -40,6 +40,13 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
             d["action_items"] = []
     else:
         d["action_items"] = []
+    if d.get("tags"):
+        try:
+            d["tags"] = json.loads(d["tags"])
+        except (json.JSONDecodeError, TypeError):
+            d["tags"] = []
+    else:
+        d["tags"] = []
     return d
 
 
@@ -58,6 +65,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("action_items", "TEXT"),
         ("bookmarked", "INTEGER NOT NULL DEFAULT 0"),
         ("memo", "TEXT"),
+        ("tags", "TEXT"),
     ]:
         if col not in existing:
             conn.execute(f"ALTER TABLE meetings ADD COLUMN {col} {definition}")
@@ -278,6 +286,7 @@ def search_jobs(
     category_id: str = "",
     date_from: str = "",
     date_to: str = "",
+    tag: str = "",
 ) -> dict:
     """제목+요약 LIKE 검색 + 카테고리/날짜 필터 + 페이지네이션.
 
@@ -308,6 +317,10 @@ def search_jobs(
         if date_to:
             conditions.append("DATE(created_at) <= ?")
             params.append(date_to[:10])
+
+        if tag:
+            conditions.append("tags LIKE ?")
+            params.append(f'%"{tag}"%')
 
         where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
@@ -448,6 +461,40 @@ def update_job_memo(job_id: str, memo: str) -> Optional[dict]:
         conn.execute("UPDATE meetings SET memo = ? WHERE id = ?", (memo, job_id))
         conn.commit()
         return get_job(job_id)
+    finally:
+        conn.close()
+
+
+def update_job_tags(job_id: str, tags: list[str]) -> Optional[dict]:
+    """태그 목록을 JSON으로 저장하고 갱신된 Job을 반환한다."""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE meetings SET tags = ? WHERE id = ?",
+            (json.dumps(tags, ensure_ascii=False), job_id),
+        )
+        conn.commit()
+        return get_job(job_id)
+    finally:
+        conn.close()
+
+
+def get_all_tags() -> list[str]:
+    """전체 사용된 태그 목록을 반환한다."""
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT tags FROM meetings WHERE tags IS NOT NULL AND tags != ''"
+        ).fetchall()
+        tag_set: set[str] = set()
+        for row in rows:
+            try:
+                parsed = json.loads(row[0])
+                if isinstance(parsed, list):
+                    tag_set.update(parsed)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return sorted(tag_set)
     finally:
         conn.close()
 
