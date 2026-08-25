@@ -4,11 +4,19 @@ import { useState, useEffect, useCallback } from 'react'
 import { Job } from '@/types'
 import Sidebar from '@/components/Sidebar'
 import MainArea from '@/components/MainArea'
+import ShortcutHelpModal from '@/components/ShortcutHelpModal'
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 
 export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showShortcutHelp, setShowShortcutHelp] = useState(false)
+
+  useKeyboardShortcuts({
+    onHelp: () => setShowShortcutHelp(true),
+    onEscape: () => setShowShortcutHelp(false),
+  })
 
   // /meetings 에서 카드 클릭 시 /?job=<id> 로 이동 — 해당 job 자동 선택
   useEffect(() => {
@@ -83,6 +91,8 @@ export default function Home() {
         onNewRecording={handleNewRecording}
         onOpenSidebar={() => setSidebarOpen(true)}
       />
+
+      {showShortcutHelp && <ShortcutHelpModal onClose={() => setShowShortcutHelp(false)} />}
     </div>
   )
 }
