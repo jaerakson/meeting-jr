@@ -1,6 +1,15 @@
-## 진행 중 — feature/mobile-responsive
-- 시작: 2026-08-25
-- 목표: 모바일 반응형 레이아웃 최적화 (터치 버튼, 패딩, RecordingZone 등)
+## 2026-08-25 (작업 PC: 로컬) — 세션 15 (기능 b~f 완료)
+- 브랜치: main (feature/mobile-responsive → PR #9 → squash 머지)
+- 완료: 기능 b~f 전체 완료
+  - b. 화자 프로필 관리: POST/DELETE /api/speakers + 설정 모달 '화자' 탭 (PR #7)
+  - c. 통계 대시보드: GET /api/stats + /meetings 페이지 통계 카드 4개 (PR #8)
+  - d. 실패 재시도: 이미 구현 확인 (추가 PR 불필요)
+  - e. 다크 모드: useTheme 훅 + Tailwind class 전체 적용 (PR #6, 세션 12)
+  - f. 모바일 최적화: Sidebar 삭제 버튼 모바일 상시표시, ProgressCard 패딩 (PR #9)
+- 현재 상태: main 최신 (9b6dbbb), 브랜치 origin/main 만 남음
+- 다음 할 일: 없음 (모든 계획 기능 완료)
+- 관련 PR: #6, #7, #8, #9
+- 푸시 여부: origin/main 푸시 완료
 
 ## 2026-08-25 (작업 PC: 로컬) — 세션 14
 - 브랜치: main (feature/stats-dashboard → PR #8 → squash 머지)
