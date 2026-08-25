@@ -14,6 +14,7 @@ import logging
 import os
 from pathlib import Path
 
+import numpy as np
 import ffmpeg
 import torch
 import torchaudio
@@ -104,6 +105,9 @@ if hasattr(_pyannote_pipeline, 'hf_hub_download'):
         _hf_hub.hf_hub_download.__wrapped__ if hasattr(_hf_hub.hf_hub_download, '__wrapped__') else _hf_hub.hf_hub_download
     )
 
+from pyannote.audio import Model as EmbeddingModel, Inference as EmbeddingInference
+from pyannote.core import Segment
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -111,6 +115,130 @@ logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent.parent
 INPUT_DIR = BASE_DIR / "input"
 SPEAKERS_FILE = BASE_DIR / "speakers.json"
+
+
+# ---------------------------------------------------------------------------
+# Speaker Embedding 모델 캐시 + 추출 함수
+# ---------------------------------------------------------------------------
+
+_embedding_model_cache: dict = {}
+
+
+def _get_hf_token() -> str:
+    """settings_manager에서 HF_TOKEN을 가져온다."""
+    from .settings_manager import get_setting
+    hf_token = get_setting("HF_TOKEN")
+    if not hf_token:
+        raise ValueError(
+            "HF_TOKEN이 설정되지 않았습니다. "
+            "설정 화면에서 HuggingFace 토큰을 입력하세요."
+        )
+    return hf_token
+
+
+def _get_embedding_model(hf_token: str) -> EmbeddingModel:
+    """Embedding 모델을 캐시하여 반환한다."""
+    if "model" not in _embedding_model_cache:
+        model = EmbeddingModel.from_pretrained(
+            "pyannote/embedding", use_auth_token=hf_token
+        )
+        try:
+            if torch.backends.mps.is_available():
+                device = torch.device("mps")
+            else:
+                device = torch.device("cpu")
+        except Exception:
+            device = torch.device("cpu")
+        _embedding_model_cache["model"] = model.to(device)
+    return _embedding_model_cache["model"]
+
+
+def extract_speaker_embedding(
+    wav_path: str,
+    start_sec: float | None = None,
+    end_sec: float | None = None,
+) -> np.ndarray:
+    """
+    WAV 파일(또는 특정 구간)에서 speaker embedding 추출.
+
+    Args:
+        wav_path: WAV 파일 경로
+        start_sec: 시작 시간 (None이면 전체)
+        end_sec: 종료 시간 (None이면 전체)
+
+    Returns:
+        numpy array (float32), shape: (embedding_dim,) — 보통 192 또는 512
+    """
+    hf_token = _get_hf_token()
+    model = _get_embedding_model(hf_token)
+    inference = EmbeddingInference(model, window="whole")
+
+    if start_sec is not None and end_sec is not None:
+        duration = end_sec - start_sec
+        if duration < 1.0:
+            logger.warning(
+                "구간이 %.2f초로 너무 짧습니다 (< 1초). "
+                "embedding 신뢰도가 낮을 수 있습니다.", duration
+            )
+        embedding = inference.crop(wav_path, Segment(start_sec, end_sec))
+    else:
+        embedding = inference(wav_path)
+
+    return np.array(embedding, dtype=np.float32).flatten()
+
+
+def extract_embeddings_from_diarization(
+    wav_path: str,
+    diarization_result: dict,
+) -> dict[str, np.ndarray]:
+    """
+    diarization 결과의 각 화자별 embedding 추출.
+
+    각 화자의 구간들 중 5초 이상인 구간을 우선 사용하고,
+    여러 구간이 있으면 평균을 낸다.
+
+    Args:
+        wav_path: WAV 파일 경로
+        diarization_result: {"segments": [{"speaker": "SPEAKER_00", "start": 0.5, "end": 3.2}, ...]}
+
+    Returns:
+        {"SPEAKER_00": np.ndarray, "SPEAKER_01": np.ndarray, ...}
+    """
+    segments = diarization_result.get("segments", [])
+
+    # 화자별 구간 수집
+    speaker_segments: dict[str, list[dict]] = {}
+    for seg in segments:
+        speaker = seg["speaker"]
+        speaker_segments.setdefault(speaker, []).append(seg)
+
+    result: dict[str, np.ndarray] = {}
+
+    for speaker, segs in speaker_segments.items():
+        # 길이 기준 내림차순 정렬
+        segs_sorted = sorted(segs, key=lambda s: s["end"] - s["start"], reverse=True)
+
+        # 5초 이상 구간 우선, 없으면 가장 긴 구간 최대 3개
+        long_segs = [s for s in segs_sorted if (s["end"] - s["start"]) >= 5.0]
+        selected = long_segs[:3] if long_segs else segs_sorted[:3]
+
+        embeddings = []
+        for seg in selected:
+            try:
+                emb = extract_speaker_embedding(wav_path, seg["start"], seg["end"])
+                embeddings.append(emb)
+            except Exception as e:
+                logger.warning(
+                    "화자 %s 구간 [%.1f-%.1f] embedding 추출 실패: %s",
+                    speaker, seg["start"], seg["end"], e,
+                )
+
+        if embeddings:
+            result[speaker] = np.mean(embeddings, axis=0).astype(np.float32)
+        else:
+            logger.warning("화자 %s의 embedding을 추출할 수 없습니다.", speaker)
+
+    return result
 
 
 # ---------------------------------------------------------------------------
