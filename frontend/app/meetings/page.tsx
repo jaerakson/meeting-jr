@@ -326,6 +326,13 @@ function MeetingsContent() {
                       items: prev.items.map(j => j.id === id ? { ...j, bookmarked: j.bookmarked ? 0 : 1 } : j)
                     } : prev)
                   }}
+                  onDelete={async (id) => {
+                    await fetch(`/api/jobs/${id}`, { method: 'DELETE' })
+                    setData(prev => prev ? {
+                      ...prev,
+                      items: prev.items.filter(j => j.id !== id)
+                    } : prev)
+                  }}
                 />
               ))}
           </div>

@@ -8,6 +8,7 @@ interface MeetingCardProps {
   job: Job
   searchQuery?: string
   onBookmark?: (jobId: string) => void
+  onDelete?: (jobId: string) => void
 }
 
 function escapeRegExp(str: string): string {
@@ -60,7 +61,7 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   error:         { label: '실패',      cls: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-400' },
 }
 
-export default function MeetingCard({ job, searchQuery, onBookmark }: MeetingCardProps) {
+export default function MeetingCard({ job, searchQuery, onBookmark, onDelete }: MeetingCardProps) {
   const router = useRouter()
   const badge = STATUS_BADGE[job.status] ?? { label: job.status, cls: 'bg-gray-100 text-gray-800' }
   const actionCount = job.summary ? countActionItems(job.summary) : 0
@@ -90,6 +91,18 @@ export default function MeetingCard({ job, searchQuery, onBookmark }: MeetingCar
               title={job.bookmarked ? '북마크 해제' : '북마크'}
             >
               {job.bookmarked ? '★' : '☆'}
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={e => {
+                e.stopPropagation()
+                if (confirm(`"${job.title}" 을 삭제할까요?`)) onDelete(job.id)
+              }}
+              className="text-gray-300 dark:text-gray-600 hover:text-red-400 transition-colors text-sm leading-none"
+              title="삭제"
+            >
+              🗑
             </button>
           )}
         </div>
