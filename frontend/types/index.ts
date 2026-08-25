@@ -18,6 +18,12 @@ export interface Category {
   sort_order: number
 }
 
+export interface ActionItem {
+  text: string
+  assignee: string
+  done: boolean
+}
+
 export interface Job {
   id: string
   title: string
@@ -32,6 +38,7 @@ export interface Job {
   notion_url?: string
   notion_page_id?: string
   category_id?: string
+  action_items?: ActionItem[]
 }
 
 export interface ProgressEvent {

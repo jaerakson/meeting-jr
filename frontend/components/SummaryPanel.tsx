@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
+import { ActionItem } from '@/types'
 
 interface SummaryPanelProps {
   summary: string
   jobId: string
   onSummaryUpdate?: (newSummary: string) => void
   speakers?: Record<string, string>
+  actionItems?: ActionItem[]
 }
 
 const TABS = ['핵심 요약', '주요 논의', '결정 사항', '액션 아이템'] as const
@@ -139,20 +141,39 @@ function renderMarkdown(text: string): React.ReactNode[] {
   return nodes
 }
 
-export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers }: SummaryPanelProps) {
+export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers, actionItems: initialActionItems }: SummaryPanelProps) {
   const [activeTab, setActiveTab] = useState<typeof TABS[number]>('핵심 요약')
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(summary)
   const [isSaving, setIsSaving] = useState(false)
   const [nameMap, setNameMap] = useState<Record<string, string>>({})
   const [copyFeedback, setCopyFeedback] = useState(false)
+  const [actionItems, setActionItems] = useState<ActionItem[]>(initialActionItems || [])
 
   // Bug fix: jobId가 바뀌면 편집 상태 리셋
   useEffect(() => {
     setIsEditing(false)
     setEditContent(summary)
     setNameMap({})
+    setActionItems(initialActionItems || [])
   }, [jobId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // initialActionItems가 외부에서 바뀌면 동기화
+  useEffect(() => {
+    setActionItems(initialActionItems || [])
+  }, [initialActionItems])
+
+  const handleToggleActionItem = async (idx: number) => {
+    const updated = actionItems.map((item, i) =>
+      i === idx ? { ...item, done: !item.done } : item
+    )
+    setActionItems(updated)
+    await fetch(`/api/jobs/${jobId}/action-items`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action_items: updated }),
+    })
+  }
 
   const sections = useMemo(() => {
     const result: Record<string, string> = {}
@@ -325,6 +346,23 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
               onChange={(e) => setEditContent(e.target.value)}
               className="flex-1 min-h-[200px] text-sm text-gray-700 font-mono p-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-accent"
             />
+          </div>
+        ) : activeTab === '액션 아이템' && actionItems.length > 0 ? (
+          <div className="space-y-2">
+            {actionItems.map((item, idx) => (
+              <label key={idx} className="flex items-start gap-2 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={item.done}
+                  onChange={() => handleToggleActionItem(idx)}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                />
+                <span className={`text-sm ${item.done ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                  {item.assignee && <span className="font-medium text-blue-600 mr-1">@{item.assignee}</span>}
+                  {item.text}
+                </span>
+              </label>
+            ))}
           </div>
         ) : (
           <div>{renderMarkdown(currentContent)}</div>
