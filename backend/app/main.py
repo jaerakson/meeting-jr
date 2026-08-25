@@ -7,9 +7,11 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 import asyncio
+import io
 import json
 import os
 import uuid
+import zipfile
 
 import re
 from collections import Counter
@@ -991,6 +993,53 @@ async def get_related_meetings(job_id: str):
 
     results.sort(key=lambda x: x["score"], reverse=True)
     return {"items": results[:5]}
+
+
+# ---------------------------------------------------------------------------
+# ZIP 전체 내보내기
+# ---------------------------------------------------------------------------
+
+@app.get("/api/export")
+async def export_all_meetings():
+    """모든 회의를 ZIP으로 내보낸다."""
+    jobs = get_all_jobs()
+    if not jobs:
+        raise HTTPException(status_code=404, detail="내보낼 회의가 없습니다.")
+
+    def generate_zip():
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for job in jobs:
+                job_id = job["id"]
+                title = (job.get("title") or job_id)[:40]
+                safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)
+                folder = f"{safe_title}/"
+
+                if job.get("summary"):
+                    date = job.get("created_at", "")[:10]
+                    md = f"# {job.get('title', '')}\n\n날짜: {date}\n\n## 요약\n\n{job['summary']}"
+                    if job.get("transcript"):
+                        md += f"\n\n## 스크립트\n\n{job['transcript']}"
+                    zf.writestr(folder + "summary.md", md.encode("utf-8"))
+
+                if job.get("transcript"):
+                    zf.writestr(folder + "transcript.txt", job["transcript"].encode("utf-8"))
+
+                for ext in AUDIO_EXTENSIONS:
+                    audio_path = INPUT_DIR / f"{job_id}{ext}"
+                    if audio_path.exists():
+                        zf.write(str(audio_path), folder + f"audio{ext}")
+                        break
+
+        buf.seek(0)
+        yield buf.read()
+
+    filename = f"meetings-export-{datetime.now().strftime('%Y%m%d')}.zip"
+    return StreamingResponse(
+        generate_zip(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 def _save_speakers(speaker_map: dict) -> None:
