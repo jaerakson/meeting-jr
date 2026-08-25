@@ -1438,6 +1438,26 @@ async def add_sample_to_profile(
         Path(wav_path).unlink(missing_ok=True)
 
 
+@app.post("/api/jobs/{job_id}/rename-speakers")
+async def rename_speakers(job_id: str, body: dict):
+    """화자 이름 매핑을 적용한다 (요약 없이 speaker_map만 저장).
+
+    body: {speaker_map: {"SPEAKER_00": "김팀장", ...}}
+    """
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+
+    speaker_map: dict = body.get("speaker_map", {})
+
+    update_job_result(job_id, speakers=speaker_map)
+
+    if speaker_map:
+        _save_speakers(speaker_map)
+
+    return {"ok": True}
+
+
 @app.post("/api/jobs/{job_id}/save-speaker-profile")
 async def save_speaker_profile(job_id: str, body: dict):
     """완료된 회의의 화자를 프로필로 저장.

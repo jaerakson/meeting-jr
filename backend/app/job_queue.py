@@ -102,7 +102,7 @@ async def start_worker() -> None:
                     traceback.print_exc()
 
             # awaiting_edit 상태로 전환 — suggested_names를 DB에 저장해 페이지 새로고침 후에도 복원
-            update_job_result(job_id, speakers=result.get("suggested_names", {}))
+            update_job_result(job_id, speakers=result.get("suggested_names", {}), suggested_speakers=suggested_speakers)
             update_job_status(job_id, "awaiting_edit")
             update_progress(job_id, {
                 "stage": "awaiting_edit",

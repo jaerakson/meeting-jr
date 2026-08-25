@@ -47,6 +47,13 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
             d["tags"] = []
     else:
         d["tags"] = []
+    if d.get("suggested_speakers"):
+        try:
+            d["suggested_speakers"] = json.loads(d["suggested_speakers"])
+        except (json.JSONDecodeError, TypeError):
+            d["suggested_speakers"] = {}
+    else:
+        d["suggested_speakers"] = {}
     return d
 
 
@@ -72,6 +79,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("bookmarked", "INTEGER NOT NULL DEFAULT 0"),
         ("memo", "TEXT"),
         ("tags", "TEXT"),
+        ("suggested_speakers", "TEXT"),
     ]:
         if col not in existing:
             conn.execute(f"ALTER TABLE meetings ADD COLUMN {col} {definition}")
@@ -224,6 +232,7 @@ def update_job_result(
     transcript: Optional[str] = None,
     summary: Optional[str] = None,
     speakers: Optional[dict] = None,
+    suggested_speakers: Optional[dict] = None,
     duration_sec: Optional[int] = None,
     status: Optional[str] = None,
 ) -> None:
@@ -240,6 +249,9 @@ def update_job_result(
     if speakers is not None:
         fields.append("speakers = ?")
         values.append(json.dumps(speakers, ensure_ascii=False))
+    if suggested_speakers is not None:
+        fields.append("suggested_speakers = ?")
+        values.append(json.dumps(suggested_speakers, ensure_ascii=False))
     if duration_sec is not None:
         fields.append("duration_sec = ?")
         values.append(duration_sec)
