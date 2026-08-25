@@ -350,6 +350,18 @@ async def run_summary(job_id: str, script_path: str, speaker_map: dict, category
         output_path = OUTPUT_DIR / f"{job_id}_요약.md"
         output_path.write_text(summary, encoding="utf-8")
 
+        # 제목 자동 생성: 요약 첫 번째 # 제목 줄 파싱
+        job = get_job(job_id)
+        default_title = get_setting("DEFAULT_MEETING_TITLE") or "회의록"
+        if job and job.get("title", "").strip() in ("회의록", default_title, ""):
+            for line in summary.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("# "):
+                    auto_title = stripped[2:].strip().strip("[]")
+                    if auto_title:
+                        update_job_title(job_id, auto_title)
+                    break
+
         update_job_result(job_id, summary=summary, status="done")
         update_progress(job_id, {
             "stage": "done",
