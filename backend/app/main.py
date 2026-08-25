@@ -906,6 +906,119 @@ async def patch_settings(body: dict):
 
 
 # ---------------------------------------------------------------------------
+# 15-b) GET /api/settings/backup  — 설정 백업
+# ---------------------------------------------------------------------------
+
+@app.get("/api/settings/backup")
+async def backup_settings():
+    """speakers.json + settings + categories를 JSON으로 내보낸다."""
+    from .database import get_categories
+
+    # speakers.json
+    speakers_data: dict = {}
+    if SPEAKERS_FILE.exists():
+        try:
+            speakers_data = json.loads(SPEAKERS_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, IOError):
+            speakers_data = {}
+
+    # settings (복호화된 값)
+    settings_data: dict = {}
+    for key in SETTING_KEYS:
+        val = get_setting(key)
+        if val:
+            settings_data[key] = val
+
+    # categories (사용자 카테고리만 + 내장 카테고리 커스텀 prompt)
+    categories_data = []
+    for cat in get_categories():
+        categories_data.append({
+            "id": cat["id"],
+            "name": cat["name"],
+            "icon": cat["icon"],
+            "description": cat["description"],
+            "prompt": cat["prompt"],
+            "is_builtin": cat["is_builtin"],
+        })
+
+    backup = {
+        "version": 1,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "speakers": speakers_data,
+        "settings": settings_data,
+        "categories": categories_data,
+    }
+
+    filename = f"meeting-jr-backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
+    return StreamingResponse(
+        iter([json.dumps(backup, ensure_ascii=False, indent=2)]),
+        media_type="application/json",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# 15-c) POST /api/settings/restore  — 설정 복원
+# ---------------------------------------------------------------------------
+
+@app.post("/api/settings/restore")
+async def restore_settings(file: UploadFile = File(...)):
+    """백업 JSON 파일에서 설정을 복원한다."""
+    from .database import get_category, create_category, update_category
+
+    content = await file.read()
+    try:
+        backup = json.loads(content)
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(status_code=422, detail="유효하지 않은 JSON 파일입니다.")
+
+    if not isinstance(backup, dict) or "version" not in backup:
+        raise HTTPException(status_code=422, detail="Meeting Junior 백업 파일이 아닙니다.")
+
+    restored = {"speakers": False, "settings": False, "categories": False}
+
+    # speakers 복원
+    if "speakers" in backup and isinstance(backup["speakers"], dict):
+        existing: dict = {}
+        if SPEAKERS_FILE.exists():
+            try:
+                existing = json.loads(SPEAKERS_FILE.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, IOError):
+                existing = {}
+        existing.update(backup["speakers"])
+        SPEAKERS_FILE.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
+        restored["speakers"] = True
+
+    # settings 복원
+    if "settings" in backup and isinstance(backup["settings"], dict):
+        for key in SETTING_KEYS:
+            if key in backup["settings"]:
+                set_setting(key, backup["settings"][key])
+        restored["settings"] = True
+
+    # categories 복원
+    if "categories" in backup and isinstance(backup["categories"], list):
+        for cat_data in backup["categories"]:
+            cat_id = cat_data.get("id")
+            if not cat_id:
+                continue
+            existing_cat = get_category(cat_id)
+            if existing_cat:
+                update_category(cat_id, prompt=cat_data.get("prompt", existing_cat["prompt"]))
+            elif not cat_data.get("is_builtin"):
+                create_category(
+                    cat_id,
+                    cat_data.get("name", ""),
+                    cat_data.get("icon", "📋"),
+                    cat_data.get("description", ""),
+                    cat_data.get("prompt", "{script}"),
+                )
+        restored["categories"] = True
+
+    return {"status": "restored", **restored}
+
+
+# ---------------------------------------------------------------------------
 # 16) GET /api/meetings  — 검색 + 페이지네이션
 # ---------------------------------------------------------------------------
 
