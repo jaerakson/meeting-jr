@@ -43,3 +43,6 @@ test-*.png
 
 # Superpowers 임시 파일
 .superpowers/
+
+# 에이전트 Playwright 스크린샷
+*.png

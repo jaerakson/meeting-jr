@@ -58,6 +58,27 @@ TeamCreate(
 - 오디오 파이프라인 출력 형식 검증
 - UI 상태 전환 검증
 
+## Phase 4.5: 코드 리뷰 (머지 전 필수)
+
+> ⚠️ **머지 전 반드시 실행. 생략 절대 금지.**
+
+각 PR에 대해 `/code-review:code-review` 스킬을 실행한다:
+
+```
+Skill("code-review:code-review", args="<PR번호>")
+```
+
+- 리뷰 결과에서 Critical/High 이슈 → 수정 후 재푸시 → 재리뷰
+- Medium/Low 이슈 → 기록 후 머지 진행 가능
+- 리뷰 통과 후에만 `gh pr merge --squash --delete-branch` 실행
+
+**머지 후 브랜치 정리 (매번 실행):**
+```bash
+git checkout main && git pull
+git branch -D feature/<기능명>   # 로컬 브랜치 삭제
+git remote prune origin          # stale 참조 정리
+```
+
 ## Phase 5: 완료 보고
 
 `director`가 사용자에게:
