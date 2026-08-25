@@ -38,6 +38,12 @@ export default function ProgressCard({ jobId, onDone, onAwaitingEdit }: Progress
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  }, [])
+
+  useEffect(() => {
     const connect = () => {
       if (eventSourceRef.current) {
         eventSourceRef.current.close()
@@ -62,9 +68,10 @@ export default function ProgressCard({ jobId, onDone, onAwaitingEdit }: Progress
 
           if (data.stage === 'done') {
             es.close()
-            if (Notification.permission === 'granted') {
-              new Notification('Meeting Junior', {
-                body: '회의록 생성이 완료되었습니다.',
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification('회의록 완성', {
+                body: '회의록이 완성됐습니다.',
+                icon: '/favicon.ico',
               })
             }
             onDone()
@@ -72,6 +79,12 @@ export default function ProgressCard({ jobId, onDone, onAwaitingEdit }: Progress
 
           if (data.stage === 'error') {
             es.close()
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification('처리 실패', {
+                body: '처리 중 오류가 발생했습니다.',
+                icon: '/favicon.ico',
+              })
+            }
           }
         } catch {
           // JSON 파싱 실패 무시

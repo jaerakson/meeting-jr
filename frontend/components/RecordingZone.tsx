@@ -59,10 +59,11 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
     const draw = () => {
       animFrameRef.current = requestAnimationFrame(draw)
       analyserRef.current!.getByteTimeDomainData(dataArray)
-      ctx.fillStyle = '#F8F9FA'
+      const isDark = document.documentElement.classList.contains('dark')
+      ctx.fillStyle = isDark ? '#1E293B' : '#F8F9FA'
       ctx.fillRect(0, 0, canvas.width, canvas.height)
       ctx.lineWidth = 2
-      ctx.strokeStyle = '#EF4444'
+      ctx.strokeStyle = isDark ? '#F87171' : '#EF4444'
       ctx.beginPath()
       const sliceWidth = canvas.width / bufferLength
       let x = 0
