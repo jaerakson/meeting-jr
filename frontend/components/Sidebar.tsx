@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { Job } from '@/types'
 import { useTheme } from '@/hooks/useTheme'
-import SettingsModal from './SettingsModal'
 
 interface SidebarProps {
   jobs: Job[]
@@ -14,6 +13,7 @@ interface SidebarProps {
   onNewRecording: () => void
   onClose?: () => void
   onCollapse?: () => void
+  onShowSettings?: () => void
 }
 
 function formatDate(dateStr: string): string {
@@ -29,9 +29,8 @@ function formatDuration(sec?: number): string {
   return `${m}분`
 }
 
-export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange, onNewRecording, onClose, onCollapse }: SidebarProps) {
+export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange, onNewRecording, onClose, onCollapse, onShowSettings }: SidebarProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; jobId: string } | null>(null)
-  const [showSettings, setShowSettings] = useState(false)
   const [editingJobId, setEditingJobId] = useState<string | null>(null)
   const [editTitleValue, setEditTitleValue] = useState('')
   const titleSavingRef = useRef(false)
@@ -144,7 +143,7 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
           className="w-full py-2.5 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2"
         >
           <span className="w-2 h-2 rounded-full bg-white" />
-          새 회의 녹음
+          새 녹음
         </button>
       </div>
 
@@ -285,7 +284,7 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
       {/* 하단 버튼 */}
       <div className="px-3 py-3 border-t border-slate-600 flex items-center gap-1">
         <button
-          onClick={() => setShowSettings(true)}
+          onClick={() => onShowSettings?.()}
           className="flex-1 py-2 px-3 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-lg text-sm transition-colors flex items-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -310,8 +309,6 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
           )}
         </button>
       </div>
-
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
       {/* 컨텍스트 메뉴 */}
       {contextMenu && (

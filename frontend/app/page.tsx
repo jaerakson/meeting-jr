@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Job } from '@/types'
 import Sidebar from '@/components/Sidebar'
 import MainArea from '@/components/MainArea'
+import SettingsModal from '@/components/SettingsModal'
 import ShortcutHelpModal from '@/components/ShortcutHelpModal'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 
@@ -13,6 +14,7 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showShortcutHelp, setShowShortcutHelp] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
     setSidebarCollapsed(localStorage.getItem('sidebar-collapsed') === 'true')
@@ -115,17 +117,24 @@ export default function Home() {
           onNewRecording={() => { setSelectedJobId(null); setSidebarOpen(false) }}
           onClose={() => setSidebarOpen(false)}
           onCollapse={toggleSidebarCollapsed}
+          onShowSettings={() => setShowSettings(true)}
         />
       </div>
 
-      <MainArea
-        job={selectedJob}
-        onJobsChange={fetchJobs}
-        onNewRecording={handleNewRecording}
-        onOpenSidebar={() => setSidebarOpen(true)}
-        sidebarCollapsed={sidebarCollapsed}
-        onExpandSidebar={toggleSidebarCollapsed}
-      />
+      {showSettings ? (
+        <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
+          <SettingsModal onClose={() => setShowSettings(false)} />
+        </div>
+      ) : (
+        <MainArea
+          job={selectedJob}
+          onJobsChange={fetchJobs}
+          onNewRecording={handleNewRecording}
+          onOpenSidebar={() => setSidebarOpen(true)}
+          sidebarCollapsed={sidebarCollapsed}
+          onExpandSidebar={toggleSidebarCollapsed}
+        />
+      )}
 
       {showShortcutHelp && <ShortcutHelpModal onClose={() => setShowShortcutHelp(false)} />}
     </div>
