@@ -28,6 +28,7 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
   const [fileUploading, setFileUploading] = useState(false)
   const [fileError, setFileError] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [language, setLanguage] = useState('ko')
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -132,6 +133,7 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
     const formData = new FormData()
     formData.append('audio', blob, 'recording.webm')
     formData.append('category_id', categoryId)
+    formData.append('language', language)
     try {
       const res = await fetch('/api/record', { method: 'POST', body: formData })
       const data = await res.json()
@@ -161,6 +163,7 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('category_id', categoryId)
+      formData.append('language', language)
       const res = await fetch('/api/upload', { method: 'POST', body: formData })
       if (!res.ok) {
         const err = await res.json()
@@ -296,12 +299,24 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
             )}
             {!isRecording && !audioBlob && (
               <>
-                <div className="mb-4">
-                  <CategorySelect
-                    value={categoryId}
-                    onChange={handleCategoryChange}
-                    className="w-full"
-                  />
+                <div className="mb-3 flex gap-2">
+                  <div className="flex-1">
+                    <CategorySelect
+                      value={categoryId}
+                      onChange={handleCategoryChange}
+                      className="w-full"
+                    />
+                  </div>
+                  <select
+                    value={language}
+                    onChange={e => setLanguage(e.target.value)}
+                    className="px-2 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="ko">🇰🇷 한국어</option>
+                    <option value="en">🇺🇸 English</option>
+                    <option value="ja">🇯🇵 日本語</option>
+                    <option value="auto">🌐 자동</option>
+                  </select>
                 </div>
                 <button onClick={startRecording} className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center mx-auto mb-4 transition-colors shadow-lg">
                   <span className="w-5 h-5 rounded-full bg-white" />
@@ -329,12 +344,24 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
         {/* File upload tab */}
         {activeTab === 'upload' && (
           <>
-            <div className="mb-4">
-              <CategorySelect
-                value={categoryId}
-                onChange={handleCategoryChange}
-                className="w-full"
-              />
+            <div className="mb-3 flex gap-2">
+              <div className="flex-1">
+                <CategorySelect
+                  value={categoryId}
+                  onChange={handleCategoryChange}
+                  className="w-full"
+                />
+              </div>
+              <select
+                value={language}
+                onChange={e => setLanguage(e.target.value)}
+                className="px-2 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="ko">🇰🇷 한국어</option>
+                <option value="en">🇺🇸 English</option>
+                <option value="ja">🇯🇵 日本語</option>
+                <option value="auto">🌐 자동</option>
+              </select>
             </div>
             <input
               ref={fileInputRef}

@@ -59,7 +59,8 @@ async def start_worker() -> None:
                 raise FileNotFoundError(f"오디오 파일을 찾을 수 없습니다: {job_id}")
             file_path = str(audio_files[0])
 
-            result = await process_audio(file_path, job_id, lambda jid, data: update_progress(jid, data))
+            language = job_data.get("language") or "ko"
+            result = await process_audio(file_path, job_id, lambda jid, data: update_progress(jid, data), language=language)
 
             # transcript + duration DB 저장
             script_path = result.get("script_path", "")

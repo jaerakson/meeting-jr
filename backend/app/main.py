@@ -95,6 +95,7 @@ app.add_middleware(
 async def record_audio(
     audio: UploadFile = File(...),
     category_id: str = Form("meeting"),
+    language: str = Form("ko"),
 ):
     """브라우저에서 녹음된 webm Blob을 받아 처리 큐에 등록한다."""
     max_bytes = MAX_UPLOAD_MB * 1024 * 1024
@@ -132,7 +133,9 @@ async def record_audio(
     # category_id 유효성 확인, 없으면 "meeting" 폴백
     valid_cat = get_category(category_id) if category_id else None
     effective_category_id = category_id if valid_cat else "meeting"
-    create_job(job_id, filename, title=title, category_id=effective_category_id)
+    # language: "auto" → None (Whisper 자동 감지), 그 외는 그대로 전달
+    lang = None if language == "auto" else language
+    create_job(job_id, filename, title=title, category_id=effective_category_id, language=lang)
     await job_queue.put(job_id)
 
     return {"job_id": job_id, "filename": filename}
@@ -146,6 +149,7 @@ async def record_audio(
 async def upload_file(
     file: UploadFile = File(...),
     category_id: str = Form("meeting"),
+    language: str = Form("ko"),
 ):
     """오디오 또는 텍스트 파일을 업로드하여 처리 큐에 등록한다."""
     original_filename = file.filename or "unknown"
@@ -184,12 +188,13 @@ async def upload_file(
     valid_cat = get_category(category_id) if category_id else None
     effective_category_id = category_id if valid_cat else "meeting"
 
+    lang = None if language == "auto" else language
     if ext in AUDIO_EXTENSIONS:
-        create_job(job_id, filename, title=title, category_id=effective_category_id)
+        create_job(job_id, filename, title=title, category_id=effective_category_id, language=lang)
         await job_queue.put(job_id)
     elif ext in TEXT_EXTENSIONS:
         transcript_content = save_path.read_text(encoding="utf-8")
-        create_job(job_id, filename, title=title, category_id=effective_category_id)
+        create_job(job_id, filename, title=title, category_id=effective_category_id, language=lang)
         update_job_result(job_id, transcript=transcript_content)
         update_job_status(job_id, "awaiting_edit")
         update_progress(job_id, {
