@@ -922,9 +922,12 @@ async def backup_settings():
         except (json.JSONDecodeError, IOError):
             speakers_data = {}
 
-    # settings (복호화된 값)
+    # settings (민감 키 제외, 비밀 키는 백업하지 않음)
+    SECRET_KEYS = {"HF_TOKEN", "NOTION_API_KEY", "NOTION_DATABASE_ID"}
     settings_data: dict = {}
     for key in SETTING_KEYS:
+        if key in SECRET_KEYS:
+            continue
         val = get_setting(key)
         if val:
             settings_data[key] = val

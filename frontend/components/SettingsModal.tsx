@@ -460,7 +460,7 @@ export default function SettingsModal({ onClose }: Props) {
               <div className="rounded-lg border border-gray-200 overflow-hidden">
                 <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
                   <span className="text-sm font-medium text-gray-700">설정 백업 / 복원</span>
-                  <p className="text-xs text-gray-400 mt-0.5">화자 프로필, API 키, 카테고리 설정을 파일로 내보내거나 복원합니다.</p>
+                  <p className="text-xs text-gray-400 mt-0.5">화자 프로필, 카테고리 설정을 파일로 내보내거나 복원합니다. API 키는 보안상 포함되지 않습니다.</p>
                 </div>
                 <div className="px-4 py-3 flex items-center gap-2">
                   <button
