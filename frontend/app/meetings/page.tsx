@@ -314,7 +314,7 @@ function MeetingsContent() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {data?.items
               .filter(job => !bookmarkOnly || job.bookmarked === 1)
-              .map(job => <MeetingCard key={job.id} job={job} />)}
+              .map(job => <MeetingCard key={job.id} job={job} searchQuery={query} />)}
           </div>
         )}
 

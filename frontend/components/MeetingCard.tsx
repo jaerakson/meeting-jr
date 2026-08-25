@@ -1,10 +1,29 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { ReactNode } from 'react'
 import { Job } from '@/types'
 
 interface MeetingCardProps {
   job: Job
+  searchQuery?: string
+}
+
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function highlightText(text: string, query: string | undefined): ReactNode {
+  if (!query || !text) return text
+  const escaped = escapeRegExp(query)
+  const regex = new RegExp(`(${escaped})`, 'gi')
+  const parts = text.split(regex)
+  if (parts.length === 1) return text
+  return parts.map((part, i) =>
+    regex.test(part)
+      ? <mark key={i} className="bg-yellow-200 dark:bg-yellow-700 text-inherit rounded-sm px-0.5">{part}</mark>
+      : part
+  )
 }
 
 function countActionItems(summary: string): number {
@@ -40,7 +59,7 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   error:         { label: '실패',      cls: 'bg-red-100 text-red-800' },
 }
 
-export default function MeetingCard({ job }: MeetingCardProps) {
+export default function MeetingCard({ job, searchQuery }: MeetingCardProps) {
   const router = useRouter()
   const badge = STATUS_BADGE[job.status] ?? { label: job.status, cls: 'bg-gray-100 text-gray-800' }
   const actionCount = job.summary ? countActionItems(job.summary) : 0
@@ -57,7 +76,7 @@ export default function MeetingCard({ job }: MeetingCardProps) {
       {/* 제목 + 상태 뱃지 */}
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold text-gray-800 text-sm leading-snug line-clamp-2 flex-1">
-          {job.title}
+          {highlightText(job.title, searchQuery)}
         </h3>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${badge.cls}`}>
           {badge.label}
@@ -83,7 +102,7 @@ export default function MeetingCard({ job }: MeetingCardProps) {
       {/* 요약 미리보기 */}
       {summaryPreview && (
         <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed flex-1">
-          {summaryPreview}
+          {highlightText(summaryPreview, searchQuery)}
         </p>
       )}
 
