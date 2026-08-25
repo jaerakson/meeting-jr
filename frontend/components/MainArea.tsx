@@ -292,6 +292,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             initialTranscript={editData.transcript}
             initialSpeakers={editData.speakers}
             suggestedNames={editData.suggestedNames}
+            suggestedSpeakers={job.suggested_speakers}
             initialCategoryId={job.category_id || 'meeting'}
             onComplete={() => { setEditData(null); onJobsChange() }}
           />
@@ -304,6 +305,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             initialTranscript={job.transcript}
             initialSpeakers={Object.keys(job.speakers || {})}
             suggestedNames={job.speakers || {}}
+            suggestedSpeakers={job.suggested_speakers}
             initialCategoryId={job.category_id || 'meeting'}
             onComplete={() => { setEditData(null); onJobsChange() }}
           />

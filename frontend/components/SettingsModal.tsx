@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { SettingsStatus, ClaudeStatus, Category } from '@/types'
+import { useState, useEffect, useRef } from 'react'
+import { SettingsStatus, ClaudeStatus, Category, VoiceProfile, Job } from '@/types'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 
 interface Props {
@@ -49,6 +49,19 @@ export default function SettingsModal({ onClose }: Props) {
   const [restoring, setRestoring] = useState(false)
   const [restoreResult, setRestoreResult] = useState<string | null>(null)
 
+  // 목소리 프로필 관련 상태
+  const [voiceProfiles, setVoiceProfiles] = useState<VoiceProfile[]>([])
+  const [threshold, setThreshold] = useState(0.75)
+  const [recordingForProfile, setRecordingForProfile] = useState(false)
+  const [newProfileName, setNewProfileName] = useState('')
+  const [extractFromJob, setExtractFromJob] = useState<string | null>(null)
+  const [doneJobs, setDoneJobs] = useState<Job[]>([])
+  const [extractSpeakerLabel, setExtractSpeakerLabel] = useState('')
+  const [extractProfileName, setExtractProfileName] = useState('')
+  const [extractSpeakers, setExtractSpeakers] = useState<string[]>([])
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+
   useKeyboardShortcuts({ onEscape: onClose })
 
   const loadSpeakers = () => {
@@ -81,6 +94,113 @@ export default function SettingsModal({ onClose }: Props) {
     loadSpeakers()
   }
 
+  // 목소리 프로필 로드
+  const loadVoiceProfiles = () => {
+    fetch('/api/voice-profiles').then(r => r.json()).then(setVoiceProfiles).catch(() => {})
+  }
+
+  const loadThreshold = () => {
+    fetch('/api/voice-profiles/threshold').then(r => r.json()).then(data => {
+      setThreshold(data.threshold ?? 0.75)
+    }).catch(() => {})
+  }
+
+  const handleDeleteProfile = async (id: string) => {
+    await fetch(`/api/voice-profiles/${id}`, { method: 'DELETE' })
+    loadVoiceProfiles()
+  }
+
+  const handleAddSample = async (profileId: string) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      const chunks: Blob[] = []
+      recorder.ondataavailable = e => chunks.push(e.data)
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        const blob = new Blob(chunks, { type: 'audio/webm' })
+        const form = new FormData()
+        form.append('audio', blob, 'sample.webm')
+        await fetch(`/api/voice-profiles/${profileId}/add-sample`, { method: 'POST', body: form })
+        loadVoiceProfiles()
+      }
+      recorder.start()
+      setTimeout(() => recorder.stop(), 10000)
+    } catch {
+      alert('마이크 접근에 실패했습니다.')
+    }
+  }
+
+  const startRecordingProfile = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      audioChunksRef.current = []
+      recorder.ondataavailable = e => audioChunksRef.current.push(e.data)
+      recorder.onstop = () => stream.getTracks().forEach(t => t.stop())
+      mediaRecorderRef.current = recorder
+      recorder.start()
+      setRecordingForProfile(true)
+    } catch {
+      alert('마이크 접근에 실패했습니다.')
+    }
+  }
+
+  const stopRecordingProfile = async () => {
+    const recorder = mediaRecorderRef.current
+    if (!recorder || recorder.state !== 'recording') return
+    return new Promise<void>(resolve => {
+      recorder.onstop = async () => {
+        recorder.stream.getTracks().forEach(t => t.stop())
+        setRecordingForProfile(false)
+        if (!newProfileName.trim()) { alert('프로필 이름을 입력해주세요.'); resolve(); return }
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        const form = new FormData()
+        form.append('name', newProfileName.trim())
+        form.append('audio', blob, 'profile.webm')
+        try {
+          await fetch('/api/voice-profiles', { method: 'POST', body: form })
+          setNewProfileName('')
+          loadVoiceProfiles()
+        } catch {
+          alert('프로필 등록에 실패했습니다.')
+        }
+        resolve()
+      }
+      recorder.stop()
+    })
+  }
+
+  const handleExtractFromJob = async () => {
+    if (!extractFromJob || !extractSpeakerLabel || !extractProfileName.trim()) return
+    try {
+      await fetch(`/api/jobs/${extractFromJob}/save-speaker-profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ speaker_label: extractSpeakerLabel, profile_name: extractProfileName.trim() }),
+      })
+      setExtractFromJob(null)
+      setExtractSpeakerLabel('')
+      setExtractProfileName('')
+      loadVoiceProfiles()
+    } catch {
+      alert('프로필 추출에 실패했습니다.')
+    }
+  }
+
+  const saveThreshold = async () => {
+    await fetch('/api/voice-profiles/threshold', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threshold }),
+    }).catch(() => {})
+  }
+
+  const formatDate = (s: string) => {
+    const d = new Date(s)
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  }
+
   // 카테고리 관련 상태
   const [categories, setCategories] = useState<Category[]>([])
   const [editingCatId, setEditingCatId] = useState<string | null>(null)
@@ -105,6 +225,11 @@ export default function SettingsModal({ onClose }: Props) {
       .catch(console.error)
     loadCategories()
     loadSpeakers()
+    loadVoiceProfiles()
+    loadThreshold()
+    fetch('/api/jobs').then(r => r.json()).then((jobs: Job[]) => {
+      setDoneJobs(jobs.filter(j => j.status === 'done'))
+    }).catch(() => {})
   }, [])
 
   const handleClaudeLogout = async () => {
@@ -650,45 +775,194 @@ export default function SettingsModal({ onClose }: Props) {
           )}
 
           {activeTab === 'speakers' && (
-            <div className="space-y-3">
-              {/* 새 화자 추가 */}
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newSpeakerName}
-                  onChange={e => setNewSpeakerName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddSpeaker()}
-                  placeholder="화자 이름 입력"
-                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  onClick={handleAddSpeaker}
-                  disabled={speakerSaving || !newSpeakerName.trim()}
-                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
-                >
-                  추가
-                </button>
-              </div>
-              <p className="text-xs text-gray-400">저장된 화자 이름은 스크립트 편집 시 드롭다운에 제안됩니다.</p>
-
-              {/* 화자 목록 */}
-              {speakers.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-4">저장된 화자가 없습니다.</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {speakers.map(name => (
-                    <div key={name} className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                      <span className="text-sm text-gray-800 dark:text-gray-200">{name}</span>
-                      <button
-                        onClick={() => handleDeleteSpeaker(name)}
-                        className="text-xs px-2 py-1 border border-red-200 rounded hover:bg-red-50 text-red-500 transition-colors"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  ))}
+            <div className="space-y-6">
+              {/* ── 화자 이름 사전 ── */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">화자 이름 사전</h4>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newSpeakerName}
+                    onChange={e => setNewSpeakerName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleAddSpeaker()}
+                    placeholder="화자 이름 입력"
+                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={handleAddSpeaker}
+                    disabled={speakerSaving || !newSpeakerName.trim()}
+                    className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
+                  >
+                    추가
+                  </button>
                 </div>
-              )}
+                <p className="text-xs text-gray-400">저장된 화자 이름은 스크립트 편집 시 드롭다운에 제안됩니다.</p>
+                {speakers.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4">저장된 화자가 없습니다.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {speakers.map(name => (
+                      <div key={name} className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <span className="text-sm text-gray-800 dark:text-gray-200">{name}</span>
+                        <button
+                          onClick={() => handleDeleteSpeaker(name)}
+                          className="text-xs px-2 py-1 border border-red-200 rounded hover:bg-red-50 text-red-500 transition-colors"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <hr className="border-gray-200 dark:border-gray-700" />
+
+              {/* ── 목소리 프로필 ── */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">목소리 프로필</h4>
+                <p className="text-xs text-gray-400">목소리 프로필을 등록하면 회의 녹음 시 자동으로 화자를 매칭합니다.</p>
+
+                {/* 프로필 목록 */}
+                {voiceProfiles.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4">등록된 목소리 프로필이 없습니다.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {voiceProfiles.map(profile => (
+                      <div key={profile.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <div>
+                          <p className="text-sm font-medium text-gray-800 dark:text-gray-100">🎤 {profile.name}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">샘플 {profile.sample_count}개 · {formatDate(profile.updated_at)}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleAddSample(profile.id)}
+                            className="text-xs px-2 py-1 border border-blue-200 dark:border-blue-700 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 transition-colors"
+                          >
+                            샘플 추가
+                          </button>
+                          <button
+                            onClick={() => handleDeleteProfile(profile.id)}
+                            className="text-xs px-2 py-1 border border-red-200 rounded hover:bg-red-50 text-red-500 transition-colors"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 새 프로필 등록 */}
+                <div className="space-y-2 pt-2">
+                  <p className="text-xs font-medium text-gray-600 dark:text-gray-300">새 프로필 등록</p>
+
+                  {/* 직접 녹음 */}
+                  <div className="p-3 border border-gray-200 dark:border-gray-600 rounded-lg space-y-2">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">직접 녹음 (10~30초)</p>
+                    <input
+                      type="text"
+                      value={newProfileName}
+                      onChange={e => setNewProfileName(e.target.value)}
+                      placeholder="프로필 이름 (예: 홍길동)"
+                      className="w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    {recordingForProfile ? (
+                      <button
+                        onClick={stopRecordingProfile}
+                        className="w-full py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                        녹음 중... 클릭하여 중지
+                      </button>
+                    ) : (
+                      <button
+                        onClick={startRecordingProfile}
+                        disabled={!newProfileName.trim()}
+                        className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs rounded transition-colors"
+                      >
+                        녹음 시작
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 기존 회의에서 추출 */}
+                  <div className="p-3 border border-gray-200 dark:border-gray-600 rounded-lg space-y-2">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">기존 회의에서 추출</p>
+                    <select
+                      value={extractFromJob || ''}
+                      onChange={e => {
+                        const jobId = e.target.value || null
+                        setExtractFromJob(jobId)
+                        setExtractSpeakerLabel('')
+                        if (jobId) {
+                          const job = doneJobs.find(j => j.id === jobId)
+                          if (job?.speakers) {
+                            setExtractSpeakers(Object.keys(job.speakers))
+                          } else {
+                            fetch(`/api/jobs/${jobId}`).then(r => r.json()).then((j: Job) => {
+                              setExtractSpeakers(j.speakers ? Object.keys(j.speakers) : [])
+                            }).catch(() => setExtractSpeakers([]))
+                          }
+                        }
+                      }}
+                      className="w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="">회의 선택...</option>
+                      {doneJobs.map(job => (
+                        <option key={job.id} value={job.id}>{job.title || job.filename}</option>
+                      ))}
+                    </select>
+                    {extractFromJob && extractSpeakers.length > 0 && (
+                      <>
+                        <select
+                          value={extractSpeakerLabel}
+                          onChange={e => setExtractSpeakerLabel(e.target.value)}
+                          className="w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        >
+                          <option value="">화자 선택...</option>
+                          {extractSpeakers.map(sp => (
+                            <option key={sp} value={sp}>{sp}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={extractProfileName}
+                          onChange={e => setExtractProfileName(e.target.value)}
+                          placeholder="프로필 이름"
+                          className="w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <button
+                          onClick={handleExtractFromJob}
+                          disabled={!extractSpeakerLabel || !extractProfileName.trim()}
+                          className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs rounded transition-colors"
+                        >
+                          프로필 추출
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* 매칭 임계값 */}
+                <div className="mt-4 space-y-1">
+                  <label className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                    매칭 임계값: {threshold.toFixed(2)}
+                  </label>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="0.95"
+                    step="0.05"
+                    value={threshold}
+                    onChange={e => setThreshold(parseFloat(e.target.value))}
+                    onMouseUp={saveThreshold}
+                    onTouchEnd={saveThreshold}
+                    className="w-full h-1.5 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  />
+                  <p className="text-xs text-gray-400">값이 높을수록 엄격하게 매칭 (기본: 0.75)</p>
+                </div>
+              </div>
             </div>
           )}
         </div>
