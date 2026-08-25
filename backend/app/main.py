@@ -38,6 +38,7 @@ from .database import (
     delete_category,
     update_job_category,
     update_job_action_items,
+    toggle_bookmark,
 )
 from .job_queue import job_queue, start_worker, progress_store, update_progress
 from .settings_manager import get_settings_status, get_setting, set_setting, SETTING_KEYS
@@ -456,6 +457,18 @@ async def patch_title(job_id: str, body: dict):
 
     update_job_title(job_id, title)
     return {"status": "updated", "job_id": job_id, "title": title}
+
+
+# ---------------------------------------------------------------------------
+# 8-b) PATCH /api/jobs/{job_id}/bookmark
+# ---------------------------------------------------------------------------
+
+@app.patch("/api/jobs/{job_id}/bookmark")
+async def toggle_job_bookmark(job_id: str):
+    job = toggle_bookmark(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+    return job
 
 
 # ---------------------------------------------------------------------------
