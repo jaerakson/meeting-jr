@@ -47,6 +47,7 @@ function MeetingsContent() {
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkBookmarking, setBulkBookmarking] = useState(false)
 
   useEffect(() => {
     fetch('/api/categories')
@@ -173,6 +174,26 @@ function MeetingsContent() {
       setSelectMode(false)
     } finally {
       setBulkDeleting(false)
+    }
+  }
+
+  const handleBulkBookmark = async () => {
+    if (selectedIds.size === 0) return
+    setBulkBookmarking(true)
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map(id =>
+          fetch(`/api/jobs/${id}/bookmark`, { method: 'PATCH' })
+        )
+      )
+      setData(prev => prev ? {
+        ...prev,
+        items: prev.items.map(j => selectedIds.has(j.id) ? { ...j, bookmarked: j.bookmarked ? 0 : 1 } : j)
+      } : prev)
+      setSelectedIds(new Set())
+      setSelectMode(false)
+    } finally {
+      setBulkBookmarking(false)
     }
   }
 
@@ -381,6 +402,13 @@ function MeetingsContent() {
               {selectedIds.size}개 선택됨
             </span>
             <div className="flex-1" />
+            <button
+              onClick={handleBulkBookmark}
+              disabled={selectedIds.size === 0 || bulkBookmarking}
+              className="px-3 py-1.5 text-sm bg-yellow-400 text-yellow-900 rounded-lg hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {bulkBookmarking ? '처리 중...' : `★ 북마크 (${selectedIds.size})`}
+            </button>
             <button
               onClick={handleBulkDelete}
               disabled={selectedIds.size === 0 || bulkDeleting}
