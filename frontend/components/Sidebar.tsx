@@ -152,7 +152,7 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
                   e.stopPropagation()
                   handleDelete(job.id)
                 }}
-                className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-slate-500 text-slate-400 hover:text-red-300 transition-all flex-shrink-0"
+                className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 md:p-0.5 rounded hover:bg-slate-500 text-slate-400 hover:text-red-300 transition-all flex-shrink-0"
                 title="삭제"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

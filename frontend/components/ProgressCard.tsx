@@ -113,8 +113,8 @@ export default function ProgressCard({ jobId, onDone, onAwaitingEdit }: Progress
   }
 
   return (
-    <div className="flex items-center justify-center h-full p-8">
-      <div className="w-full max-w-md bg-white rounded-xl shadow-sm p-8">
+    <div className="flex items-center justify-center h-full p-4 md:p-8">
+      <div className="w-full max-w-md bg-white rounded-xl shadow-sm p-5 md:p-8">
         <h2 className="text-lg font-bold text-gray-800 mb-6">처리 중...</h2>
 
         <div className="space-y-4">
