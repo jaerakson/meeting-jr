@@ -12,6 +12,7 @@ import os
 import uuid
 
 import re
+from collections import Counter
 
 import aiofiles
 from dotenv import load_dotenv
@@ -918,6 +919,52 @@ async def reset_category_prompt(cat_id: str):
 # ---------------------------------------------------------------------------
 # 헬퍼: speakers.json 저장
 # ---------------------------------------------------------------------------
+
+def _extract_keywords(text: str, top_n: int = 8) -> list[str]:
+    """불용어 제거 + 빈도 기반 상위 N개 키워드 추출."""
+    STOPWORDS = {
+        "의", "을", "를", "이", "가", "은", "는", "에", "에서", "와", "과", "로", "으로",
+        "그", "저", "것", "수", "있", "하", "되", "이다", "합니다", "했습니다", "회의",
+        "the", "a", "an", "is", "are", "was", "were", "and", "or", "in", "on", "at",
+    }
+    words = re.findall(r'[가-힣a-zA-Z]{2,}', text)
+    filtered = [w for w in words if w not in STOPWORDS]
+    counts = Counter(filtered)
+    return [w for w, _ in counts.most_common(top_n)]
+
+
+@app.get("/api/jobs/{job_id}/related")
+async def get_related_meetings(job_id: str):
+    """현재 회의와 키워드가 겹치는 다른 회의를 최대 5개 반환한다."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    text = (job.get("summary") or "") + " " + (job.get("title") or "")
+    keywords = _extract_keywords(text)
+
+    if not keywords:
+        return {"items": []}
+
+    all_jobs = get_all_jobs()
+    results = []
+    for j in all_jobs:
+        if j["id"] == job_id:
+            continue
+        search_text = (j.get("title") or "") + " " + (j.get("summary") or "")
+        matched = [kw for kw in keywords if kw in search_text]
+        if matched:
+            results.append({
+                "id": j["id"],
+                "title": j.get("title"),
+                "created_at": j.get("created_at"),
+                "matched_keywords": matched[:3],
+                "score": len(matched),
+            })
+
+    results.sort(key=lambda x: x["score"], reverse=True)
+    return {"items": results[:5]}
+
 
 def _save_speakers(speaker_map: dict) -> None:
     """speaker_map의 이름들을 speakers.json에 병합 저장한다.
