@@ -1,3 +1,15 @@
+## 2026-08-25 (작업 PC: 로컬) — 세션 25 (신규 기능 3개 완료)
+- 브랜치: main (PR #31~#33 squash 머지)
+- 완료: director 직접 구현 (3가지 기능)
+  - 설정 백업/복원: GET /api/settings/backup, POST /api/settings/restore, SettingsModal 내보내기/가져오기 UI (PR #31)
+  - Claude 프롬프트 미리보기: 카테고리 편집/생성 시 미리보기 버튼, 샘플 대화 삽입 프롬프트 모달 (PR #32)
+  - Notion 연동 상태 표시: MeetingCard Notion 배지, MainArea 상태 배지 (등록됨/미등록) (PR #33)
+- 코드 리뷰: PR #31에서 민감 키 평문 노출 이슈 발견 → 수정 후 머지, PR #32/#33 클린 패스
+- 현재 상태: main 최신
+- 다음 할 일: 없음
+- 관련 PR: #31, #32, #33
+- 푸시 여부: origin/main 푸시 완료
+
 ## 2026-08-25 (작업 PC: 로컬) — 세션 24 (신규 기능 3개 완료)
 - 브랜치: main (PR #27~#29 squash 머지)
 - 완료: director + frontend-dev 팀 구현 (3가지 기능)
