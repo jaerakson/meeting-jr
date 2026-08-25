@@ -1,3 +1,7 @@
+## 진행 중 — feature/speaker-profile
+- 시작: 2026-08-25
+- 목표: 화자 프로필 관리 (POST/DELETE /api/speakers + 설정 모달 UI)
+
 ## 2026-08-25 (작업 PC: 로컬) — 세션 12
 - 브랜치: main (feature/dark-mode → PR #6 → squash 머지)
 - 완료: 다크 모드 지원 + git 브랜치 정리
