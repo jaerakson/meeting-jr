@@ -56,7 +56,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
     // h1
     if (line.startsWith('# ')) {
       nodes.push(
-        <h1 key={i} className="text-xl font-bold text-gray-800 mb-2">
+        <h1 key={i} className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">
           {line.slice(2)}
         </h1>
       )
@@ -66,7 +66,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
     // h2
     if (line.startsWith('## ')) {
       nodes.push(
-        <h2 key={i} className="text-lg font-bold text-gray-800 mb-2 mt-3">
+        <h2 key={i} className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2 mt-3">
           {line.slice(3)}
         </h2>
       )
@@ -76,7 +76,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
     // h3
     if (line.startsWith('### ')) {
       nodes.push(
-        <h3 key={i} className="text-base font-semibold text-gray-800 mb-1 mt-2">
+        <h3 key={i} className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1 mt-2">
           {line.slice(4)}
         </h3>
       )
@@ -89,7 +89,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
       nodes.push(
         <div key={i} className="flex items-start gap-2 py-0.5">
           <input type="checkbox" disabled className="mt-1 flex-shrink-0" />
-          <span className="text-sm text-gray-700">{content}</span>
+          <span className="text-sm text-gray-700 dark:text-gray-300">{content}</span>
         </div>
       )
       continue
@@ -113,7 +113,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
       nodes.push(
         <div key={i} className="flex items-start gap-2 py-0.5 pl-1">
           <span className="text-gray-400 mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full bg-gray-400" />
-          <span className="text-sm text-gray-700">{content}</span>
+          <span className="text-sm text-gray-700 dark:text-gray-300">{content}</span>
         </div>
       )
       continue
@@ -133,7 +133,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
 
     // 일반 텍스트
     nodes.push(
-      <p key={i} className="text-sm text-gray-700 leading-relaxed">
+      <p key={i} className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
         {line}
       </p>
     )
@@ -276,11 +276,11 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
   }
 
   return (
-    <div className="h-full flex flex-col bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div className="h-full flex flex-col bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
       {/* 헤더: 탭 + 버튼 */}
-      <div className="flex items-center border-b border-gray-200 px-3 min-w-0">
+      <div className="flex items-center border-b border-gray-200 dark:border-gray-700 px-3 min-w-0">
         {isEditing ? (
-          <span className="text-xs text-gray-400 py-2.5 italic flex-1">마크다운 전체 편집 중</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500 py-2.5 italic flex-1">마크다운 전체 편집 중</span>
         ) : (
           <div className="flex-1 overflow-x-auto min-w-0 flex">
             {TABS.map((tab) => (
@@ -290,7 +290,7 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
                 className={`px-3 py-2.5 text-xs font-medium transition-colors border-b-2 whitespace-nowrap ${
                   activeTab === tab
                     ? 'border-accent text-accent'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                 }`}
               >
                 {tab}
@@ -304,7 +304,7 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
               <button
                 onClick={handleEditCancel}
                 disabled={isSaving}
-                className="px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                className="px-2.5 py-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
               >
                 취소
               </button>
@@ -320,7 +320,7 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
             <>
               <button
                 onClick={handleEditStart}
-                className="px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                className="px-2.5 py-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
               >
                 편집
               </button>
@@ -331,14 +331,14 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
                     setTimeout(() => setCopyFeedback(false), 2000)
                   })
                 }}
-                className="px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                className="px-2.5 py-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                 title="클립보드에 복사"
               >
                 {copyFeedback ? '복사됨' : '복사'}
               </button>
               <button
                 onClick={handleDownload}
-                className="px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                className="px-2.5 py-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                 title="마크다운 다운로드"
               >
                 다운로드
@@ -361,15 +361,15 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
         {isEditing ? (
           <div className="flex flex-col h-full gap-3">
             {Object.keys(nameMap).length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded-lg">
+              <div className="flex flex-wrap items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg">
                 {Object.keys(nameMap).map((currentName) => (
                   <div key={currentName} className="flex items-center gap-1 text-xs">
-                    <span className="text-gray-500 font-medium">{currentName} →</span>
+                    <span className="text-gray-500 dark:text-gray-400 font-medium">{currentName} →</span>
                     <input
                       type="text"
                       value={nameMap[currentName] ?? currentName}
                       onChange={(e) => setNameMap((prev) => ({ ...prev, [currentName]: e.target.value }))}
-                      className="w-24 px-1.5 py-0.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-accent"
+                      className="w-24 px-1.5 py-0.5 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-600 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-accent"
                     />
                   </div>
                 ))}
@@ -384,7 +384,7 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
             <textarea
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
-              className="flex-1 min-h-[200px] text-sm text-gray-700 font-mono p-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-accent"
+              className="flex-1 min-h-[200px] text-sm text-gray-700 dark:text-gray-300 font-mono p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-accent"
             />
           </div>
         ) : activeTab === '액션 아이템' && actionItems.length > 0 ? (

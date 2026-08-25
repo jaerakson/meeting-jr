@@ -71,11 +71,11 @@ export default function MeetingCard({ job, searchQuery }: MeetingCardProps) {
   return (
     <div
       onClick={() => router.push(`/meetings/${job.id}`)}
-      className="bg-white border border-gray-200 rounded-xl p-4 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all flex flex-col gap-2 min-h-[140px]"
+      className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-sm transition-all flex flex-col gap-2 min-h-[140px]"
     >
       {/* 제목 + 상태 뱃지 */}
       <div className="flex items-start justify-between gap-2">
-        <h3 className="font-semibold text-gray-800 text-sm leading-snug line-clamp-2 flex-1">
+        <h3 className="font-semibold text-gray-800 dark:text-gray-100 text-sm leading-snug line-clamp-2 flex-1">
           {highlightText(job.title, searchQuery)}
         </h3>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${badge.cls}`}>
@@ -96,12 +96,12 @@ export default function MeetingCard({ job, searchQuery }: MeetingCardProps) {
 
       {/* 참석자 */}
       {speakersLabel && (
-        <p className="text-xs text-gray-500 truncate">{speakersLabel}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{speakersLabel}</p>
       )}
 
       {/* 요약 미리보기 */}
       {summaryPreview && (
-        <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed flex-1">
+        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed flex-1">
           {highlightText(summaryPreview, searchQuery)}
         </p>
       )}
@@ -110,7 +110,7 @@ export default function MeetingCard({ job, searchQuery }: MeetingCardProps) {
       {job.tags && job.tags.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {job.tags.slice(0, 3).map(tag => (
-            <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full">{tag}</span>
+            <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full">{tag}</span>
           ))}
           {job.tags.length > 3 && <span className="text-[10px] text-gray-400">+{job.tags.length - 3}</span>}
         </div>

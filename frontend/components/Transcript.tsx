@@ -18,10 +18,10 @@ interface TranscriptLine {
 }
 
 const SPEAKER_COLORS: { bg: string; text: string }[] = [
-  { bg: 'bg-[#EBF4FF]', text: 'text-[#1D4ED8]' },
-  { bg: 'bg-[#F0FDF4]', text: 'text-[#166534]' },
-  { bg: 'bg-[#FFF7ED]', text: 'text-[#9A3412]' },
-  { bg: 'bg-[#FAF5FF]', text: 'text-[#6B21A8]' },
+  { bg: 'bg-[#EBF4FF] dark:bg-blue-900/30', text: 'text-[#1D4ED8] dark:text-blue-400' },
+  { bg: 'bg-[#F0FDF4] dark:bg-green-900/30', text: 'text-[#166534] dark:text-green-400' },
+  { bg: 'bg-[#FFF7ED] dark:bg-orange-900/30', text: 'text-[#9A3412] dark:text-orange-400' },
+  { bg: 'bg-[#FAF5FF] dark:bg-purple-900/30', text: 'text-[#6B21A8] dark:text-purple-400' },
 ]
 
 function parseTranscript(raw: string): TranscriptLine[] {
@@ -223,11 +223,11 @@ export default function Transcript({ transcript, currentTime, onTimeClick, edita
                   if (e.key === 'Enter') saveEdit(idx, editText)
                   if (e.key === 'Escape') setEditIdx(null)
                 }}
-                className="w-full text-sm text-gray-800 bg-white border-b border-blue-400 outline-none leading-relaxed px-0.5"
+                className="w-full text-sm text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-700 border-b border-blue-400 outline-none leading-relaxed px-0.5"
               />
             ) : (
               <p
-                className={`text-sm text-gray-800 leading-relaxed ${editable ? 'cursor-text hover:bg-white/60 rounded px-0.5' : ''}`}
+                className={`text-sm text-gray-800 dark:text-gray-200 leading-relaxed ${editable ? 'cursor-text hover:bg-white/60 dark:hover:bg-gray-600/60 rounded px-0.5' : ''}`}
                 onClick={() => {
                   if (editable) { setEditIdx(idx); setEditText(line.text) }
                 }}

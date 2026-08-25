@@ -294,13 +294,13 @@ export default function SettingsModal({ onClose }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-xl">
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-800">설정</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">설정</h2>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+            className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-colors"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -319,15 +319,15 @@ export default function SettingsModal({ onClose }: Props) {
         )}
 
         {/* 탭 바 */}
-        <div className="flex border-b px-2">
+        <div className="flex border-b border-gray-200 dark:border-gray-700 px-2">
           {([['general', '일반'], ['claude', 'Claude'], ['categories', '카테고리'], ['speakers', '화자']] as [Tab, string][]).map(([id, label]) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === id
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
               }`}
             >
               {label}
@@ -341,7 +341,7 @@ export default function SettingsModal({ onClose }: Props) {
             <div className="space-y-5">
               {/* 기본 회의 제목 섹션 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   기본 회의 제목
                 </label>
                 <input
@@ -349,16 +349,16 @@ export default function SettingsModal({ onClose }: Props) {
                   value={defaultTitle}
                   onChange={e => setDefaultTitle(e.target.value)}
                   placeholder="회의록 (미입력 시 기본값)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <p className="mt-1 text-xs text-gray-400">새 녹음 시작 시 이 제목이 자동으로 설정됩니다.</p>
               </div>
 
               {/* Claude CLI 섹션 */}
-              <div className="rounded-lg border border-gray-200 overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-700">Claude CLI</span>
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Claude CLI</span>
                     {claudeStatus ? (
                       claudeStatus.installed ? (
                         claudeStatus.logged_in ? (
@@ -385,7 +385,7 @@ export default function SettingsModal({ onClose }: Props) {
                 </div>
                 <div className="px-4 py-3 space-y-2">
                   {claudeStatus?.logged_in && claudeStatus.email && (
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
                       <span className="text-gray-400">계정:</span>{' '}
                       <span className="font-mono">{claudeStatus.email}</span>
                       {claudeStatus.subscription_type && (
@@ -396,7 +396,7 @@ export default function SettingsModal({ onClose }: Props) {
                   {claudeStatus && !claudeStatus.installed && (
                     <div className="text-sm text-gray-600 space-y-1">
                       <p className="font-medium text-gray-700">Claude CLI 설치 방법</p>
-                      <code className="block bg-gray-100 rounded px-3 py-2 text-xs font-mono text-gray-800">
+                      <code className="block bg-gray-100 dark:bg-gray-600 rounded px-3 py-2 text-xs font-mono text-gray-800 dark:text-gray-200">
                         npm install -g @anthropic-ai/claude-code
                       </code>
                     </div>
@@ -404,7 +404,7 @@ export default function SettingsModal({ onClose }: Props) {
                   {claudeStatus?.installed && !claudeStatus.logged_in && (
                     <div className="text-sm text-gray-600 space-y-2">
                       <p>터미널에서 아래 명령어를 실행하면 브라우저가 열려 로그인할 수 있습니다:</p>
-                      <code className="block bg-gray-100 rounded px-3 py-2 text-xs font-mono text-gray-800">
+                      <code className="block bg-gray-100 dark:bg-gray-600 rounded px-3 py-2 text-xs font-mono text-gray-800 dark:text-gray-200">
                         claude auth login
                       </code>
                       <p className="text-xs text-gray-400">로그인 후 설정 화면을 다시 열면 상태가 갱신됩니다.</p>
@@ -424,7 +424,7 @@ export default function SettingsModal({ onClose }: Props) {
                 const preview = status?.[key]?.preview ?? null
                 return (
                   <div key={key}>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                       {KEY_LABELS[key]}
                     </label>
                     <div className="relative">
@@ -433,7 +433,7 @@ export default function SettingsModal({ onClose }: Props) {
                         value={values[key]}
                         onChange={e => setValues(prev => ({ ...prev, [key]: e.target.value }))}
                         placeholder={preview ?? '값을 입력하세요'}
-                        className="w-full pr-10 pl-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 placeholder:font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full pr-10 pl-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder:text-gray-400 placeholder:font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                       <button
                         type="button"
@@ -458,9 +458,9 @@ export default function SettingsModal({ onClose }: Props) {
               })}
 
               {/* 백업/복원 섹션 */}
-              <div className="rounded-lg border border-gray-200 overflow-hidden">
-                <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-                  <span className="text-sm font-medium text-gray-700">설정 백업 / 복원</span>
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">설정 백업 / 복원</span>
                   <p className="text-xs text-gray-400 mt-0.5">화자 프로필, 카테고리 설정을 파일로 내보내거나 복원합니다. API 키는 보안상 포함되지 않습니다.</p>
                 </div>
                 <div className="px-4 py-3 flex items-center gap-2">
@@ -496,13 +496,13 @@ export default function SettingsModal({ onClose }: Props) {
             <div className="space-y-5">
               {/* 모델 선택 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   회의록 생성 모델
                 </label>
                 <select
                   value={claudeModel}
                   onChange={e => setClaudeModel(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   {CLAUDE_MODELS.map(m => (
                     <option key={m.value} value={m.value}>{m.label}</option>
@@ -529,7 +529,7 @@ export default function SettingsModal({ onClose }: Props) {
                   value={claudePrompt || defaultPrompt}
                   onChange={e => setClaudePrompt(e.target.value)}
                   rows={10}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs text-gray-800 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-700 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
                   placeholder="프롬프트를 입력하세요. {script} 위치에 회의 스크립트가 삽입됩니다."
                 />
                 <p className="mt-1 text-xs text-gray-400">
@@ -542,13 +542,13 @@ export default function SettingsModal({ onClose }: Props) {
           {activeTab === 'categories' && (
             <div className="space-y-3">
               {categories.map(cat => (
-                <div key={cat.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                <div key={cat.id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                   {/* 카테고리 헤더 행 */}
-                  <div className="flex items-center justify-between px-3 py-2 bg-gray-50">
+                  <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700">
                     <div className="flex items-center gap-2">
                       <span className="text-lg">{cat.icon}</span>
                       <div>
-                        <span className="text-sm font-medium text-gray-800">{cat.name}</span>
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-100">{cat.name}</span>
                         {cat.description && (
                           <p className="text-xs text-gray-400">{cat.description}</p>
                         )}
@@ -577,7 +577,7 @@ export default function SettingsModal({ onClose }: Props) {
 
                   {/* 편집 패널 — 인라인 펼침 */}
                   {editingCatId === cat.id && (
-                    <div className="p-3 space-y-2 border-t bg-white">
+                    <div className="p-3 space-y-2 border-t border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800">
                       <div className="flex gap-2">
                         <input
                           type="text"
@@ -717,7 +717,7 @@ export default function SettingsModal({ onClose }: Props) {
                   onChange={e => setNewSpeakerName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleAddSpeaker()}
                   placeholder="화자 이름 입력"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <button
                   onClick={handleAddSpeaker}
@@ -735,8 +735,8 @@ export default function SettingsModal({ onClose }: Props) {
               ) : (
                 <div className="space-y-1.5">
                   {speakers.map(name => (
-                    <div key={name} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
-                      <span className="text-sm text-gray-800">{name}</span>
+                    <div key={name} className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                      <span className="text-sm text-gray-800 dark:text-gray-200">{name}</span>
                       <button
                         onClick={() => handleDeleteSpeaker(name)}
                         className="text-xs px-2 py-1 border border-red-200 rounded hover:bg-red-50 text-red-500 transition-colors"
@@ -753,7 +753,7 @@ export default function SettingsModal({ onClose }: Props) {
 
         {/* 푸터 */}
         {activeTab !== 'categories' && activeTab !== 'speakers' && (
-          <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-xl">
+          <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-b-xl">
             <button
               onClick={onClose}
               className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium transition-colors"
@@ -789,7 +789,7 @@ export default function SettingsModal({ onClose }: Props) {
           </div>
         )}
         {(activeTab === 'categories' || activeTab === 'speakers') && (
-          <div className="flex justify-end px-6 py-4 border-t bg-gray-50 rounded-b-xl">
+          <div className="flex justify-end px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-b-xl">
             <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium">
               닫기
             </button>
@@ -800,9 +800,9 @@ export default function SettingsModal({ onClose }: Props) {
       {/* 프롬프트 미리보기 모달 */}
       {previewPrompt !== null && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-3 border-b">
-              <h3 className="text-sm font-semibold text-gray-800">프롬프트 미리보기</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">프롬프트 미리보기</h3>
               <button
                 onClick={() => setPreviewPrompt(null)}
                 className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"
@@ -814,13 +814,13 @@ export default function SettingsModal({ onClose }: Props) {
             </div>
             <div className="flex-1 overflow-y-auto p-5">
               <p className="text-xs text-gray-400 mb-3">Claude에게 전송될 실제 프롬프트입니다. <code className="bg-gray-100 px-1 rounded">{'{script}'}</code> 위치에 회의 스크립트가 삽입됩니다.</p>
-              <pre className="text-xs text-gray-700 font-mono whitespace-pre-wrap bg-gray-50 border border-gray-200 rounded-lg p-4 leading-relaxed">
+              <pre className="text-xs text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4 leading-relaxed">
                 {previewPrompt.includes('{script}')
                   ? previewPrompt.replace('{script}', '[SPEAKER_00] 안녕하세요, 오늘 회의를 시작하겠습니다.\n[SPEAKER_01] 네, 준비되었습니다.\n[SPEAKER_00] 첫 번째 안건은 프로젝트 일정 검토입니다.\n[SPEAKER_01] 현재 진행률은 70%이고 다음 주까지 완료 예정입니다.\n[SPEAKER_00] 좋습니다. 두 번째 안건으로 넘어가겠습니다.')
                   : previewPrompt + '\n\n---\n회의 스크립트:\n[SPEAKER_00] 안녕하세요, 오늘 회의를 시작하겠습니다.\n[SPEAKER_01] 네, 준비되었습니다.'}
               </pre>
             </div>
-            <div className="flex justify-end px-5 py-3 border-t bg-gray-50 rounded-b-xl">
+            <div className="flex justify-end px-5 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-b-xl">
               <button
                 onClick={() => setPreviewPrompt(null)}
                 className="px-4 py-1.5 text-sm text-gray-600 hover:text-gray-800 font-medium"
