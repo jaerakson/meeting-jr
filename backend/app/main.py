@@ -405,6 +405,45 @@ async def run_summary(job_id: str, script_path: str, speaker_map: dict, category
 
 
 # ---------------------------------------------------------------------------
+# 5-b) POST /api/jobs/{job_id}/regenerate  — 요약 재생성 (동기)
+# ---------------------------------------------------------------------------
+
+@app.post("/api/jobs/{job_id}/regenerate")
+async def regenerate_summary(job_id: str, body: dict = {}):
+    """done 상태 회의의 요약을 다른 카테고리로 재생성한다."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+    if job["status"] != "done":
+        raise HTTPException(status_code=422, detail="done 상태의 Job만 재생성할 수 있습니다.")
+    if not job.get("transcript"):
+        raise HTTPException(status_code=422, detail="transcript가 없습니다.")
+
+    category_id = body.get("category_id") or job.get("category_id") or "meeting"
+
+    # category_id 갱신
+    if category_id != job.get("category_id"):
+        update_job_category(job_id, category_id)
+
+    # speaker_map 적용 후 스크립트 준비
+    speaker_map = job.get("speakers") or {}
+    final_transcript = job["transcript"]
+    for speaker_id, name in speaker_map.items():
+        if name.strip():
+            final_transcript = final_transcript.replace(speaker_id, name)
+
+    script_path = INPUT_DIR / f"{job_id}.txt"
+    script_path.write_text(final_transcript, encoding="utf-8")
+
+    # 동기적으로 요약 실행 (요약은 보통 짧으므로)
+    update_job_status(job_id, "summarizing")
+    await run_summary(job_id, str(script_path), speaker_map, category_id=category_id)
+
+    updated_job = get_job(job_id)
+    return updated_job
+
+
+# ---------------------------------------------------------------------------
 # 6) POST /api/jobs/{job_id}/retry
 # ---------------------------------------------------------------------------
 
