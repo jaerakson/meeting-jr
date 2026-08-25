@@ -689,6 +689,40 @@ async def get_stats():
     return {"total": total, "this_week": this_week, "by_category": by_category}
 
 
+@app.get("/api/stats/monthly")
+async def get_monthly_stats():
+    """최근 6개월 월별 회의 횟수 + 총 시간(분)을 반환한다."""
+    import sqlite3 as _sqlite3
+    from .database import DB_PATH
+    conn = _sqlite3.connect(str(DB_PATH))
+    conn.row_factory = _sqlite3.Row
+
+    rows = conn.execute(
+        """
+        SELECT strftime('%Y-%m', created_at) AS month,
+               COUNT(*) AS count,
+               COALESCE(SUM(duration_sec), 0) AS total_seconds
+        FROM meetings
+        WHERE status = 'done'
+        GROUP BY month
+        ORDER BY month DESC
+        LIMIT 6
+        """
+    ).fetchall()
+    conn.close()
+
+    items = [
+        {
+            "month": r["month"],
+            "count": r["count"],
+            "total_minutes": round(r["total_seconds"] / 60),
+        }
+        for r in rows
+    ]
+    items.reverse()
+    return items
+
+
 @app.get("/api/speakers")
 async def get_speakers():
     if SPEAKERS_FILE.exists():

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Job } from '@/types'
 import MeetingCard from '@/components/MeetingCard'
+import MonthlyChart from '@/components/MonthlyChart'
 import Pagination from '@/components/Pagination'
 
 interface MeetingsResponse {
@@ -43,6 +44,9 @@ function MeetingsContent() {
   const [tagFilter, setTagFilter] = useState(searchParams.get('tag') || '')
   const [allTags, setAllTags] = useState<string[]>([])
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   useEffect(() => {
     fetch('/api/categories')
@@ -133,6 +137,50 @@ function MeetingsContent() {
     }
   }
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const visibleItems = data?.items.filter(job => !bookmarkOnly || job.bookmarked === 1) ?? []
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === visibleItems.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(visibleItems.map(j => j.id)))
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`선택한 ${selectedIds.size}개 회의를 삭제할까요?`)) return
+    setBulkDeleting(true)
+    try {
+      for (const id of selectedIds) {
+        await fetch(`/api/jobs/${id}`, { method: 'DELETE' })
+      }
+      setData(prev => prev ? {
+        ...prev,
+        items: prev.items.filter(j => !selectedIds.has(j.id)),
+        total: prev.total - selectedIds.size,
+      } : prev)
+      setSelectedIds(new Set())
+      setSelectMode(false)
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  const exitSelectMode = () => {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+  }
+
   const hasFilters = query || categoryId || dateFrom || dateTo || tagFilter
   const clearFilters = () => {
     setQuery('')
@@ -155,6 +203,21 @@ function MeetingsContent() {
             ← 돌아가기
           </Link>
           <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-100 flex-1">회의 목록</h1>
+          {selectMode ? (
+            <button
+              onClick={exitSelectMode}
+              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 transition-colors"
+            >
+              취소
+            </button>
+          ) : (
+            <button
+              onClick={() => setSelectMode(true)}
+              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 transition-colors"
+            >
+              선택
+            </button>
+          )}
           <button
             onClick={handleExport}
             disabled={exporting}
@@ -186,6 +249,11 @@ function MeetingsContent() {
             })}
           </div>
         )}
+
+        {/* 월별 통계 차트 */}
+        <div className="mb-4">
+          <MonthlyChart />
+        </div>
 
         {/* 검색 + 필터 영역 */}
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 mb-4 space-y-3">
@@ -297,6 +365,32 @@ function MeetingsContent() {
           </p>
         )}
 
+        {/* 선택 모드 액션 바 */}
+        {selectMode && (
+          <div className="flex items-center gap-3 mb-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3">
+            <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600 dark:text-gray-300">
+              <input
+                type="checkbox"
+                checked={visibleItems.length > 0 && selectedIds.size === visibleItems.length}
+                onChange={toggleSelectAll}
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              전체 선택
+            </label>
+            <span className="text-sm text-gray-400">
+              {selectedIds.size}개 선택됨
+            </span>
+            <div className="flex-1" />
+            <button
+              onClick={handleBulkDelete}
+              disabled={selectedIds.size === 0 || bulkDeleting}
+              className="px-3 py-1.5 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {bulkDeleting ? '삭제 중...' : `선택 삭제 (${selectedIds.size})`}
+            </button>
+          </div>
+        )}
+
         {/* 카드 그리드 */}
         {!loading && data && data.items.length === 0 ? (
           <div className="text-center py-20">
@@ -312,9 +406,7 @@ function MeetingsContent() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {data?.items
-              .filter(job => !bookmarkOnly || job.bookmarked === 1)
-              .map(job => {
+            {visibleItems.map(job => {
                 const cat = job.category_id ? categories.find(c => c.id === job.category_id) : undefined
                 const enrichedJob = cat ? { ...job, category: cat.name } : job
                 return (
@@ -322,14 +414,17 @@ function MeetingsContent() {
                   key={job.id}
                   job={enrichedJob}
                   searchQuery={query}
-                  onBookmark={async (id) => {
+                  selectMode={selectMode}
+                  isSelected={selectedIds.has(job.id)}
+                  onSelect={toggleSelect}
+                  onBookmark={selectMode ? undefined : async (id) => {
                     await fetch(`/api/jobs/${id}/bookmark`, { method: 'PATCH' })
                     setData(prev => prev ? {
                       ...prev,
                       items: prev.items.map(j => j.id === id ? { ...j, bookmarked: j.bookmarked ? 0 : 1 } : j)
                     } : prev)
                   }}
-                  onDelete={async (id) => {
+                  onDelete={selectMode ? undefined : async (id) => {
                     await fetch(`/api/jobs/${id}`, { method: 'DELETE' })
                     setData(prev => prev ? {
                       ...prev,
