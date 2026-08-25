@@ -9,6 +9,9 @@ interface MeetingCardProps {
   searchQuery?: string
   onBookmark?: (jobId: string) => void
   onDelete?: (jobId: string) => void
+  selectMode?: boolean
+  isSelected?: boolean
+  onSelect?: (jobId: string) => void
 }
 
 function escapeRegExp(str: string): string {
@@ -70,7 +73,7 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   error:         { label: '실패',      cls: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-400' },
 }
 
-export default function MeetingCard({ job, searchQuery, onBookmark, onDelete }: MeetingCardProps) {
+export default function MeetingCard({ job, searchQuery, onBookmark, onDelete, selectMode, isSelected, onSelect }: MeetingCardProps) {
   const router = useRouter()
   const badge = STATUS_BADGE[job.status] ?? { label: job.status, cls: 'bg-gray-100 text-gray-800' }
   const actionCount = job.summary ? countActionItems(job.summary) : 0
@@ -79,13 +82,36 @@ export default function MeetingCard({ job, searchQuery, onBookmark, onDelete }: 
     ? job.summary.replace(/^#+.+$/gm, '').trim().slice(0, 100)
     : ''
 
+  const handleClick = () => {
+    if (selectMode && onSelect) {
+      onSelect(job.id)
+    } else {
+      router.push(`/meetings/${job.id}`)
+    }
+  }
+
   return (
     <div
-      onClick={() => router.push(`/meetings/${job.id}`)}
-      className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-sm transition-all flex flex-col gap-2 min-h-[140px]"
+      onClick={handleClick}
+      className={`bg-white dark:bg-gray-800 border rounded-xl p-4 cursor-pointer hover:shadow-sm transition-all flex flex-col gap-2 min-h-[140px] ${
+        isSelected
+          ? 'border-blue-500 dark:border-blue-400 ring-2 ring-blue-200 dark:ring-blue-800'
+          : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
+      }`}
     >
       {/* 제목 + 상태 뱃지 + 북마크 */}
       <div className="flex items-start justify-between gap-2">
+        {selectMode && (
+          <div className="flex-shrink-0 pt-0.5">
+            <input
+              type="checkbox"
+              checked={!!isSelected}
+              onChange={() => onSelect?.(job.id)}
+              onClick={e => e.stopPropagation()}
+              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+            />
+          </div>
+        )}
         <h3 className="font-semibold text-gray-800 dark:text-gray-100 text-sm leading-snug line-clamp-2 flex-1">
           {highlightText(job.title, searchQuery)}
         </h3>
