@@ -344,7 +344,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
               />
             </div>
             <div className="md:w-[45%] flex flex-col min-h-0 p-4 h-1/2 md:h-auto">
-              <SummaryPanel summary={job.summary || ''} jobId={job.id} onSummaryUpdate={onJobsChange} speakers={job.speakers} />
+              <SummaryPanel summary={job.summary || ''} jobId={job.id} onSummaryUpdate={onJobsChange} speakers={job.speakers} actionItems={job.action_items} />
             </div>
           </div>
         </div>
