@@ -50,6 +50,15 @@ function getSpeakersLabel(speakers?: Record<string, string>): string {
   return rest > 0 ? `${visible.join(', ')} 외 ${rest}명` : visible.join(', ')
 }
 
+const CATEGORY_COLORS: Record<string, string> = {
+  '주간회의': 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  '기획회의': 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+  '일일스크럼': 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+  '회고': 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+  '인터뷰': 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300',
+}
+const DEFAULT_CATEGORY_COLOR = 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   done:          { label: '완료',      cls: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400' },
   pending:       { label: '대기',      cls: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-400' },
@@ -108,13 +117,21 @@ export default function MeetingCard({ job, searchQuery, onBookmark, onDelete }: 
         </div>
       </div>
 
-      {/* 날짜 + 시간 */}
+      {/* 날짜 + 시간 + 카테고리 */}
       <div className="flex items-center gap-1.5 text-xs text-gray-400">
         <span>{formatDate(job.created_at)}</span>
         {job.duration_sec && (
           <>
             <span>·</span>
             <span>{formatDuration(job.duration_sec)}</span>
+          </>
+        )}
+        {job.category && (
+          <>
+            <span>·</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[job.category] ?? DEFAULT_CATEGORY_COLOR}`}>
+              {job.category}
+            </span>
           </>
         )}
       </div>

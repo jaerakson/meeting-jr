@@ -38,6 +38,7 @@ export interface Job {
   notion_url?: string
   notion_page_id?: string
   category_id?: string
+  category?: string
   action_items?: ActionItem[]
   bookmarked?: number
   memo?: string
