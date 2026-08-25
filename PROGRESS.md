@@ -1,3 +1,15 @@
+## 2026-08-25 (작업 PC: 로컬) — 세션 22 (신규 기능 4개 완료)
+- 브랜치: main (PR #18~#23 squash 머지)
+- 완료: product-manager + director 협의 후 4개 기능 개발
+  - 북마크/즐겨찾기: DB bookmarked 컬럼, PATCH API, Sidebar 별표 토글, /meetings 필터 (PR #18, #22)
+  - 회의 메모 필드: DB memo 컬럼, PATCH API, done 화면 textarea+저장 (PR #19, #22)
+  - 다크모드 파형+Notification: AnalyserNode 캔버스 다크/라이트, done/error 브라우저 알림 (PR #20)
+  - ZIP 전체 내보내기: GET /api/export StreamingResponse, /meetings 버튼 (PR #21, #23)
+- 현재 상태: main 최신 (3651b4f), 서버 실행 중
+- 다음 할 일: 없음
+- 관련 PR: #18, #19, #20, #21, #22, #23
+- 푸시 여부: origin/main 푸시 완료
+
 ## 2026-08-25 (작업 PC: 로컬) — 세션 21 (서버 검증 + 버그 수정)
 - 브랜치: main (직접 커밋 8c6f1be)
 - 완료: 신규 기능 3개 서버 검증 + 버그 수정
