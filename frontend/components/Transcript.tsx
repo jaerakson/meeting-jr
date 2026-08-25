@@ -206,7 +206,7 @@ export default function Transcript({ transcript, currentTime, onTimeClick, edita
                   </span>
                   <button
                     onClick={() => onTimeClick(line.time)}
-                    className="text-xs text-gray-400 hover:text-accent transition-colors font-mono"
+                    className="text-xs text-blue-500 hover:text-blue-700 hover:underline transition-colors font-mono bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded"
                   >
                     {line.timeStr}
                   </button>
