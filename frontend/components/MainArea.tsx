@@ -41,6 +41,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   const [memoSaved, setMemoSaved] = useState(false)
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (job?.status === 'done' && job.id) {
@@ -452,7 +453,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
                     {relatedMeetings.map(m => (
                       <div
                         key={m.id}
-                        onClick={() => router.push(`/?job=${m.id}`)}
+                        onClick={() => router.push(`/meetings/${m.id}`)}
                         className="flex items-center justify-between p-3 rounded-lg border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
                       >
                         <div>
@@ -533,6 +534,20 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
                 >
                   Notion에서 보기 ↗
                 </a>
+              )}
+              {job.status === 'done' && (
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}/meetings/${job.id}`
+                    navigator.clipboard.writeText(url)
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 2000)
+                  }}
+                  className="text-xs md:text-sm px-2 md:px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center gap-1.5 transition-colors"
+                  title="링크 복사"
+                >
+                  {copied ? '복사됨!' : '링크'}
+                </button>
               )}
               {job.status === 'done' && (
                 <button
