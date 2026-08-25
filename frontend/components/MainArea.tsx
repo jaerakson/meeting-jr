@@ -519,14 +519,17 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
                 value={titleValue}
                 onChange={e => setTitleValue(e.target.value)}
                 onBlur={handleTitleSave}
-                onKeyDown={e => e.key === 'Enter' && handleTitleSave()}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleTitleSave()
+                  if (e.key === 'Escape') { setTitleValue(job.title || ''); setEditingTitle(false) }
+                }}
                 className="text-lg font-semibold outline-none border-b-2 border-blue-500 bg-transparent flex-1 mr-4"
               />
             ) : (
               <h1
                 className="text-base md:text-lg font-semibold text-gray-800 dark:text-gray-100 cursor-pointer hover:text-blue-600 flex-1 mr-2 truncate"
-                onClick={() => setEditingTitle(true)}
-                title="클릭하여 제목 편집"
+                onDoubleClick={() => setEditingTitle(true)}
+                title="더블클릭하여 제목 편집"
               >
                 {titleValue || '회의'}
               </h1>
