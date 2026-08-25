@@ -6,7 +6,7 @@
   - 잔여 이슈 추가 수정: MeetingCard 상태 뱃지, SummaryPanel 리스트, SettingsModal 버튼, TranscriptEditor 화자 색상 (PR #35)
   - 확인: 코드 리뷰 이슈 0건 (클린 패스)
 - 현재 상태: main 최신 (add523f)
-- 다음 할 일: 없음
+- 다음 할 일: 사이드바 접기/펼치기 기능 (product-manager 기획 대기 중)
 - 관련 PR: #34, #35
 - 푸시 여부: origin/main 푸시 완료
 
