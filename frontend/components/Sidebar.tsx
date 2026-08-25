@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { Job } from '@/types'
 import { useTheme } from '@/hooks/useTheme'
@@ -34,6 +34,7 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
   const [showSettings, setShowSettings] = useState(false)
   const [editingJobId, setEditingJobId] = useState<string | null>(null)
   const [editTitleValue, setEditTitleValue] = useState('')
+  const titleSavingRef = useRef(false)
   const { theme, toggleTheme } = useTheme()
 
   useEffect(() => {
@@ -82,9 +83,11 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
   }
 
   const handleTitleSave = async (jobId: string) => {
+    if (titleSavingRef.current) return
+    titleSavingRef.current = true
     const trimmed = editTitleValue.trim()
     setEditingJobId(null)
-    if (!trimmed) return
+    if (!trimmed) { titleSavingRef.current = false; return }
     try {
       await fetch(`/api/jobs/${jobId}/title`, {
         method: 'PATCH',
@@ -94,6 +97,8 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
       onJobsChange()
     } catch {
       // silent fail
+    } finally {
+      titleSavingRef.current = false
     }
   }
 
@@ -196,7 +201,7 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
                   onBlur={() => handleTitleSave(job.id)}
                   onKeyDown={e => {
                     if (e.key === 'Enter') handleTitleSave(job.id)
-                    if (e.key === 'Escape') setEditingJobId(null)
+                    if (e.key === 'Escape') { setEditTitleValue(''); setEditingJobId(null) }
                   }}
                   onClick={e => e.stopPropagation()}
                   className="text-sm font-medium flex-1 bg-transparent outline-none border-b border-blue-400 text-white mr-1"
