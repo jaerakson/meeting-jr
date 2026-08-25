@@ -1,3 +1,14 @@
+## 2026-08-25 (작업 PC: 로컬) — 세션 23 (신규 기능 3개 완료)
+- 브랜치: main (PR #24~#26 squash 머지)
+- 완료: product-manager 기획 → director 팀 구현 (3가지 기능)
+  - 타임스탬프 클릭 → 오디오 점프: [MM:SS] 버튼 파란색 링크 스타일, CustomEvent audio-seek (PR #24)
+  - 요약 재생성: POST /api/jobs/{id}/regenerate, SummaryPanel 재생성 버튼+카테고리 선택 모달 (PR #25)
+  - 회의 태그: DB tags 컬럼, PATCH /api/jobs/{id}/tags, GET /api/tags, 태그 입력 UI, /meetings 필터, Sidebar 뱃지 (PR #26)
+- 현재 상태: main 최신 (7a28dbb)
+- 다음 할 일: 없음
+- 관련 PR: #24, #25, #26
+- 푸시 여부: origin/main 푸시 완료
+
 ## 2026-08-25 (작업 PC: 로컬) — 세션 22 (신규 기능 4개 완료)
 - 브랜치: main (PR #18~#23 squash 머지)
 - 완료: product-manager + director 협의 후 4개 기능 개발
