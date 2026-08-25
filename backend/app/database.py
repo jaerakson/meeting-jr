@@ -47,6 +47,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("notion_url", "TEXT"),
         ("notion_page_id", "TEXT"),
         ("category_id", "TEXT"),
+        ("language", "TEXT"),
     ]:
         if col not in existing:
             conn.execute(f"ALTER TABLE meetings ADD COLUMN {col} {definition}")
@@ -111,6 +112,7 @@ def create_job(
     filename: str,
     title: Optional[str] = None,
     category_id: Optional[str] = None,
+    language: Optional[str] = "ko",
 ) -> dict:
     """새 Job 레코드를 생성하고 dict로 반환."""
     now = datetime.now(timezone.utc).isoformat()
@@ -118,10 +120,10 @@ def create_job(
     try:
         conn.execute(
             """
-            INSERT INTO meetings (id, title, filename, status, created_at, category_id)
-            VALUES (?, ?, ?, 'pending', ?, ?)
+            INSERT INTO meetings (id, title, filename, status, created_at, category_id, language)
+            VALUES (?, ?, ?, 'pending', ?, ?, ?)
             """,
-            (job_id, title or filename, filename, now, category_id),
+            (job_id, title or filename, filename, now, category_id, language),
         )
         conn.commit()
         return get_job(job_id)

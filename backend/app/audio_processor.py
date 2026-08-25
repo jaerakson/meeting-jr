@@ -236,8 +236,9 @@ async def run_transcription(
     wav_path: str,
     progress_callback,
     job_id: str,
+    language: str | None = "ko",
 ) -> dict:
-    """MLX-Whisper로 한국어 음성 인식을 수행한다."""
+    """MLX-Whisper로 음성 인식을 수행한다. language=None이면 자동 감지."""
     progress_callback(job_id, {
         "stage": "transcribing",
         "progress": 0,
@@ -250,7 +251,7 @@ async def run_transcription(
         return mlx_whisper.transcribe(
             str(wav_path),
             path_or_hf_repo="mlx-community/whisper-large-v3-turbo",
-            language="ko",
+            language=language,
             word_timestamps=True,
         )
 
@@ -369,6 +370,7 @@ async def process_audio(
     file_path: str,
     job_id: str,
     progress_callback,
+    language: str | None = "ko",
 ) -> dict:
     """
     오디오 파일을 처리하여 화자 분리 + STT를 수행한다.
@@ -396,7 +398,7 @@ async def process_audio(
     diarization = await run_diarization(str(wav_path), progress_callback, job_id)
 
     # 3. STT
-    transcription = await run_transcription(str(wav_path), progress_callback, job_id)
+    transcription = await run_transcription(str(wav_path), progress_callback, job_id, language=language)
 
     # 4. 매핑 + 저장
     script_path, speakers = merge_and_save(diarization, transcription, job_id)
