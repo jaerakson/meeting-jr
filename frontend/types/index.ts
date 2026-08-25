@@ -45,6 +45,7 @@ export interface Job {
   memo?: string
   tags?: string[]
   snippet?: string
+  suggested_speakers?: Record<string, { name: string; confidence: number }>
 }
 
 export interface RelatedMeeting {
@@ -68,6 +69,14 @@ export interface SettingsStatus {
   HF_TOKEN: { set: boolean; preview: string | null }
   NOTION_API_KEY: { set: boolean; preview: string | null }
   NOTION_DATABASE_ID: { set: boolean; preview: string | null }
+}
+
+export interface VoiceProfile {
+  id: string
+  name: string
+  sample_count: number
+  created_at: string
+  updated_at: string
 }
 
 export interface ClaudeStatus {

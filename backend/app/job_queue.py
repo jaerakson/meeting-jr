@@ -73,8 +73,36 @@ async def start_worker() -> None:
                     duration_sec=result.get("duration_sec"),
                 )
 
+            # Voice Profile 자동 매칭
+            suggested_speakers: dict = {}
+            wav_path = result.get("wav_path")
+            diar_segments = result.get("diarization_segments", {})
+            if wav_path and diar_segments:
+                try:
+                    from .audio_processor import extract_speaker_embedding
+                    from .main import match_speaker_to_profiles
+                    import numpy as _np
+
+                    for speaker_label, segs in diar_segments.items():
+                        sorted_segs = sorted(segs, key=lambda s: s["end"] - s["start"], reverse=True)
+                        selected = sorted_segs[:3]
+                        embeddings = []
+                        for seg in selected:
+                            try:
+                                emb = extract_speaker_embedding(wav_path, seg["start"], seg["end"])
+                                embeddings.append(emb)
+                            except Exception:
+                                continue
+                        if embeddings:
+                            avg_emb = _np.mean(embeddings, axis=0).astype(_np.float32)
+                            match_result = await match_speaker_to_profiles(avg_emb)
+                            if match_result:
+                                suggested_speakers[speaker_label] = match_result
+                except Exception:
+                    traceback.print_exc()
+
             # awaiting_edit 상태로 전환 — suggested_names를 DB에 저장해 페이지 새로고침 후에도 복원
-            update_job_result(job_id, speakers=result.get("suggested_names", {}))
+            update_job_result(job_id, speakers=result.get("suggested_names", {}), suggested_speakers=suggested_speakers)
             update_job_status(job_id, "awaiting_edit")
             update_progress(job_id, {
                 "stage": "awaiting_edit",
@@ -83,6 +111,7 @@ async def start_worker() -> None:
                 "transcript": transcript_text,
                 "speakers": result.get("speakers", []),
                 "suggested_names": result.get("suggested_names", {}),
+                "suggested_speakers": suggested_speakers,
             })
 
         except Exception as e:

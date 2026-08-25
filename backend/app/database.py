@@ -47,6 +47,13 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
             d["tags"] = []
     else:
         d["tags"] = []
+    if d.get("suggested_speakers"):
+        try:
+            d["suggested_speakers"] = json.loads(d["suggested_speakers"])
+        except (json.JSONDecodeError, TypeError):
+            d["suggested_speakers"] = {}
+    else:
+        d["suggested_speakers"] = {}
     return d
 
 
@@ -72,6 +79,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("bookmarked", "INTEGER NOT NULL DEFAULT 0"),
         ("memo", "TEXT"),
         ("tags", "TEXT"),
+        ("suggested_speakers", "TEXT"),
     ]:
         if col not in existing:
             conn.execute(f"ALTER TABLE meetings ADD COLUMN {col} {definition}")
@@ -79,7 +87,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
 
 
 def init_db() -> None:
-    """meetings/categories 테이블이 없으면 생성한다. 앱 시작 시 호출."""
+    """meetings/categories/voice_profiles 테이블이 없으면 생성한다. 앱 시작 시 호출."""
     from .categories import seed_categories
     conn = _get_conn()
     try:
@@ -119,6 +127,17 @@ def init_db() -> None:
                 key        TEXT PRIMARY KEY,
                 value      TEXT NOT NULL,
                 updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS voice_profiles (
+                id            TEXT PRIMARY KEY,
+                name          TEXT NOT NULL,
+                embedding     BLOB NOT NULL,
+                embedding_dim INTEGER NOT NULL DEFAULT 192,
+                sample_count  INTEGER NOT NULL DEFAULT 1,
+                created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+                updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
             )
         """)
         _migrate(conn)
@@ -213,6 +232,7 @@ def update_job_result(
     transcript: Optional[str] = None,
     summary: Optional[str] = None,
     speakers: Optional[dict] = None,
+    suggested_speakers: Optional[dict] = None,
     duration_sec: Optional[int] = None,
     status: Optional[str] = None,
 ) -> None:
@@ -229,6 +249,9 @@ def update_job_result(
     if speakers is not None:
         fields.append("speakers = ?")
         values.append(json.dumps(speakers, ensure_ascii=False))
+    if suggested_speakers is not None:
+        fields.append("suggested_speakers = ?")
+        values.append(json.dumps(suggested_speakers, ensure_ascii=False))
     if duration_sec is not None:
         fields.append("duration_sec = ?")
         values.append(duration_sec)
@@ -551,3 +574,153 @@ def update_job_category(job_id: str, category_id: str) -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Voice Profiles CRUD
+# ---------------------------------------------------------------------------
+
+def get_voice_profiles() -> list[dict]:
+    """모든 목소리 프로필 반환 (embedding 제외)."""
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id, name, embedding_dim, sample_count, created_at, updated_at "
+            "FROM voice_profiles ORDER BY created_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_voice_profile(profile_id: str) -> Optional[dict]:
+    """단일 프로필 반환 (embedding 포함)."""
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM voice_profiles WHERE id = ?", (profile_id,)
+        ).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["embedding"] = bytes(d["embedding"])
+        return d
+    finally:
+        conn.close()
+
+
+def get_all_voice_profiles_with_embeddings() -> list[dict]:
+    """모든 프로필을 embedding 포함하여 반환."""
+    conn = _get_conn()
+    try:
+        rows = conn.execute("SELECT * FROM voice_profiles").fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["embedding"] = bytes(d["embedding"])
+            result.append(d)
+        return result
+    finally:
+        conn.close()
+
+
+def create_voice_profile(name: str, embedding: bytes, embedding_dim: int) -> dict:
+    """새 목소리 프로필 생성."""
+    import uuid
+    profile_id = str(uuid.uuid4())
+    conn = _get_conn()
+    try:
+        conn.execute(
+            """
+            INSERT INTO voice_profiles (id, name, embedding, embedding_dim, sample_count)
+            VALUES (?, ?, ?, ?, 1)
+            """,
+            (profile_id, name, embedding, embedding_dim),
+        )
+        conn.commit()
+        return {
+            "id": profile_id,
+            "name": name,
+            "embedding_dim": embedding_dim,
+            "sample_count": 1,
+        }
+    finally:
+        conn.close()
+
+
+def update_voice_profile_embedding(
+    profile_id: str, new_embedding: bytes, sample_count: int
+) -> Optional[dict]:
+    """embedding 업데이트 (샘플 추가 시)."""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            """
+            UPDATE voice_profiles
+            SET embedding = ?, sample_count = ?,
+                updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+            WHERE id = ?
+            """,
+            (new_embedding, sample_count, profile_id),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT id, name, embedding_dim, sample_count, created_at, updated_at "
+            "FROM voice_profiles WHERE id = ?",
+            (profile_id,),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def rename_voice_profile(profile_id: str, name: str) -> Optional[dict]:
+    """프로필 이름 변경."""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            """
+            UPDATE voice_profiles
+            SET name = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+            WHERE id = ?
+            """,
+            (name, profile_id),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT id, name, embedding_dim, sample_count, created_at, updated_at "
+            "FROM voice_profiles WHERE id = ?",
+            (profile_id,),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def delete_voice_profile(profile_id: str) -> bool:
+    """프로필 삭제."""
+    conn = _get_conn()
+    try:
+        cursor = conn.execute(
+            "DELETE FROM voice_profiles WHERE id = ?", (profile_id,)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def get_voice_profile_threshold() -> float:
+    """매칭 임계값 설정 조회 (기본 0.75)."""
+    from .settings_manager import get_setting
+    val = get_setting("VOICE_MATCH_THRESHOLD")
+    try:
+        return float(val) if val else 0.75
+    except (ValueError, TypeError):
+        return 0.75
+
+
+def set_voice_profile_threshold(threshold: float) -> None:
+    """매칭 임계값 저장."""
+    from .settings_manager import set_setting
+    set_setting("VOICE_MATCH_THRESHOLD", str(threshold))

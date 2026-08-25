@@ -7,6 +7,7 @@ interface Props {
   initialTranscript: string
   initialSpeakers: string[]
   suggestedNames: Record<string, string>
+  suggestedSpeakers?: Record<string, { name: string; confidence: number }>
   initialCategoryId?: string
   onComplete: () => void
 }
@@ -46,12 +47,19 @@ const C: Record<Color, { dot: string; text: string; ring: string; bg: string; ro
   cyan:    { dot: 'bg-cyan-500',    text: 'text-cyan-600 dark:text-cyan-400',       ring: 'ring-cyan-300 dark:ring-cyan-700',       bg: 'bg-cyan-50 dark:bg-cyan-900/30',       rowBg: 'bg-cyan-50 dark:bg-cyan-900/20' },
 }
 
-export default function TranscriptEditor({ jobId, initialTranscript, initialSpeakers, suggestedNames, initialCategoryId = 'meeting', onComplete }: Props) {
+export default function TranscriptEditor({ jobId, initialTranscript, initialSpeakers, suggestedNames, suggestedSpeakers, initialCategoryId = 'meeting', onComplete }: Props) {
   const [lines, setLines] = useState<TLine[]>(() => parseTranscript(initialTranscript))
   const [categoryId, setCategoryId] = useState(initialCategoryId)
   const [names, setNames] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {}
-    initialSpeakers.forEach(s => { m[s] = '' })
+    initialSpeakers.forEach(s => {
+      // 자동 매칭 결과가 있으면 기본값으로 설정
+      if (suggestedSpeakers?.[s]) {
+        m[s] = suggestedSpeakers[s].name
+      } else {
+        m[s] = ''
+      }
+    })
     return m
   })
   const [selected, setSelected] = useState<string | null>(null)
@@ -199,13 +207,20 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
                   </div>
                   <input
                     type="text"
-                    placeholder={suggestedNames[sp] || '이름 입력'}
+                    placeholder={suggestedSpeakers?.[sp]?.name || suggestedNames[sp] || '이름 입력'}
                     value={names[sp] || ''}
                     onChange={e => setNames(prev => ({ ...prev, [sp]: e.target.value }))}
                     onClick={e => e.stopPropagation()}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white dark:bg-gray-600 dark:text-gray-200"
                   />
-                  <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">{count}개 발화</div>
+                  <div className="flex items-center gap-1 mt-1">
+                    <span className="text-xs text-gray-400 dark:text-gray-500">{count}개 발화</span>
+                    {suggestedSpeakers?.[sp] && (
+                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium">
+                        ✓ {Math.round(suggestedSpeakers[sp].confidence)}%
+                      </span>
+                    )}
+                  </div>
                 </div>
               )
             })}

@@ -22,6 +22,8 @@ from fastapi import FastAPI, File, Form, Request, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 
+import numpy as np
+
 from .database import (
     init_db,
     create_job,
@@ -44,6 +46,14 @@ from .database import (
     update_job_memo,
     update_job_tags,
     get_all_tags,
+    get_voice_profiles,
+    get_voice_profile,
+    get_all_voice_profiles_with_embeddings,
+    create_voice_profile,
+    update_voice_profile_embedding,
+    delete_voice_profile,
+    get_voice_profile_threshold,
+    set_voice_profile_threshold,
 )
 from .job_queue import job_queue, start_worker, progress_store, update_progress
 from .settings_manager import get_settings_status, get_setting, set_setting, SETTING_KEYS
@@ -1276,3 +1286,244 @@ def _save_speakers(speaker_map: dict) -> None:
         json.dumps(existing, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+# ---------------------------------------------------------------------------
+# Voice Profile 자동 매칭
+# ---------------------------------------------------------------------------
+
+async def match_speaker_to_profiles(speaker_embedding: np.ndarray) -> dict | None:
+    """코사인 유사도로 화자 embedding과 프로필 매칭.
+
+    Returns:
+        {"profile_id": str, "name": str, "confidence": float} or None
+    """
+    threshold = get_voice_profile_threshold()
+    profiles = get_all_voice_profiles_with_embeddings()
+    if not profiles:
+        return None
+
+    best_match = None
+    best_score = 0.0
+
+    for profile in profiles:
+        emb = np.frombuffer(profile["embedding"], dtype=np.float32)
+        norm_a = np.linalg.norm(speaker_embedding)
+        norm_b = np.linalg.norm(emb)
+        if norm_a == 0 or norm_b == 0:
+            continue
+        score = float(np.dot(speaker_embedding, emb) / (norm_a * norm_b))
+        if score > best_score:
+            best_score = score
+            best_match = profile
+
+    if best_match and best_score >= threshold:
+        return {
+            "profile_id": best_match["id"],
+            "name": best_match["name"],
+            "confidence": round(best_score * 100, 1),
+        }
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Voice Profiles API
+# ---------------------------------------------------------------------------
+
+@app.get("/api/voice-profiles")
+async def list_voice_profiles():
+    """목소리 프로필 목록 (embedding 제외)."""
+    return get_voice_profiles()
+
+
+@app.post("/api/voice-profiles")
+async def create_voice_profile_endpoint(
+    name: str = Form(...),
+    audio: UploadFile = File(...),
+):
+    """새 목소리 프로필 생성 (오디오 → embedding 추출)."""
+    import tempfile
+    import subprocess
+
+    content = await audio.read()
+    if not content:
+        raise HTTPException(status_code=422, detail="오디오 데이터가 없습니다.")
+
+    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp_in:
+        tmp_in.write(content)
+        tmp_in_path = tmp_in.name
+
+    wav_path = tmp_in_path.replace(".webm", ".wav")
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", tmp_in_path, "-ar", "16000", "-ac", "1", wav_path],
+            capture_output=True, check=True,
+        )
+        from .audio_processor import extract_speaker_embedding
+        embedding = await asyncio.to_thread(extract_speaker_embedding, wav_path)
+        profile = create_voice_profile(name, embedding.tobytes(), len(embedding))
+        return profile
+    finally:
+        Path(tmp_in_path).unlink(missing_ok=True)
+        Path(wav_path).unlink(missing_ok=True)
+
+
+@app.get("/api/voice-profiles/threshold")
+async def get_threshold():
+    """매칭 임계값 조회."""
+    return {"threshold": get_voice_profile_threshold()}
+
+
+@app.put("/api/voice-profiles/threshold")
+async def set_threshold(body: dict):
+    """매칭 임계값 설정."""
+    threshold = body.get("threshold")
+    if threshold is None or not isinstance(threshold, (int, float)):
+        raise HTTPException(status_code=422, detail="threshold (숫자)가 필요합니다.")
+    if not (0.0 <= threshold <= 1.0):
+        raise HTTPException(status_code=422, detail="threshold는 0~1 범위여야 합니다.")
+    set_voice_profile_threshold(float(threshold))
+    return {"threshold": float(threshold)}
+
+
+@app.delete("/api/voice-profiles/{profile_id}")
+async def delete_voice_profile_endpoint(profile_id: str):
+    """프로필 삭제."""
+    if not delete_voice_profile(profile_id):
+        raise HTTPException(status_code=404, detail="프로필을 찾을 수 없습니다.")
+    return {"status": "deleted", "id": profile_id}
+
+
+@app.post("/api/voice-profiles/{profile_id}/add-sample")
+async def add_sample_to_profile(
+    profile_id: str,
+    audio: UploadFile = File(...),
+):
+    """기존 프로필에 샘플 추가 (누적 평균)."""
+    import tempfile
+    import subprocess
+
+    profile = get_voice_profile(profile_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="프로필을 찾을 수 없습니다.")
+
+    content = await audio.read()
+    if not content:
+        raise HTTPException(status_code=422, detail="오디오 데이터가 없습니다.")
+
+    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp_in:
+        tmp_in.write(content)
+        tmp_in_path = tmp_in.name
+
+    wav_path = tmp_in_path.replace(".webm", ".wav")
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", tmp_in_path, "-ar", "16000", "-ac", "1", wav_path],
+            capture_output=True, check=True,
+        )
+        from .audio_processor import extract_speaker_embedding
+        new_emb = await asyncio.to_thread(extract_speaker_embedding, wav_path)
+
+        existing_emb = np.frombuffer(profile["embedding"], dtype=np.float32)
+        count = profile["sample_count"]
+        averaged = (existing_emb * count + new_emb) / (count + 1)
+        averaged = averaged.astype(np.float32)
+
+        result = update_voice_profile_embedding(
+            profile_id, averaged.tobytes(), count + 1
+        )
+        return result
+    finally:
+        Path(tmp_in_path).unlink(missing_ok=True)
+        Path(wav_path).unlink(missing_ok=True)
+
+
+@app.post("/api/jobs/{job_id}/rename-speakers")
+async def rename_speakers(job_id: str, body: dict):
+    """화자 이름 매핑을 적용한다 (요약 없이 speaker_map만 저장).
+
+    body: {speaker_map: {"SPEAKER_00": "김팀장", ...}}
+    """
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+
+    speaker_map: dict = body.get("speaker_map", {})
+
+    update_job_result(job_id, speakers=speaker_map)
+
+    if speaker_map:
+        _save_speakers(speaker_map)
+
+    return {"ok": True}
+
+
+@app.post("/api/jobs/{job_id}/save-speaker-profile")
+async def save_speaker_profile(job_id: str, body: dict):
+    """완료된 회의의 화자를 프로필로 저장.
+
+    body: {speaker_label: "SPEAKER_00", profile_name: "김팀장", profile_id?: "기존ID"}
+    """
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+
+    speaker_label = body.get("speaker_label", "").strip()
+    profile_name = body.get("profile_name", "").strip()
+    profile_id = body.get("profile_id")
+
+    if not speaker_label:
+        raise HTTPException(status_code=422, detail="speaker_label이 필요합니다.")
+    if not profile_name and not profile_id:
+        raise HTTPException(status_code=422, detail="profile_name 또는 profile_id가 필요합니다.")
+
+    # diarization 세그먼트 파일에서 화자 구간 로드
+    diar_path = INPUT_DIR / f"{job_id}_diarization.json"
+    if not diar_path.exists():
+        raise HTTPException(status_code=422, detail="Diarization 데이터가 없습니다.")
+
+    diar_data = json.loads(diar_path.read_text(encoding="utf-8"))
+    speaker_segs = diar_data.get(speaker_label)
+    if not speaker_segs:
+        raise HTTPException(status_code=422, detail=f"화자 {speaker_label}의 구간을 찾을 수 없습니다.")
+
+    # WAV 파일 경로
+    wav_path = INPUT_DIR / f"{job_id}_16k.wav"
+    if not wav_path.exists():
+        raise HTTPException(status_code=422, detail="WAV 파일을 찾을 수 없습니다.")
+
+    from .audio_processor import extract_speaker_embedding
+
+    # 길이 기준 상위 3개 구간에서 embedding 추출
+    sorted_segs = sorted(speaker_segs, key=lambda s: s["end"] - s["start"], reverse=True)
+    selected = sorted_segs[:3]
+
+    embeddings = []
+    for seg in selected:
+        try:
+            emb = await asyncio.to_thread(
+                extract_speaker_embedding, str(wav_path), seg["start"], seg["end"]
+            )
+            embeddings.append(emb)
+        except Exception:
+            continue
+
+    if not embeddings:
+        raise HTTPException(status_code=500, detail="Embedding 추출에 실패했습니다.")
+
+    new_emb = np.mean(embeddings, axis=0).astype(np.float32)
+
+    if profile_id:
+        # 기존 프로필에 샘플 추가
+        profile = get_voice_profile(profile_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="프로필을 찾을 수 없습니다.")
+        existing_emb = np.frombuffer(profile["embedding"], dtype=np.float32)
+        count = profile["sample_count"]
+        averaged = ((existing_emb * count + new_emb) / (count + 1)).astype(np.float32)
+        result = update_voice_profile_embedding(profile_id, averaged.tobytes(), count + 1)
+        return result
+    else:
+        # 새 프로필 생성
+        result = create_voice_profile(profile_name, new_emb.tobytes(), len(new_emb))
+        return result
