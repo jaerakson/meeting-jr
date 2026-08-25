@@ -279,6 +279,23 @@ def delete_job(job_id: str) -> bool:
         conn.close()
 
 
+def _extract_snippet(text: str, query: str, length: int = 100) -> str:
+    """검색어 주변 텍스트 스니펫 추출."""
+    if not text or not query:
+        return ""
+    idx = text.lower().find(query.lower())
+    if idx == -1:
+        return ""
+    start = max(0, idx - 40)
+    end = min(len(text), idx + len(query) + 60)
+    snippet = text[start:end]
+    if start > 0:
+        snippet = "..." + snippet
+    if end < len(text):
+        snippet = snippet + "..."
+    return snippet
+
+
 def search_jobs(
     q: str = "",
     page: int = 1,
@@ -288,7 +305,7 @@ def search_jobs(
     date_to: str = "",
     tag: str = "",
 ) -> dict:
-    """제목+요약 LIKE 검색 + 카테고리/날짜 필터 + 페이지네이션.
+    """제목+요약+스크립트 LIKE 검색 + 카테고리/날짜 필터 + 페이지네이션.
 
     반환: {"items": list[dict], "total": int, "page": int, "pages": int}
     """
@@ -301,9 +318,9 @@ def search_jobs(
         params: list = []
 
         if q:
-            conditions.append("(title LIKE ? OR summary LIKE ?)")
+            conditions.append("(title LIKE ? OR summary LIKE ? OR transcript LIKE ?)")
             pattern = f"%{q}%"
-            params.extend([pattern, pattern])
+            params.extend([pattern, pattern, pattern])
 
         if category_id:
             conditions.append("category_id = ?")
@@ -334,8 +351,20 @@ def search_jobs(
         ).fetchone()[0]
 
         pages = max(1, (total + limit - 1) // limit)
+        items = [_row_to_dict(r) for r in rows]
+
+        # 검색어가 있을 때 snippet 추가
+        if q:
+            for item in items:
+                snippet = (
+                    _extract_snippet(item.get("title") or "", q)
+                    or _extract_snippet(item.get("summary") or "", q)
+                    or _extract_snippet(item.get("transcript") or "", q)
+                )
+                item["snippet"] = snippet
+
         return {
-            "items": [_row_to_dict(r) for r in rows],
+            "items": items,
             "total": total,
             "page": page,
             "pages": pages,

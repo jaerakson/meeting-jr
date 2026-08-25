@@ -1035,7 +1035,7 @@ async def list_meetings(
     date_to: str = "",
     tag: str = "",
 ):
-    """제목+요약 검색 + 카테고리/날짜/태그 필터 + 페이지네이션."""
+    """제목+요약+스크립트 검색 + 카테고리/날짜/태그 필터 + 페이지네이션."""
     limit = min(limit, 100)
     return search_jobs(q=q, page=page, limit=limit, category_id=category_id, date_from=date_from, date_to=date_to, tag=tag)
 
