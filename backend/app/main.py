@@ -970,6 +970,7 @@ async def backup_settings():
             "description": cat["description"],
             "prompt": cat["prompt"],
             "is_builtin": cat["is_builtin"],
+            "model": cat.get("model", "claude-sonnet-4-6"),
         })
 
     backup = {
@@ -1035,7 +1036,7 @@ async def restore_settings(file: UploadFile = File(...)):
                 continue
             existing_cat = get_category(cat_id)
             if existing_cat:
-                update_category(cat_id, prompt=cat_data.get("prompt", existing_cat["prompt"]))
+                update_category(cat_id, prompt=cat_data.get("prompt", existing_cat["prompt"]), model=cat_data.get("model", "claude-sonnet-4-6"))
             elif not cat_data.get("is_builtin"):
                 create_category(
                     cat_id,
@@ -1043,6 +1044,7 @@ async def restore_settings(file: UploadFile = File(...)):
                     cat_data.get("icon", "📋"),
                     cat_data.get("description", ""),
                     cat_data.get("prompt", "{script}"),
+                    model=cat_data.get("model", "claude-sonnet-4-6"),
                 )
         restored["categories"] = True
 
