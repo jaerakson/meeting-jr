@@ -756,7 +756,7 @@ export default function SettingsModal({ onClose }: Props) {
           <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-b-xl">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium transition-colors"
+              className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 font-medium transition-colors"
             >
               취소
             </button>
@@ -790,7 +790,7 @@ export default function SettingsModal({ onClose }: Props) {
         )}
         {(activeTab === 'categories' || activeTab === 'speakers') && (
           <div className="flex justify-end px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-b-xl">
-            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium">
+            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 font-medium">
               닫기
             </button>
           </div>
@@ -805,7 +805,7 @@ export default function SettingsModal({ onClose }: Props) {
               <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">프롬프트 미리보기</h3>
               <button
                 onClick={() => setPreviewPrompt(null)}
-                className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"
+                className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -813,7 +813,7 @@ export default function SettingsModal({ onClose }: Props) {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-5">
-              <p className="text-xs text-gray-400 mb-3">Claude에게 전송될 실제 프롬프트입니다. <code className="bg-gray-100 px-1 rounded">{'{script}'}</code> 위치에 회의 스크립트가 삽입됩니다.</p>
+              <p className="text-xs text-gray-400 mb-3">Claude에게 전송될 실제 프롬프트입니다. <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{script}'}</code> 위치에 회의 스크립트가 삽입됩니다.</p>
               <pre className="text-xs text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4 leading-relaxed">
                 {previewPrompt.includes('{script}')
                   ? previewPrompt.replace('{script}', '[SPEAKER_00] 안녕하세요, 오늘 회의를 시작하겠습니다.\n[SPEAKER_01] 네, 준비되었습니다.\n[SPEAKER_00] 첫 번째 안건은 프로젝트 일정 검토입니다.\n[SPEAKER_01] 현재 진행률은 70%이고 다음 주까지 완료 예정입니다.\n[SPEAKER_00] 좋습니다. 두 번째 안건으로 넘어가겠습니다.')
@@ -823,7 +823,7 @@ export default function SettingsModal({ onClose }: Props) {
             <div className="flex justify-end px-5 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-b-xl">
               <button
                 onClick={() => setPreviewPrompt(null)}
-                className="px-4 py-1.5 text-sm text-gray-600 hover:text-gray-800 font-medium"
+                className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 font-medium"
               >
                 닫기
               </button>

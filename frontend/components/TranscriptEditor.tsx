@@ -38,12 +38,12 @@ const COLORS = ['blue', 'emerald', 'violet', 'amber', 'rose', 'cyan'] as const
 type Color = typeof COLORS[number]
 
 const C: Record<Color, { dot: string; text: string; ring: string; bg: string; rowBg: string }> = {
-  blue:    { dot: 'bg-blue-500',    text: 'text-blue-600',    ring: 'ring-blue-300',    bg: 'bg-blue-50',    rowBg: 'bg-blue-50' },
-  emerald: { dot: 'bg-emerald-500', text: 'text-emerald-600', ring: 'ring-emerald-300', bg: 'bg-emerald-50', rowBg: 'bg-emerald-50' },
-  violet:  { dot: 'bg-violet-500',  text: 'text-violet-600',  ring: 'ring-violet-300',  bg: 'bg-violet-50',  rowBg: 'bg-violet-50' },
-  amber:   { dot: 'bg-amber-500',   text: 'text-amber-600',   ring: 'ring-amber-300',   bg: 'bg-amber-50',   rowBg: 'bg-amber-50' },
-  rose:    { dot: 'bg-rose-500',    text: 'text-rose-600',    ring: 'ring-rose-300',    bg: 'bg-rose-50',    rowBg: 'bg-rose-50' },
-  cyan:    { dot: 'bg-cyan-500',    text: 'text-cyan-600',    ring: 'ring-cyan-300',    bg: 'bg-cyan-50',    rowBg: 'bg-cyan-50' },
+  blue:    { dot: 'bg-blue-500',    text: 'text-blue-600 dark:text-blue-400',       ring: 'ring-blue-300 dark:ring-blue-700',       bg: 'bg-blue-50 dark:bg-blue-900/30',       rowBg: 'bg-blue-50 dark:bg-blue-900/20' },
+  emerald: { dot: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', ring: 'ring-emerald-300 dark:ring-emerald-700', bg: 'bg-emerald-50 dark:bg-emerald-900/30', rowBg: 'bg-emerald-50 dark:bg-emerald-900/20' },
+  violet:  { dot: 'bg-violet-500',  text: 'text-violet-600 dark:text-violet-400',   ring: 'ring-violet-300 dark:ring-violet-700',   bg: 'bg-violet-50 dark:bg-violet-900/30',   rowBg: 'bg-violet-50 dark:bg-violet-900/20' },
+  amber:   { dot: 'bg-amber-500',   text: 'text-amber-600 dark:text-amber-400',     ring: 'ring-amber-300 dark:ring-amber-700',     bg: 'bg-amber-50 dark:bg-amber-900/30',     rowBg: 'bg-amber-50 dark:bg-amber-900/20' },
+  rose:    { dot: 'bg-rose-500',    text: 'text-rose-600 dark:text-rose-400',       ring: 'ring-rose-300 dark:ring-rose-700',       bg: 'bg-rose-50 dark:bg-rose-900/30',       rowBg: 'bg-rose-50 dark:bg-rose-900/20' },
+  cyan:    { dot: 'bg-cyan-500',    text: 'text-cyan-600 dark:text-cyan-400',       ring: 'ring-cyan-300 dark:ring-cyan-700',       bg: 'bg-cyan-50 dark:bg-cyan-900/30',       rowBg: 'bg-cyan-50 dark:bg-cyan-900/20' },
 }
 
 export default function TranscriptEditor({ jobId, initialTranscript, initialSpeakers, suggestedNames, initialCategoryId = 'meeting', onComplete }: Props) {

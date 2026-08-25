@@ -124,8 +124,8 @@ function renderMarkdown(text: string): React.ReactNode[] {
     if (numberedMatch) {
       nodes.push(
         <div key={i} className="flex items-start gap-2 py-0.5 pl-1">
-          <span className="text-sm text-gray-500 flex-shrink-0 font-medium">{numberedMatch[1]}.</span>
-          <span className="text-sm text-gray-700">{numberedMatch[2]}</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400 flex-shrink-0 font-medium">{numberedMatch[1]}.</span>
+          <span className="text-sm text-gray-700 dark:text-gray-300">{numberedMatch[2]}</span>
         </div>
       )
       continue
