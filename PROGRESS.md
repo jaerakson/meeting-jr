@@ -1,6 +1,13 @@
-## 진행 중 — feature/auto-title
+## 진행 중 — feature/markdown-export
 - 시작: 2026-08-25
-- 목표: 요약 완료 시 첫 줄 # 제목 파싱 → DB 자동 저장
+- 목표: done 상태 회의를 .md 파일로 다운로드
+
+## 2026-08-25 (작업 PC: 로컬) — 세션 17
+- 브랜치: main (feature/auto-title → PR #10 → squash 머지)
+- 완료: A. 자동 회의 제목 생성 (run_summary 요약 첫 # 줄 파싱)
+- 현재 상태: main 최신 (4c4425e)
+- 관련 PR: #10
+- 푸시 여부: origin/main 푸시 완료
 
 ## 2026-08-25 (작업 PC: 로컬) — 세션 16 (서버 검증 + 버그 수정)
 - 브랜치: main (직접 커밋)
