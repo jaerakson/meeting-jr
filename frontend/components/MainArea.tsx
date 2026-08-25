@@ -15,6 +15,7 @@ interface EditData {
   transcript: string
   speakers: string[]
   suggestedNames: Record<string, string>
+  suggestedSpeakers: Record<string, { name: string; confidence: number }>
 }
 
 interface Props {
@@ -263,9 +264,14 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
     }
   }
 
-  const handleAwaitingEdit = (transcript: string, speakers: string[], suggestedNames: Record<string, string>) => {
+  const handleAwaitingEdit = (
+    transcript: string,
+    speakers: string[],
+    suggestedNames: Record<string, string>,
+    suggestedSpeakers: Record<string, { name: string; confidence: number }>
+  ) => {
     if (transcript) {
-      setEditData({ transcript, speakers, suggestedNames })
+      setEditData({ transcript, speakers, suggestedNames, suggestedSpeakers })
     }
     onJobsChange()
   }
@@ -292,7 +298,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             initialTranscript={editData.transcript}
             initialSpeakers={editData.speakers}
             suggestedNames={editData.suggestedNames}
-            suggestedSpeakers={job.suggested_speakers}
+            suggestedSpeakers={editData.suggestedSpeakers || job?.suggested_speakers}
             initialCategoryId={job.category_id || 'meeting'}
             onComplete={() => { setEditData(null); onJobsChange() }}
           />

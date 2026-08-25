@@ -5,7 +5,12 @@ import { useState, useEffect, useRef } from 'react'
 interface ProgressCardProps {
   jobId: string
   onDone: () => void
-  onAwaitingEdit: (transcript: string, speakers: string[], suggestedNames: Record<string, string>) => void
+  onAwaitingEdit: (
+    transcript: string,
+    speakers: string[],
+    suggestedNames: Record<string, string>,
+    suggestedSpeakers: Record<string, { name: string; confidence: number }>
+  ) => void
 }
 
 interface StageInfo {
@@ -26,6 +31,7 @@ interface ProgressState {
   transcript?: string
   speakers?: string[]
   suggested_names?: Record<string, string>
+  suggested_speakers?: Record<string, { name: string; confidence: number }>
 }
 
 export default function ProgressCard({ jobId, onDone, onAwaitingEdit }: ProgressCardProps) {
@@ -63,6 +69,7 @@ export default function ProgressCard({ jobId, onDone, onAwaitingEdit }: Progress
               data.transcript || '',
               data.speakers || [],
               data.suggested_names || {},
+              data.suggested_speakers || {},
             )
           }
 

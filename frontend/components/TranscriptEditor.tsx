@@ -217,7 +217,7 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
                     <span className="text-xs text-gray-400 dark:text-gray-500">{count}개 발화</span>
                     {suggestedSpeakers?.[sp] && (
                       <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium">
-                        ✓ {Math.round(suggestedSpeakers[sp].confidence * 100)}%
+                        ✓ {Math.round(suggestedSpeakers[sp].confidence)}%
                       </span>
                     )}
                   </div>
