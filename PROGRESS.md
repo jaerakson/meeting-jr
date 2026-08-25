@@ -2,11 +2,12 @@
 - 브랜치: main (PR #27~#29 squash 머지)
 - 완료: director + frontend-dev 팀 구현 (3가지 기능)
   - 검색 결과 하이라이트: /meetings 검색어 일치 텍스트 노란색 형광 강조, XSS 안전 (PR #27)
-  - 공유 링크 URL 라우팅: /meetings/[id] 직접 접근, 링크 복사 버튼, Sidebar 클릭→URL 동기화 (PR #28)
+  - 공유 링크 URL 라우팅: /meetings/[id] 직접 접근, 링크 복사 버튼 (PR #28)
+  - Sidebar URL 동기화: 클릭 시 history.pushState, popstate 뒤로 가기 지원 (PR #30)
   - 키보드 단축키 도움말: ? 키로 단축키 목록 모달, useKeyboardShortcuts 훅 확장 (PR #29)
-- 현재 상태: main 최신 (48ddca5)
+- 현재 상태: main 최신 (21c6603)
 - 다음 할 일: 없음
-- 관련 PR: #27, #28, #29
+- 관련 PR: #27, #28, #29, #30
 - 푸시 여부: origin/main 푸시 완료
 
 ## 2026-08-25 (작업 PC: 로컬) — 세션 23 (신규 기능 3개 완료)
