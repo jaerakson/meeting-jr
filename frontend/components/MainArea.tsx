@@ -22,9 +22,11 @@ interface Props {
   onJobsChange: () => void
   onNewRecording: (jobId: string) => void
   onOpenSidebar: () => void
+  onExpandSidebar?: () => void
+  sidebarCollapsed?: boolean
 }
 
-export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSidebar }: Props) {
+export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSidebar, onExpandSidebar, sidebarCollapsed }: Props) {
   const router = useRouter()
   const [currentTime, setCurrentTime] = useState(0)
   const [editingTitle, setEditingTitle] = useState(false)
@@ -496,6 +498,19 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
+        {/* 사이드바 펼치기 버튼 (데스크탑, collapsed일 때만) */}
+        {sidebarCollapsed && onExpandSidebar && (
+          <button
+            onClick={onExpandSidebar}
+            className="hidden md:flex p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors mr-2 flex-shrink-0"
+            aria-label="사이드바 펼치기"
+            title="사이드바 펼치기 ( [ )"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
         {job ? (
           <>
             {editingTitle ? (

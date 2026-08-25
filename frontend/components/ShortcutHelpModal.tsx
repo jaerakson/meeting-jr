@@ -9,6 +9,7 @@ const shortcuts = [
   { key: '\u2190', desc: '오디오 5초 뒤로' },
   { key: '\u2192', desc: '오디오 5초 앞으로' },
   { key: 'Esc', desc: '현재 작업 취소 / 모달 닫기' },
+  { key: '[', desc: '사이드바 접기/펼치기' },
   { key: '?', desc: '이 도움말 열기' },
 ]
 
