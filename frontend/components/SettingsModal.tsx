@@ -21,7 +21,7 @@ const CLAUDE_MODELS = [
   { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 (빠름, 경량)" },
 ]
 
-type Tab = 'general' | 'claude' | 'categories'
+type Tab = 'general' | 'claude' | 'categories' | 'speakers'
 
 export default function SettingsModal({ onClose }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('general')
@@ -47,6 +47,41 @@ export default function SettingsModal({ onClose }: Props) {
   const [claudePrompt, setClaudePrompt] = useState('')
   const [initialClaudePrompt, setInitialClaudePrompt] = useState('')
   const [defaultPrompt, setDefaultPrompt] = useState('')
+
+  // 화자 관련 상태
+  const [speakers, setSpeakers] = useState<string[]>([])
+  const [newSpeakerName, setNewSpeakerName] = useState('')
+  const [speakerSaving, setSpeakerSaving] = useState(false)
+
+  const loadSpeakers = () => {
+    fetch('/api/speakers').then(r => r.json()).then((data: Record<string, string>) => {
+      setSpeakers(Object.keys(data))
+    }).catch(() => {})
+  }
+
+  const handleAddSpeaker = async () => {
+    const name = newSpeakerName.trim()
+    if (!name) return
+    setSpeakerSaving(true)
+    try {
+      await fetch('/api/speakers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      setNewSpeakerName('')
+      loadSpeakers()
+    } catch {
+      alert('화자 추가 실패')
+    } finally {
+      setSpeakerSaving(false)
+    }
+  }
+
+  const handleDeleteSpeaker = async (name: string) => {
+    await fetch(`/api/speakers/${encodeURIComponent(name)}`, { method: 'DELETE' })
+    loadSpeakers()
+  }
 
   // 카테고리 관련 상태
   const [categories, setCategories] = useState<Category[]>([])
@@ -89,6 +124,7 @@ export default function SettingsModal({ onClose }: Props) {
       })
       .catch(console.error)
     loadCategories()
+    loadSpeakers()
   }, [])
 
   const handleClaudeLogout = async () => {
@@ -233,7 +269,7 @@ export default function SettingsModal({ onClose }: Props) {
 
         {/* 탭 바 */}
         <div className="flex border-b px-2">
-          {([['general', '일반'], ['claude', 'Claude'], ['categories', '카테고리']] as [Tab, string][]).map(([id, label]) => (
+          {([['general', '일반'], ['claude', 'Claude'], ['categories', '카테고리'], ['speakers', '화자']] as [Tab, string][]).map(([id, label]) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
@@ -572,10 +608,53 @@ export default function SettingsModal({ onClose }: Props) {
               )}
             </div>
           )}
+
+          {activeTab === 'speakers' && (
+            <div className="space-y-3">
+              {/* 새 화자 추가 */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newSpeakerName}
+                  onChange={e => setNewSpeakerName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddSpeaker()}
+                  placeholder="화자 이름 입력"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  onClick={handleAddSpeaker}
+                  disabled={speakerSaving || !newSpeakerName.trim()}
+                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
+                >
+                  추가
+                </button>
+              </div>
+              <p className="text-xs text-gray-400">저장된 화자 이름은 스크립트 편집 시 드롭다운에 제안됩니다.</p>
+
+              {/* 화자 목록 */}
+              {speakers.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">저장된 화자가 없습니다.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {speakers.map(name => (
+                    <div key={name} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
+                      <span className="text-sm text-gray-800">{name}</span>
+                      <button
+                        onClick={() => handleDeleteSpeaker(name)}
+                        className="text-xs px-2 py-1 border border-red-200 rounded hover:bg-red-50 text-red-500 transition-colors"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 푸터 */}
-        {activeTab !== 'categories' && (
+        {activeTab !== 'categories' && activeTab !== 'speakers' && (
           <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-xl">
             <button
               onClick={onClose}
@@ -611,7 +690,7 @@ export default function SettingsModal({ onClose }: Props) {
             </button>
           </div>
         )}
-        {activeTab === 'categories' && (
+        {(activeTab === 'categories' || activeTab === 'speakers') && (
           <div className="flex justify-end px-6 py-4 border-t bg-gray-50 rounded-b-xl">
             <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium">
               닫기
