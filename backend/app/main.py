@@ -589,9 +589,12 @@ async def delete_speaker(name: str):
         data = json.loads(SPEAKERS_FILE.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, IOError):
         raise HTTPException(status_code=500, detail="speakers.json 읽기 실패")
-    if name not in data:
+    # 표시 이름(value)으로 매핑된 키를 모두 삭제
+    keys_to_delete = [k for k, v in data.items() if v == name]
+    if not keys_to_delete:
         raise HTTPException(status_code=404, detail="해당 화자를 찾을 수 없습니다.")
-    del data[name]
+    for k in keys_to_delete:
+        del data[k]
     SPEAKERS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"status": "ok", "name": name}
 

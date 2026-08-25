@@ -55,7 +55,7 @@ export default function SettingsModal({ onClose }: Props) {
 
   const loadSpeakers = () => {
     fetch('/api/speakers').then(r => r.json()).then((data: Record<string, string>) => {
-      setSpeakers(Object.keys(data))
+      setSpeakers([...new Set(Object.values(data))])
     }).catch(() => {})
   }
 
