@@ -1,3 +1,15 @@
+## 2026-08-26 (작업 PC: 로컬) — 세션 29 (기능 2개 + 기존 확인)
+- 브랜치: main (PR #41 squash 머지, PR #42 close)
+- 완료:
+  - 월별 통계 차트: recharts BarChart, GET /api/stats/monthly, MonthlyChart 컴포넌트 (PR #41)
+  - 다중 선택 삭제: 체크박스, 선택 모드, 일괄 삭제 (PR #41에 포함)
+  - 인쇄/PDF: 이미 /print/[id] 페이지로 구현 완료 확인 (추가 작업 불필요)
+- QA: PR #41에 bulk-select 중복 포함 발견 → PR #42 close 처리
+- 현재 상태: main 최신 (8029a61)
+- 다음 할 일: 없음
+- 관련 PR: #41 (머지), #42 (close)
+- 푸시 여부: origin/main 푸시 완료
+
 ## 2026-08-26 (작업 PC: 로컬) — 세션 28 (기능 4개 완료)
 - 브랜치: main (PR #37~#40 squash 머지)
 - 완료: backend-dev + frontend-dev × 2 + qa-engineer 병렬 구현
