@@ -1,6 +1,13 @@
-## 진행 중 — feature/markdown-export
+## 진행 중 — feature/multilang-stt
 - 시작: 2026-08-25
-- 목표: done 상태 회의를 .md 파일로 다운로드
+- 목표: RecordingZone 언어 선택 → Whisper language 파라미터 전달
+
+## 2026-08-25 (작업 PC: 로컬) — 세션 18
+- 브랜치: main (feature/markdown-export → PR #11 → squash 머지)
+- 완료: C. 마크다운 내보내기 (↓ MD 버튼, Blob 방식)
+- 현재 상태: main 최신 (ceaba1f)
+- 관련 PR: #11
+- 푸시 여부: origin/main 푸시 완료
 
 ## 2026-08-25 (작업 PC: 로컬) — 세션 17
 - 브랜치: main (feature/auto-title → PR #10 → squash 머지)
