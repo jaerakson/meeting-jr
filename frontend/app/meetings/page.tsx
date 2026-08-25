@@ -38,6 +38,7 @@ function MeetingsContent() {
   const [loading, setLoading] = useState(true)
   const [categories, setCategories] = useState<Category[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
+  const [bookmarkOnly, setBookmarkOnly] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -174,7 +175,7 @@ function MeetingsContent() {
             )}
           </div>
 
-          {/* 필터 행 */}
+          {/* 필터 행 — 북마크 토글 포함 */}
           <div className="flex flex-wrap gap-2 items-center">
             {/* 카테고리 필터 */}
             <select
@@ -205,6 +206,18 @@ function MeetingsContent() {
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
               />
             </div>
+
+            {/* 북마크 필터 */}
+            <button
+              onClick={() => setBookmarkOnly(b => !b)}
+              className={`text-sm px-3 py-2 rounded-lg border transition-colors ${
+                bookmarkOnly
+                  ? 'border-yellow-400 bg-yellow-50 text-yellow-700'
+                  : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100'
+              }`}
+            >
+              ★ 북마크만
+            </button>
 
             {/* 필터 초기화 */}
             {hasFilters && (
@@ -250,7 +263,9 @@ function MeetingsContent() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {data?.items.map(job => <MeetingCard key={job.id} job={job} />)}
+            {data?.items
+              .filter(job => !bookmarkOnly || job.bookmarked === 1)
+              .map(job => <MeetingCard key={job.id} job={job} />)}
           </div>
         )}
 

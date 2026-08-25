@@ -39,6 +39,8 @@ export interface Job {
   notion_page_id?: string
   category_id?: string
   action_items?: ActionItem[]
+  bookmarked?: number
+  memo?: string
 }
 
 export interface RelatedMeeting {
