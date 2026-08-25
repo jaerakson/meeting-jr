@@ -49,14 +49,14 @@ function getSpeakersLabel(speakers?: Record<string, string>): string {
 }
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  done:          { label: '완료',      cls: 'bg-green-100 text-green-800' },
-  pending:       { label: '대기',      cls: 'bg-blue-100 text-blue-800' },
-  converting:    { label: '변환 중',   cls: 'bg-blue-100 text-blue-800' },
-  diarizing:     { label: '화자 분리', cls: 'bg-blue-100 text-blue-800' },
-  transcribing:  { label: 'STT 중',   cls: 'bg-blue-100 text-blue-800' },
-  awaiting_edit: { label: '편집 대기', cls: 'bg-yellow-100 text-yellow-800' },
-  summarizing:   { label: '요약 중',   cls: 'bg-blue-100 text-blue-800' },
-  error:         { label: '실패',      cls: 'bg-red-100 text-red-800' },
+  done:          { label: '완료',      cls: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400' },
+  pending:       { label: '대기',      cls: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-400' },
+  converting:    { label: '변환 중',   cls: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-400' },
+  diarizing:     { label: '화자 분리', cls: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-400' },
+  transcribing:  { label: 'STT 중',   cls: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-400' },
+  awaiting_edit: { label: '편집 대기', cls: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-400' },
+  summarizing:   { label: '요약 중',   cls: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-400' },
+  error:         { label: '실패',      cls: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-400' },
 }
 
 export default function MeetingCard({ job, searchQuery }: MeetingCardProps) {
