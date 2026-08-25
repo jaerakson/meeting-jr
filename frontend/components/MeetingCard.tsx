@@ -116,10 +116,20 @@ export default function MeetingCard({ job, searchQuery }: MeetingCardProps) {
         </div>
       )}
 
-      {/* 액션 아이템 수 */}
-      {actionCount > 0 && (
-        <p className="text-xs text-blue-600 font-medium">액션 아이템 {actionCount}건</p>
-      )}
+      {/* 하단 상태 배지 */}
+      <div className="flex items-center gap-2">
+        {actionCount > 0 && (
+          <span className="text-xs text-blue-600 font-medium">액션 아이템 {actionCount}건</span>
+        )}
+        {job.notion_url && (
+          <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded-full flex items-center gap-0.5">
+            <svg className="w-2.5 h-2.5" viewBox="0 0 100 100" fill="currentColor">
+              <path d="M6.6,12.4c4.8,3.5,6.6,3.1,15.6,2.4l64.8-3.9c1.9,0,0.3-1.9-0.3-2.1L78.4,2.7c-2.9-2.1-6.8-4.3-14.2-3.5L4.4,4.8C1.5,5.1,0.9,6.6,2.3,7.7L6.6,12.4z M11.6,23.3v68.4c0,3.7,1.8,5.1,5.9,4.8l70.5-4.1c4.1-0.3,4.6-2.7,4.6-5.7V18.6c0-3-1.2-4.6-3.8-4.3L18,18.5C15.3,18.9,11.6,19.6,11.6,23.3z M78.5,26.9c0.5,2.2,0,4.3-2.2,4.6l-3.4,0.6v50.5c-3,1.6-5.7,2.5-8,2.5c-3.7,0-4.6-1.2-7.4-4.8l-22.6-35.5v34.4l7,1.6c0,0,0,4.3-6,4.3l-16.5,1c-0.5-1-0-3.5,1.7-3.9l4.4-1.2V30.9l-6.1-0.5c-0.5-2.2,0.7-5.3,4.1-5.6L41.2,23l23.6,36.1V26.6l-5.9-0.7c-0.5-2.6,1.4-4.5,3.8-4.7L78.5,26.9z"/>
+            </svg>
+            Notion
+          </span>
+        )}
+      </div>
     </div>
   )
 }
