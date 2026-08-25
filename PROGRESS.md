@@ -1,3 +1,22 @@
+## 2026-08-26 (작업 PC: 로컬) — 세션 33 (목소리 프로필 자동 매칭 PR #48)
+- 브랜치: main (PR #48 squash 머지, 632daa3)
+- 완료:
+  - 백엔드: voice_profiles 테이블, embedding CRUD, Voice Profile API 7개
+  - 백엔드: PyAnnote embedding 추출 함수 (extract_speaker_embedding, extract_embeddings_from_diarization)
+  - 백엔드: match_speaker_to_profiles() 코사인 유사도 매칭 (임계값 0.75)
+  - 백엔드: job_queue.py awaiting_edit 전 자동 매칭 + suggested_speakers SSE 전달
+  - 백엔드: GET/PUT /api/voice-profiles/threshold 엔드포인트
+  - 프론트: SettingsModal 화자 탭 → 목소리 프로필 관리 (목록, 직접 녹음, 기존 회의 추출, 임계값 슬라이더)
+  - 프론트: TranscriptEditor 자동 매칭 결과 표시 (이름 + 신뢰도 배지)
+  - 프론트: SpeakerMapper "이 목소리를 프로필로 저장" 체크박스 추가
+  - 코드리뷰 3건 발견 → 수정 완료:
+    1. confidence * 100 이중변환 제거 (TranscriptEditor.tsx)
+    2. suggested_speakers SSE → DB 저장 + ProgressCard/MainArea 전달 연결
+    3. rename-speakers 엔드포인트 추가 (main.py)
+- 다음 할 일: 실제 서버 실행 후 end-to-end 테스트 (목소리 프로필 등록 → 녹음 → 자동매칭 확인)
+- 관련 파일: backend/app/{database,audio_processor,job_queue,main}.py, frontend/components/{SettingsModal,TranscriptEditor,SpeakerMapper,ProgressCard,MainArea}.tsx, frontend/types/index.ts
+- 푸시 여부: origin/main 푸시 완료 (632daa3)
+
 ## 2026-08-26 (작업 PC: 로컬) — 세션 31 (설정 UX 개선 PR #47)
 - 브랜치: main (PR #47 squash 머지, 458f214)
 - 완료:
