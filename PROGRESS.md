@@ -1,3 +1,17 @@
+## 2026-08-25 (작업 PC: 로컬) — 세션 12
+- 브랜치: main (feature/dark-mode → PR #6 → squash 머지)
+- 완료: 다크 모드 지원 + git 브랜치 정리
+  - `tailwind.config.ts`: `darkMode: 'class'` 추가
+  - `frontend/hooks/useTheme.ts`: localStorage + 시스템 preference 감지, FOUC 방지, hydration 안전 (null 초기값)
+  - `layout.tsx`: 인라인 스크립트 FOUC 방지, `suppressHydrationWarning`
+  - `Sidebar.tsx`: 다크/라이트 토글 버튼 추가
+  - `MainArea.tsx`, `AudioPlayer.tsx`: dark: Tailwind 클래스 전체 적용
+- 브랜치 정리: stale 원격 브랜치 6개 pruned (clipboard-copy, pdf-export, playback-speed, sidebar-delete-button, summary-patch-test, dark-mode)
+- 현재 상태: main 최신 (6fee23a), 브랜치 origin/main 만 남음
+- 다음 할 일: 나머지 기능 (b. 화자 프로필 관리, c. 통계 대시보드, d. 실패 재시도, f. 모바일 최적화) 순차 개발
+- 관련 커밋: PR #6
+- 푸시 여부: origin/main 푸시 완료
+
 ## 2026-08-24 (작업 PC: 로컬) — 세션 11
 - 브랜치: main (feature/sidebar-delete-button → PR #3, feature/summary-patch-test → PR #4)
 - 완료: 기능 a~f 검증 및 보강
