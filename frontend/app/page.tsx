@@ -11,11 +11,25 @@ export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showShortcutHelp, setShowShortcutHelp] = useState(false)
+
+  useEffect(() => {
+    setSidebarCollapsed(localStorage.getItem('sidebar-collapsed') === 'true')
+  }, [])
+
+  const toggleSidebarCollapsed = useCallback(() => {
+    setSidebarCollapsed(prev => {
+      const next = !prev
+      localStorage.setItem('sidebar-collapsed', String(next))
+      return next
+    })
+  }, [])
 
   useKeyboardShortcuts({
     onHelp: () => setShowShortcutHelp(true),
     onEscape: () => setShowShortcutHelp(false),
+    onToggleSidebar: toggleSidebarCollapsed,
   })
 
   // /meetings 에서 카드 클릭 시 /?job=<id> 로 이동 — 해당 job 자동 선택
@@ -85,11 +99,13 @@ export default function Home() {
         />
       )}
 
-      {/* 사이드바 — 모바일: 슬라이드 오버, 데스크탑: 고정 */}
+      {/* 사이드바 — 모바일: 슬라이드 오버, 데스크탑: width transition */}
       <div className={`
-        fixed inset-y-0 left-0 z-30 transition-transform duration-200
+        fixed inset-y-0 left-0 z-30 transition-all duration-200
         md:relative md:translate-x-0 md:flex md:flex-shrink-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        overflow-hidden
+        ${sidebarCollapsed ? 'md:w-0' : 'md:w-60'}
       `}>
         <Sidebar
           jobs={jobs}
@@ -98,6 +114,7 @@ export default function Home() {
           onJobsChange={fetchJobs}
           onNewRecording={() => { setSelectedJobId(null); setSidebarOpen(false) }}
           onClose={() => setSidebarOpen(false)}
+          onCollapse={toggleSidebarCollapsed}
         />
       </div>
 
@@ -106,6 +123,8 @@ export default function Home() {
         onJobsChange={fetchJobs}
         onNewRecording={handleNewRecording}
         onOpenSidebar={() => setSidebarOpen(true)}
+        sidebarCollapsed={sidebarCollapsed}
+        onExpandSidebar={toggleSidebarCollapsed}
       />
 
       {showShortcutHelp && <ShortcutHelpModal onClose={() => setShowShortcutHelp(false)} />}

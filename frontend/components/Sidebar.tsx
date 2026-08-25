@@ -13,6 +13,7 @@ interface SidebarProps {
   onJobsChange: () => void
   onNewRecording: () => void
   onClose?: () => void
+  onCollapse?: () => void
 }
 
 function formatDate(dateStr: string): string {
@@ -28,7 +29,7 @@ function formatDuration(sec?: number): string {
   return `${m}분`
 }
 
-export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange, onNewRecording, onClose }: SidebarProps) {
+export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange, onNewRecording, onClose, onCollapse }: SidebarProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; jobId: string } | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const { theme, toggleTheme } = useTheme()
@@ -86,17 +87,31 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
       {/* 로고 */}
       <div className="px-4 py-5 border-b border-slate-600 flex items-center justify-between">
         <h1 className="text-xl font-bold">Meeting Jr.</h1>
-        {onClose && (
-          <button
-            onClick={onClose}
-            className="md:hidden p-1 rounded hover:bg-slate-600 text-slate-300 transition-colors"
-            aria-label="닫기"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          {onCollapse && (
+            <button
+              onClick={onCollapse}
+              className="hidden md:flex p-1 rounded hover:bg-slate-600 text-slate-300 transition-colors"
+              aria-label="사이드바 접기"
+              title="사이드바 접기 ( [ )"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="md:hidden p-1 rounded hover:bg-slate-600 text-slate-300 transition-colors"
+              aria-label="닫기"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 녹음 버튼 */}

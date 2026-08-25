@@ -9,6 +9,7 @@ interface ShortcutHandlers {
   onSeekForward?: () => void
   onEscape?: () => void
   onHelp?: () => void
+  onToggleSidebar?: () => void
   enabled?: boolean
 }
 
@@ -19,6 +20,7 @@ export function useKeyboardShortcuts({
   onSeekForward,
   onEscape,
   onHelp,
+  onToggleSidebar,
   enabled = true,
 }: ShortcutHandlers) {
   useEffect(() => {
@@ -56,10 +58,16 @@ export function useKeyboardShortcuts({
             onHelp()
           }
           break
+        case '[':
+          if (onToggleSidebar) {
+            e.preventDefault()
+            onToggleSidebar()
+          }
+          break
       }
     }
 
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [enabled, onSpaceRecord, onSpaceAudio, onSeekBack, onSeekForward, onEscape, onHelp])
+  }, [enabled, onSpaceRecord, onSpaceAudio, onSeekBack, onSeekForward, onEscape, onHelp, onToggleSidebar])
 }
