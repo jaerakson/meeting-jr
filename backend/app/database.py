@@ -57,6 +57,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("language", "TEXT"),
         ("action_items", "TEXT"),
         ("bookmarked", "INTEGER NOT NULL DEFAULT 0"),
+        ("memo", "TEXT"),
     ]:
         if col not in existing:
             conn.execute(f"ALTER TABLE meetings ADD COLUMN {col} {definition}")
@@ -434,6 +435,17 @@ def toggle_bookmark(job_id: str) -> Optional[dict]:
             "UPDATE meetings SET bookmarked = CASE WHEN bookmarked = 1 THEN 0 ELSE 1 END WHERE id = ?",
             (job_id,),
         )
+        conn.commit()
+        return get_job(job_id)
+    finally:
+        conn.close()
+
+
+def update_job_memo(job_id: str, memo: str) -> Optional[dict]:
+    """메모를 저장하고 갱신된 Job을 반환한다."""
+    conn = _get_conn()
+    try:
+        conn.execute("UPDATE meetings SET memo = ? WHERE id = ?", (memo, job_id))
         conn.commit()
         return get_job(job_id)
     finally:
