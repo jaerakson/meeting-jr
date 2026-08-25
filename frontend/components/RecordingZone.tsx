@@ -16,6 +16,7 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
   const [claudeStatus, setClaudeStatus] = useState<ClaudeStatus | null>(null)
   const [activeTab, setActiveTab] = useState<'record' | 'upload'>('record')
   const [isRecording, setIsRecording] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
   const [categoryId, setCategoryId] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem(CATEGORY_KEY) || 'meeting'
@@ -125,8 +126,28 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
     }
   }
 
+  const pauseRecording = () => {
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.pause()
+      if (timerRef.current) clearInterval(timerRef.current)
+      timerRef.current = null
+      cancelAnimationFrame(animFrameRef.current)
+      setIsPaused(true)
+    }
+  }
+
+  const resumeRecording = () => {
+    if (mediaRecorderRef.current?.state === 'paused') {
+      mediaRecorderRef.current.resume()
+      timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000)
+      drawWave()
+      setIsPaused(false)
+    }
+  }
+
   const stopRecording = () => {
     if (timerRef.current) clearInterval(timerRef.current)
+    setIsPaused(false)
     mediaRecorderRef.current?.stop()
   }
 
@@ -207,11 +228,15 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
 
   const toggleRecording = useCallback(() => {
     if (isRecording) {
-      stopRecording()
+      if (isPaused) {
+        resumeRecording()
+      } else {
+        pauseRecording()
+      }
     } else if (!audioBlob) {
       startRecording()
     }
-  }, [isRecording, audioBlob])
+  }, [isRecording, isPaused, audioBlob])
 
   useKeyboardShortcuts({
     onSpaceRecord: toggleRecording,
@@ -306,11 +331,18 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
         {activeTab === 'record' && (
           <>
             <div className="flex items-center justify-center gap-3 mb-6">
-              {isRecording && <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse flex-shrink-0" />}
+              {isRecording && <span className={`w-3 h-3 rounded-full bg-red-500 flex-shrink-0 ${isPaused ? '' : 'animate-pulse'}`} />}
               <span className="text-4xl md:text-5xl font-mono font-light text-gray-800 dark:text-gray-100 tracking-widest">{formatTime(seconds)}</span>
             </div>
             {isRecording && (
-              <canvas ref={canvasRef} width={400} height={60} className="w-full mb-6 rounded-lg bg-gray-50 dark:bg-gray-700" />
+              <div className="relative mb-6">
+                <canvas ref={canvasRef} width={400} height={60} className="w-full rounded-lg bg-gray-50 dark:bg-gray-700" />
+                {isPaused && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-50/70 dark:bg-gray-700/70 rounded-lg">
+                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">일시정지됨</span>
+                  </div>
+                )}
+              </div>
             )}
             {!isRecording && !audioBlob && (
               <>
@@ -337,13 +369,24 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
                   <span className="w-5 h-5 rounded-full bg-white" />
                 </button>
                 <p className="text-sm text-gray-400 dark:text-gray-500">버튼을 눌러 녹음을 시작하세요</p>
-                <p className="text-xs text-gray-300 dark:text-gray-600 mt-2">Space: 녹음 시작/중지</p>
+                <p className="text-xs text-gray-300 dark:text-gray-600 mt-2">Space: 녹음 시작 / 일시정지 / 재개</p>
               </>
             )}
             {isRecording && (
-              <button onClick={stopRecording} className="w-16 h-16 rounded-full bg-gray-700 hover:bg-gray-800 text-white flex items-center justify-center mx-auto mb-4 transition-colors shadow-lg">
-                <span className="w-5 h-5 rounded bg-white" />
-              </button>
+              <div className="flex items-center justify-center gap-4 mb-4">
+                {isPaused ? (
+                  <button onClick={resumeRecording} className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center transition-colors shadow-lg" title="재개">
+                    <svg className="w-6 h-6 ml-1" fill="currentColor" viewBox="0 0 24 24"><polygon points="8,5 19,12 8,19" /></svg>
+                  </button>
+                ) : (
+                  <button onClick={pauseRecording} className="w-16 h-16 rounded-full bg-yellow-500 hover:bg-yellow-600 text-white flex items-center justify-center transition-colors shadow-lg" title="일시정지">
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" /><rect x="14" y="5" width="4" height="14" /></svg>
+                  </button>
+                )}
+                <button onClick={stopRecording} className="w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-800 text-white flex items-center justify-center transition-colors shadow-lg" title="중지">
+                  <span className="w-4 h-4 rounded bg-white" />
+                </button>
+              </div>
             )}
             {audioBlob && (
               <div className="space-y-3 mt-2">
