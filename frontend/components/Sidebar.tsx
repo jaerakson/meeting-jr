@@ -209,6 +209,7 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
               ) : (
                 <span
                   className="text-sm font-medium truncate flex-1"
+                  onClick={e => e.stopPropagation()}
                   onDoubleClick={e => {
                     e.stopPropagation()
                     setEditTitleValue(job.title || job.filename || '')
