@@ -53,6 +53,8 @@ export default function SettingsModal({ onClose }: Props) {
   const [speakers, setSpeakers] = useState<string[]>([])
   const [newSpeakerName, setNewSpeakerName] = useState('')
   const [speakerSaving, setSpeakerSaving] = useState(false)
+  const [restoring, setRestoring] = useState(false)
+  const [restoreResult, setRestoreResult] = useState<string | null>(null)
 
   useKeyboardShortcuts({ onEscape: onClose })
 
@@ -146,6 +148,51 @@ export default function SettingsModal({ onClose }: Props) {
       alert('로그아웃 요청에 실패했습니다.')
     } finally {
       setLoggingOut(false)
+    }
+  }
+
+  const handleBackup = () => {
+    window.open('/api/settings/backup', '_blank')
+  }
+
+  const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setRestoring(true)
+    setRestoreResult(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('/api/settings/restore', { method: 'POST', body: formData })
+      if (!res.ok) {
+        const data = await res.json()
+        setRestoreResult(`복원 실패: ${data.detail}`)
+      } else {
+        setRestoreResult('설정이 복원되었습니다.')
+        // 설정 다시 로드
+        const [newStatus, newTitle, newModel, newPrompt] = await Promise.all([
+          fetch('/api/settings').then(r => r.json()),
+          fetch('/api/settings/default-title').then(r => r.json()),
+          fetch('/api/settings/claude-model').then(r => r.json()),
+          fetch('/api/settings/claude-prompt').then(r => r.json()),
+        ])
+        setStatus(newStatus)
+        setDefaultTitle(newTitle.value ?? '')
+        setInitialDefaultTitle(newTitle.value ?? '')
+        setClaudeModel(newModel.value)
+        setInitialClaudeModel(newModel.value)
+        setClaudePrompt(newPrompt.value)
+        setInitialClaudePrompt(newPrompt.value)
+        setDefaultPrompt(newPrompt.default)
+        loadCategories()
+        loadSpeakers()
+        setTimeout(() => setRestoreResult(null), 3000)
+      }
+    } catch {
+      setRestoreResult('복원 요청에 실패했습니다.')
+    } finally {
+      setRestoring(false)
+      e.target.value = ''
     }
   }
 
@@ -408,6 +455,39 @@ export default function SettingsModal({ onClose }: Props) {
                   </div>
                 )
               })}
+
+              {/* 백업/복원 섹션 */}
+              <div className="rounded-lg border border-gray-200 overflow-hidden">
+                <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+                  <span className="text-sm font-medium text-gray-700">설정 백업 / 복원</span>
+                  <p className="text-xs text-gray-400 mt-0.5">화자 프로필, 카테고리 설정을 파일로 내보내거나 복원합니다. API 키는 보안상 포함되지 않습니다.</p>
+                </div>
+                <div className="px-4 py-3 flex items-center gap-2">
+                  <button
+                    onClick={handleBackup}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 transition-colors"
+                  >
+                    내보내기
+                  </button>
+                  <label className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 transition-colors cursor-pointer">
+                    {restoring ? '복원 중...' : '가져오기'}
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleRestore}
+                      disabled={restoring}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                {restoreResult && (
+                  <div className={`px-4 py-2 text-xs border-t ${
+                    restoreResult.includes('실패') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'
+                  }`}>
+                    {restoreResult}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
