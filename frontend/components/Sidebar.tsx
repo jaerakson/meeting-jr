@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { Job } from '@/types'
 import { useTheme } from '@/hooks/useTheme'
@@ -32,6 +32,9 @@ function formatDuration(sec?: number): string {
 export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange, onNewRecording, onClose, onCollapse }: SidebarProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; jobId: string } | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [editingJobId, setEditingJobId] = useState<string | null>(null)
+  const [editTitleValue, setEditTitleValue] = useState('')
+  const titleSavingRef = useRef(false)
   const { theme, toggleTheme } = useTheme()
 
   useEffect(() => {
@@ -77,6 +80,26 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
   const handleContextMenu = (e: React.MouseEvent, jobId: string) => {
     e.preventDefault()
     setContextMenu({ x: e.clientX, y: e.clientY, jobId })
+  }
+
+  const handleTitleSave = async (jobId: string) => {
+    if (titleSavingRef.current) return
+    titleSavingRef.current = true
+    const trimmed = editTitleValue.trim()
+    setEditingJobId(null)
+    if (!trimmed) { titleSavingRef.current = false; return }
+    try {
+      await fetch(`/api/jobs/${jobId}/title`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: trimmed }),
+      })
+      onJobsChange()
+    } catch {
+      // silent fail
+    } finally {
+      titleSavingRef.current = false
+    }
   }
 
   const isProcessing = (status: string) =>
@@ -170,7 +193,31 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               )}
-              <span className="text-sm font-medium truncate flex-1">{job.title || job.filename}</span>
+              {editingJobId === job.id ? (
+                <input
+                  autoFocus
+                  value={editTitleValue}
+                  onChange={e => setEditTitleValue(e.target.value)}
+                  onBlur={() => handleTitleSave(job.id)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleTitleSave(job.id)
+                    if (e.key === 'Escape') { setEditTitleValue(''); setEditingJobId(null) }
+                  }}
+                  onClick={e => e.stopPropagation()}
+                  className="text-sm font-medium flex-1 bg-transparent outline-none border-b border-blue-400 text-white mr-1"
+                />
+              ) : (
+                <span
+                  className="text-sm font-medium truncate flex-1"
+                  onDoubleClick={e => {
+                    e.stopPropagation()
+                    setEditTitleValue(job.title || job.filename || '')
+                    setEditingJobId(job.id)
+                  }}
+                >
+                  {job.title || job.filename}
+                </span>
+              )}
               <button
                 onClick={(e) => { e.stopPropagation(); handleBookmark(job.id) }}
                 className={`p-0.5 transition-all flex-shrink-0 ${

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Job, Category, RelatedMeeting } from '@/types'
 import { useRouter } from 'next/navigation'
 import RecordingZone from './RecordingZone'
@@ -31,6 +31,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   const [currentTime, setCurrentTime] = useState(0)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleValue, setTitleValue] = useState('')
+  const titleSavingRef = useRef(false)
   const [editData, setEditData] = useState<EditData | null>(null)
   const [isEditingTranscript, setIsEditingTranscript] = useState(false)
   const [localTranscript, setLocalTranscript] = useState('')
@@ -121,14 +122,20 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   }
 
   const handleTitleSave = async () => {
-    if (!job || !titleValue.trim()) { setEditingTitle(false); return }
+    if (titleSavingRef.current) return
+    titleSavingRef.current = true
+    if (!job || !titleValue.trim()) { setEditingTitle(false); titleSavingRef.current = false; return }
     setEditingTitle(false)
-    await fetch(`/api/jobs/${job.id}/title`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: titleValue }),
-    })
-    onJobsChange()
+    try {
+      await fetch(`/api/jobs/${job.id}/title`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: titleValue }),
+      })
+      onJobsChange()
+    } finally {
+      titleSavingRef.current = false
+    }
   }
 
   const handleTimeClick = useCallback((sec: number) => {
@@ -519,14 +526,17 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
                 value={titleValue}
                 onChange={e => setTitleValue(e.target.value)}
                 onBlur={handleTitleSave}
-                onKeyDown={e => e.key === 'Enter' && handleTitleSave()}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleTitleSave()
+                  if (e.key === 'Escape') { setTitleValue(''); setEditingTitle(false) }
+                }}
                 className="text-lg font-semibold outline-none border-b-2 border-blue-500 bg-transparent flex-1 mr-4"
               />
             ) : (
               <h1
                 className="text-base md:text-lg font-semibold text-gray-800 dark:text-gray-100 cursor-pointer hover:text-blue-600 flex-1 mr-2 truncate"
-                onClick={() => setEditingTitle(true)}
-                title="클릭하여 제목 편집"
+                onDoubleClick={() => setEditingTitle(true)}
+                title="더블클릭하여 제목 편집"
               >
                 {titleValue || '회의'}
               </h1>
