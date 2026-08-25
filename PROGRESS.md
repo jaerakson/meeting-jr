@@ -3,10 +3,11 @@
 - 완료: 다크모드 전체 영역 적용 버그 수정
   - 기존: 상단 바만 다크모드 적용됨
   - 수정: Sidebar, MainArea, SummaryPanel 등 12개 컴포넌트 dark: 클래스 일괄 보완 (PR #34)
-  - 확인: Playwright 스크린샷으로 전체 영역 정상 적용 검증
-- 현재 상태: main 최신 (d71641d)
+  - 잔여 이슈 추가 수정: MeetingCard 상태 뱃지, SummaryPanel 리스트, SettingsModal 버튼, TranscriptEditor 화자 색상 (PR #35)
+  - 확인: 코드 리뷰 이슈 0건 (클린 패스)
+- 현재 상태: main 최신 (add523f)
 - 다음 할 일: 없음
-- 관련 PR: #34
+- 관련 PR: #34, #35
 - 푸시 여부: origin/main 푸시 완료
 
 ## 2026-08-25 (작업 PC: 로컬) — 세션 25 (신규 기능 3개 완료)
