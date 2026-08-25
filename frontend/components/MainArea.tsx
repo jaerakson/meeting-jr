@@ -525,15 +525,22 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
               ) : null
             })()}
             <div className="flex items-center gap-2 flex-shrink-0">
-              {notionUrl && (
+              {notionUrl ? (
                 <a
                   href={notionUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs md:text-sm text-blue-600 hover:text-blue-700 underline"
+                  className="hidden md:inline-flex text-xs px-2 py-0.5 bg-green-50 text-green-700 rounded-full items-center gap-1 hover:bg-green-100 transition-colors"
                 >
-                  Notion에서 보기 ↗
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Notion ↗
                 </a>
+              ) : job?.status === 'done' && (
+                <span className="hidden md:inline-flex text-xs px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full">
+                  Notion 미등록
+                </span>
               )}
               {job.status === 'done' && (
                 <button
