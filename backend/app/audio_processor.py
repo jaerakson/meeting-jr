@@ -534,9 +534,22 @@ async def process_audio(
     # 5. speakers.json에서 제안 이름 로드
     suggested = load_suggested_names()
 
+    # 6. diarization 세그먼트를 JSON으로 저장 (voice profile 매칭용)
+    diar_segments: dict[str, list[dict]] = {}
+    for turn, _, speaker in diarization.itertracks(yield_label=True):
+        diar_segments.setdefault(speaker, []).append({
+            "start": round(turn.start, 3),
+            "end": round(turn.end, 3),
+            "speaker": speaker,
+        })
+    diar_path = INPUT_DIR / f"{job_id}_diarization.json"
+    diar_path.write_text(json.dumps(diar_segments, ensure_ascii=False), encoding="utf-8")
+
     return {
         "script_path": str(script_path),
         "speakers": speakers,
         "suggested_names": suggested,
         "duration_sec": int(duration),
+        "wav_path": str(wav_path),
+        "diarization_segments": diar_segments,
     }
