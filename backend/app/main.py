@@ -535,6 +535,38 @@ async def get_speakers():
     return {}
 
 
+@app.post("/api/speakers")
+async def add_speaker(body: dict):
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="name은 필수입니다.")
+    data: dict = {}
+    if SPEAKERS_FILE.exists():
+        try:
+            data = json.loads(SPEAKERS_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, IOError):
+            data = {}
+    # 이름을 key/value 모두로 저장 (식별자 = 표시명)
+    data[name] = name
+    SPEAKERS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"status": "ok", "name": name}
+
+
+@app.delete("/api/speakers/{name}")
+async def delete_speaker(name: str):
+    if not SPEAKERS_FILE.exists():
+        raise HTTPException(status_code=404, detail="화자가 없습니다.")
+    try:
+        data = json.loads(SPEAKERS_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, IOError):
+        raise HTTPException(status_code=500, detail="speakers.json 읽기 실패")
+    if name not in data:
+        raise HTTPException(status_code=404, detail="해당 화자를 찾을 수 없습니다.")
+    del data[name]
+    SPEAKERS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"status": "ok", "name": name}
+
+
 # ---------------------------------------------------------------------------
 # 13) POST /api/jobs/{job_id}/export-notion
 # ---------------------------------------------------------------------------
