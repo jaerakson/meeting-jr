@@ -41,6 +41,15 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
     }
   }, [contextMenu])
 
+  const handleBookmark = async (jobId: string) => {
+    try {
+      await fetch(`/api/jobs/${jobId}/bookmark`, { method: 'PATCH' })
+      onJobsChange()
+    } catch {
+      // silent fail
+    }
+  }
+
   const handleDelete = async (jobId: string) => {
     if (!confirm('이 회의를 삭제하시겠습니까?')) return
     try {
@@ -147,6 +156,17 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
                 </svg>
               )}
               <span className="text-sm font-medium truncate flex-1">{job.title || job.filename}</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleBookmark(job.id) }}
+                className={`p-0.5 transition-all flex-shrink-0 ${
+                  job.bookmarked
+                    ? 'text-yellow-400 opacity-100'
+                    : 'text-slate-400 opacity-0 group-hover:opacity-100 hover:text-yellow-400'
+                }`}
+                title="북마크"
+              >
+                {job.bookmarked ? '★' : '☆'}
+              </button>
               <button
                 onClick={(e) => {
                   e.stopPropagation()

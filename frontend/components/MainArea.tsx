@@ -37,6 +37,8 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   const [resummarizeCategory, setResummarizeCategory] = useState<string>('meeting')
   const [categories, setCategories] = useState<Category[]>([])
   const [relatedMeetings, setRelatedMeetings] = useState<RelatedMeeting[]>([])
+  const [memo, setMemo] = useState('')
+  const [memoSaved, setMemoSaved] = useState(false)
 
   useEffect(() => {
     if (job?.status === 'done' && job.id) {
@@ -62,6 +64,8 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
     setLocalTranscript('')
     setNotionUrl(job?.notion_url ?? null)
     setResummarizeCategory(job?.category_id || 'meeting')
+    setMemo(job?.memo || '')
+    setMemoSaved(false)
   }, [job?.id])
 
   useEffect(() => {
@@ -69,6 +73,21 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
       Notification.requestPermission()
     }
   }, [])
+
+  const saveMemo = async () => {
+    if (!job) return
+    try {
+      await fetch(`/api/jobs/${job.id}/memo`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memo }),
+      })
+      setMemoSaved(true)
+      setTimeout(() => setMemoSaved(false), 2000)
+    } catch {
+      // silent fail
+    }
+  }
 
   const handleTitleSave = async () => {
     if (!job || !titleValue.trim()) { setEditingTitle(false); return }
@@ -359,6 +378,18 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             </div>
             <div className="md:w-[45%] flex flex-col min-h-0 p-4 h-1/2 md:h-auto">
               <SummaryPanel summary={job.summary || ''} jobId={job.id} onSummaryUpdate={onJobsChange} speakers={job.speakers} actionItems={job.action_items} />
+              <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">메모</h3>
+                <textarea
+                  value={memo}
+                  onChange={e => setMemo(e.target.value)}
+                  placeholder="회의 메모를 입력하세요..."
+                  className="w-full h-24 px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
+                />
+                <button onClick={saveMemo} className="mt-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
+                  {memoSaved ? '저장됨 ✓' : '저장'}
+                </button>
+              </div>
               {relatedMeetings.length > 0 && (
                 <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
                   <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">
