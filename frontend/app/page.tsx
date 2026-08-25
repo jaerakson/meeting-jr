@@ -54,10 +54,26 @@ export default function Home() {
     setSidebarOpen(false)
   }
 
+  // Sidebar 클릭 시 URL 동기화
   const handleSelectJob = (id: string | null) => {
     setSelectedJobId(id)
     setSidebarOpen(false)
+    if (id) {
+      window.history.pushState({ jobId: id }, '', `/meetings/${id}`)
+    } else {
+      window.history.pushState({ jobId: null }, '', '/')
+    }
   }
+
+  // 뒤로 가기 시 이전 상태 복원
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      const jobId = e.state?.jobId ?? null
+      setSelectedJobId(jobId)
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
 
   return (
     <div className="flex h-dvh overflow-hidden">
