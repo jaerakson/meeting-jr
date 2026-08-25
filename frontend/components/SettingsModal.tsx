@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { SettingsStatus, ClaudeStatus, Category } from '@/types'
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 
 interface Props {
   onClose: () => void
@@ -52,6 +53,8 @@ export default function SettingsModal({ onClose }: Props) {
   const [speakers, setSpeakers] = useState<string[]>([])
   const [newSpeakerName, setNewSpeakerName] = useState('')
   const [speakerSaving, setSpeakerSaving] = useState(false)
+
+  useKeyboardShortcuts({ onEscape: onClose })
 
   const loadSpeakers = () => {
     fetch('/api/speakers').then(r => r.json()).then((data: Record<string, string>) => {
