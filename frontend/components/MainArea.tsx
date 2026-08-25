@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Job, Category } from '@/types'
+import { Job, Category, RelatedMeeting } from '@/types'
+import { useRouter } from 'next/navigation'
 import RecordingZone from './RecordingZone'
 import CategorySelect from './CategorySelect'
 import ProgressCard from './ProgressCard'
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSidebar }: Props) {
+  const router = useRouter()
   const [currentTime, setCurrentTime] = useState(0)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleValue, setTitleValue] = useState('')
@@ -34,6 +36,18 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   const [showResummarizeModal, setShowResummarizeModal] = useState(false)
   const [resummarizeCategory, setResummarizeCategory] = useState<string>('meeting')
   const [categories, setCategories] = useState<Category[]>([])
+  const [relatedMeetings, setRelatedMeetings] = useState<RelatedMeeting[]>([])
+
+  useEffect(() => {
+    if (job?.status === 'done' && job.id) {
+      fetch(`/api/jobs/${job.id}/related`)
+        .then(r => r.json())
+        .then(data => setRelatedMeetings(data.items || []))
+        .catch(() => setRelatedMeetings([]))
+    } else {
+      setRelatedMeetings([])
+    }
+  }, [job?.id, job?.status])
 
   useEffect(() => {
     if (job) setTitleValue(job.title || '')
@@ -345,6 +359,36 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             </div>
             <div className="md:w-[45%] flex flex-col min-h-0 p-4 h-1/2 md:h-auto">
               <SummaryPanel summary={job.summary || ''} jobId={job.id} onSummaryUpdate={onJobsChange} speakers={job.speakers} actionItems={job.action_items} />
+              {relatedMeetings.length > 0 && (
+                <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
+                  <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">
+                    관련 회의
+                  </h3>
+                  <div className="space-y-2">
+                    {relatedMeetings.map(m => (
+                      <div
+                        key={m.id}
+                        onClick={() => router.push(`/?job=${m.id}`)}
+                        className="flex items-center justify-between p-3 rounded-lg border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{m.title}</p>
+                          <div className="flex gap-1 mt-1 flex-wrap">
+                            {m.matched_keywords.map(kw => (
+                              <span key={kw} className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded">
+                                {kw}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
+                          {new Date(m.created_at).toLocaleDateString('ko-KR')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

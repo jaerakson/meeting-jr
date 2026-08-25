@@ -41,6 +41,14 @@ export interface Job {
   action_items?: ActionItem[]
 }
 
+export interface RelatedMeeting {
+  id: string
+  title: string
+  created_at: string
+  matched_keywords: string[]
+  score: number
+}
+
 export interface ProgressEvent {
   stage: string
   progress: number
