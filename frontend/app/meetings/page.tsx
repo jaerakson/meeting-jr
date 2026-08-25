@@ -20,6 +20,12 @@ interface Category {
   icon: string
 }
 
+interface Stats {
+  total: number
+  this_week: number
+  by_category: { id: string; count: number }[]
+}
+
 function MeetingsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -31,12 +37,17 @@ function MeetingsContent() {
   const [data, setData] = useState<MeetingsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [categories, setCategories] = useState<Category[]>([])
+  const [stats, setStats] = useState<Stats | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     fetch('/api/categories')
       .then(r => r.ok ? r.json() : [])
       .then(setCategories)
+      .catch(() => {})
+    fetch('/api/stats')
+      .then(r => r.ok ? r.json() : null)
+      .then(setStats)
       .catch(() => {})
   }, [])
 
@@ -116,6 +127,29 @@ function MeetingsContent() {
           </Link>
           <h1 className="text-xl font-semibold text-gray-800">회의 목록</h1>
         </div>
+
+        {/* 통계 카드 */}
+        {stats && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
+              <p className="text-xs text-gray-400 mb-0.5">전체 회의</p>
+              <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
+              <p className="text-xs text-gray-400 mb-0.5">이번 주</p>
+              <p className="text-2xl font-bold text-blue-600">{stats.this_week}</p>
+            </div>
+            {stats.by_category.slice(0, 2).map(bc => {
+              const cat = categories.find(c => c.id === bc.id)
+              return (
+                <div key={bc.id} className="bg-white border border-gray-200 rounded-xl px-4 py-3">
+                  <p className="text-xs text-gray-400 mb-0.5">{cat ? `${cat.icon} ${cat.name}` : bc.id}</p>
+                  <p className="text-2xl font-bold text-gray-800">{bc.count}</p>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* 검색 + 필터 영역 */}
         <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4 space-y-3">
