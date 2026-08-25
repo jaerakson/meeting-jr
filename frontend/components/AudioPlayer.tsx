@@ -92,7 +92,7 @@ export default function AudioPlayer({ audioSrc, onTimeUpdate }: AudioPlayerProps
   }, [isPlaying])
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200">
+    <div className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
       <audio ref={audioRef} src={audioSrc} preload="metadata" />
 
       {/* 재생/일시정지 버튼 */}
@@ -121,7 +121,7 @@ export default function AudioPlayer({ audioSrc, onTimeUpdate }: AudioPlayerProps
         value={currentTime}
         onChange={handleSeek}
         disabled={!isFinite(duration) || duration === 0}
-        className="flex-1 h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer accent-accent disabled:opacity-40"
+        className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full appearance-none cursor-pointer accent-accent disabled:opacity-40"
       />
 
       {/* 시간 */}

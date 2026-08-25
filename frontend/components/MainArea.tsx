@@ -223,10 +223,10 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
 
     if (status === 'summarizing') {
       return (
-        <div className="flex-1 flex items-center justify-center bg-gray-50">
+        <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
           <div className="text-center">
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-gray-600 font-medium">회의록 생성 중...</p>
+            <p className="text-gray-600 dark:text-gray-300 font-medium">회의록 생성 중...</p>
             <p className="text-sm text-gray-400 mt-1">Claude가 요약하고 있습니다</p>
           </div>
         </div>
@@ -238,7 +238,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="text-4xl mb-3">⚠️</div>
-            <p className="font-medium text-gray-700">처리 실패</p>
+            <p className="font-medium text-gray-700 dark:text-gray-200">처리 실패</p>
             <p className="text-sm text-gray-400 mt-1">{job.error_msg}</p>
             <button
               onClick={async () => { await fetch(`/api/jobs/${job.id}/retry`, { method: 'POST' }); onJobsChange() }}
@@ -257,9 +257,9 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             onTimeUpdate={setCurrentTime}
           />
           <div className="flex-1 flex flex-col md:flex-row min-h-0">
-            <div className="md:w-[55%] flex flex-col min-h-0 border-b md:border-b-0 md:border-r h-1/2 md:h-auto">
-              <div className="px-4 py-2 border-b bg-gray-50 flex items-center justify-between flex-shrink-0">
-                <span className="text-xs font-medium text-gray-500">대화 스크립트</span>
+            <div className="md:w-[55%] flex flex-col min-h-0 border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 h-1/2 md:h-auto">
+              <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-between flex-shrink-0">
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">대화 스크립트</span>
                 <div className="flex items-center gap-2">
                   {isEditingTranscript ? (
                     <>
@@ -289,20 +289,20 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
                     <>
                       <button
                         onClick={downloadTranscript}
-                        className="text-xs px-2 py-1 border rounded hover:bg-white text-gray-600 transition-colors"
+                        className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded hover:bg-white dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
                       >
                         ↓ TXT
                       </button>
                       <a
                         href={`/api/jobs/${job.id}/audio`}
                         download
-                        className="text-xs px-2 py-1 border rounded hover:bg-white text-gray-600 transition-colors"
+                        className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded hover:bg-white dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
                       >
                         ↓ 음성
                       </a>
                       <button
                         onClick={handleStartEditTranscript}
-                        className="text-xs px-2 py-1 border rounded hover:bg-white text-gray-600 transition-colors"
+                        className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded hover:bg-white dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
                       >
                         편집
                       </button>
@@ -331,7 +331,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="px-4 py-3 border-b bg-white flex items-center justify-between flex-shrink-0">
+      <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between flex-shrink-0">
         {/* 햄버거 버튼 (모바일 전용) */}
         <button
           onClick={onOpenSidebar}
@@ -355,7 +355,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
               />
             ) : (
               <h1
-                className="text-base md:text-lg font-semibold text-gray-800 cursor-pointer hover:text-blue-600 flex-1 mr-2 truncate"
+                className="text-base md:text-lg font-semibold text-gray-800 dark:text-gray-100 cursor-pointer hover:text-blue-600 flex-1 mr-2 truncate"
                 onClick={() => setEditingTitle(true)}
                 title="클릭하여 제목 편집"
               >
@@ -365,7 +365,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             {job.status === 'done' && (() => {
               const cat = categories.find(c => c.id === (job.category_id || 'meeting'))
               return cat ? (
-                <span className="hidden md:inline-flex text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full flex-shrink-0 items-center gap-1">
+                <span className="hidden md:inline-flex text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full flex-shrink-0 items-center gap-1">
                   {cat.icon} {cat.name}
                 </span>
               ) : null
@@ -384,7 +384,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
               {job.status === 'done' && (
                 <button
                   onClick={() => window.open(`/print/${job.id}`, '_blank')}
-                  className="text-xs md:text-sm px-2 md:px-3 py-1.5 border rounded-lg hover:bg-gray-50 text-gray-600 flex items-center gap-1.5 transition-colors"
+                  className="text-xs md:text-sm px-2 md:px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center gap-1.5 transition-colors"
                   title="PDF로 저장"
                 >
                   PDF
@@ -393,7 +393,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
               <button
                 onClick={handleExportNotion}
                 disabled={notionLoading}
-                className="text-xs md:text-sm px-2 md:px-3 py-1.5 border rounded-lg hover:bg-gray-50 text-gray-600 disabled:opacity-60 flex items-center gap-1.5 transition-colors"
+                className="text-xs md:text-sm px-2 md:px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-60 flex items-center gap-1.5 transition-colors"
               >
                 {notionLoading ? (
                   <>
@@ -416,8 +416,8 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
       {renderContent()}
       {showResummarizeModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-80 space-y-4">
-            <h3 className="font-semibold text-gray-800">재요약 카테고리 선택</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-80 space-y-4">
+            <h3 className="font-semibold text-gray-800 dark:text-gray-100">재요약 카테고리 선택</h3>
             <p className="text-sm text-gray-500">재요약에 사용할 카테고리를 선택하세요.</p>
             <CategorySelect
               value={resummarizeCategory}
@@ -444,8 +444,8 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
       )}
       {showNotionConfirm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-80 space-y-4">
-            <h3 className="font-semibold text-gray-800">Notion 내보내기</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-80 space-y-4">
+            <h3 className="font-semibold text-gray-800 dark:text-gray-100">Notion 내보내기</h3>
             <p className="text-sm text-gray-500">이미 Notion에 등록된 회의입니다.<br/>어떻게 진행할까요?</p>
             <div className="flex flex-col gap-2">
               <button onClick={() => doExportNotion('update')}
