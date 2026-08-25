@@ -122,6 +122,10 @@ def init_db() -> None:
             )
         """)
         _migrate(conn)
+        # categories 테이블 마이그레이션: model 컬럼
+        cat_cols = {row[1] for row in conn.execute("PRAGMA table_info(categories)")}
+        if "model" not in cat_cols:
+            conn.execute("ALTER TABLE categories ADD COLUMN model TEXT DEFAULT 'claude-sonnet-4-6'")
         seed_categories(conn)
         conn.commit()
     finally:
