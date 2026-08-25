@@ -124,10 +124,12 @@ export default function MeetingCard({ job, searchQuery, onBookmark, onDelete }: 
         <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{speakersLabel}</p>
       )}
 
-      {/* 요약 미리보기 */}
-      {summaryPreview && (
+      {/* 요약 미리보기 또는 검색 snippet */}
+      {(job.snippet || summaryPreview) && (
         <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed flex-1">
-          {highlightText(summaryPreview, searchQuery)}
+          {job.snippet
+            ? highlightText(job.snippet, searchQuery)
+            : highlightText(summaryPreview, searchQuery)}
         </p>
       )}
 

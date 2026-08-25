@@ -42,6 +42,7 @@ export interface Job {
   bookmarked?: number
   memo?: string
   tags?: string[]
+  snippet?: string
 }
 
 export interface RelatedMeeting {
