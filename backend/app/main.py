@@ -524,6 +524,35 @@ async def get_audio(job_id: str):
 # 12) GET /api/speakers
 # ---------------------------------------------------------------------------
 
+@app.get("/api/stats")
+async def get_stats():
+    """done 상태 회의의 통계를 반환한다."""
+    import sqlite3 as _sqlite3
+    from .database import DB_PATH
+    conn = _sqlite3.connect(str(DB_PATH))
+    conn.row_factory = _sqlite3.Row
+
+    _KST = ZoneInfo("Asia/Seoul")
+    now_kst = datetime.now(_KST)
+    # 이번 주 월요일 00:00 KST
+    week_start = now_kst.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = week_start.replace(day=week_start.day - week_start.weekday())
+    week_start_utc = week_start.astimezone(timezone.utc).isoformat()
+
+    total = conn.execute("SELECT COUNT(*) FROM meetings WHERE status='done'").fetchone()[0]
+    this_week = conn.execute(
+        "SELECT COUNT(*) FROM meetings WHERE status='done' AND created_at >= ?",
+        (week_start_utc,)
+    ).fetchone()[0]
+    by_category_rows = conn.execute(
+        "SELECT COALESCE(category_id,'meeting') as cat, COUNT(*) as cnt FROM meetings WHERE status='done' GROUP BY cat"
+    ).fetchall()
+    conn.close()
+
+    by_category = [{"id": r["cat"], "count": r["cnt"]} for r in by_category_rows]
+    return {"total": total, "this_week": this_week, "by_category": by_category}
+
+
 @app.get("/api/speakers")
 async def get_speakers():
     if SPEAKERS_FILE.exists():
