@@ -82,6 +82,25 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
     URL.revokeObjectURL(a.href)
   }
 
+  const downloadMarkdown = () => {
+    if (!job) return
+    const date = job.created_at ? new Date(job.created_at).toLocaleDateString('ko-KR') : ''
+    const lines = [
+      `# ${job.title || '회의록'}`,
+      date ? `\n날짜: ${date}` : '',
+      job.summary ? `\n## 요약\n\n${job.summary}` : '',
+      job.transcript ? `\n## 스크립트\n\n${job.transcript}` : '',
+    ]
+    const md = lines.filter(Boolean).join('\n')
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob),
+      download: `${job.title || '회의록'}.md`,
+    })
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
   const handleStartEditTranscript = () => {
     setLocalTranscript(job?.transcript || '')
     setIsEditingTranscript(true)
@@ -292,6 +311,12 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
                         className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded hover:bg-white dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
                       >
                         ↓ TXT
+                      </button>
+                      <button
+                        onClick={downloadMarkdown}
+                        className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded hover:bg-white dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
+                      >
+                        ↓ MD
                       </button>
                       <a
                         href={`/api/jobs/${job.id}/audio`}
