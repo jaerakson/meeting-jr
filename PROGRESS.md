@@ -1,6 +1,13 @@
-## 진행 중 — feature/multilang-stt
-- 시작: 2026-08-25
-- 목표: RecordingZone 언어 선택 → Whisper language 파라미터 전달
+## 2026-08-25 (작업 PC: 로컬) — 세션 19 (A, C, G 완료)
+- 브랜치: main (feature/multilang-stt → PR #12 → squash 머지)
+- 완료: A, C, G 전체 완료
+  - A. 자동 회의 제목 생성: run_summary 후 # 첫 줄 파싱 → update_job_title (PR #10)
+  - C. 마크다운 내보내기: ↓ MD 버튼, Blob 방식, 제목+날짜+요약+스크립트 (PR #11)
+  - G. 다국어 STT: DB language 컬럼, 드롭다운 UI (🇰🇷/🇺🇸/🇯🇵/🌐), Whisper 전달 (PR #12)
+- 현재 상태: main 최신 (7774763), 서버 실행 중 (백엔드 8000, 프론트 3000)
+- 다음 할 일: 없음 (모든 계획 기능 완료)
+- 관련 PR: #10, #11, #12
+- 푸시 여부: origin/main 푸시 완료
 
 ## 2026-08-25 (작업 PC: 로컬) — 세션 18
 - 브랜치: main (feature/markdown-export → PR #11 → squash 머지)
