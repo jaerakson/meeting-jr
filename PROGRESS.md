@@ -1,6 +1,15 @@
-## 진행 중 — feature/stats-dashboard
+## 진행 중 — feature/mobile-responsive
 - 시작: 2026-08-25
-- 목표: /meetings 페이지 상단 통계 카드 (총 회의, 이번주, 카테고리별)
+- 목표: 모바일 반응형 레이아웃 최적화 (터치 버튼, 패딩, RecordingZone 등)
+
+## 2026-08-25 (작업 PC: 로컬) — 세션 14
+- 브랜치: main (feature/stats-dashboard → PR #8 → squash 머지)
+- 완료:
+  - c. 통계 대시보드: GET /api/stats + /meetings 페이지 통계 카드 4개 (PR #8)
+  - d. 실패 재시도: 이미 구현됨 확인 (backend POST /api/jobs/{id}/retry + MainArea 버튼, 별도 PR 불필요)
+- 현재 상태: main 최신 (4d84a7c)
+- 관련 커밋: PR #7, PR #8
+- 푸시 여부: origin/main 푸시 완료
 
 ## 2026-08-25 (작업 PC: 로컬) — 세션 13
 - 브랜치: main (feature/speaker-profile → PR #7 → squash 머지)
