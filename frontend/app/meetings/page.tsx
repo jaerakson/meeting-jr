@@ -143,18 +143,18 @@ function MeetingsContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA]">
+    <div className="min-h-screen bg-[#F8F9FA] dark:bg-gray-900">
       <div className="max-w-6xl mx-auto px-4 py-6">
 
         {/* 헤더 */}
         <div className="flex items-center gap-4 mb-6">
           <Link
             href="/"
-            className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
+            className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
           >
             ← 돌아가기
           </Link>
-          <h1 className="text-xl font-semibold text-gray-800 flex-1">회의 목록</h1>
+          <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-100 flex-1">회의 목록</h1>
           <button
             onClick={handleExport}
             disabled={exporting}
@@ -167,20 +167,20 @@ function MeetingsContent() {
         {/* 통계 카드 */}
         {stats && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-            <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3">
               <p className="text-xs text-gray-400 mb-0.5">전체 회의</p>
-              <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
+              <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{stats.total}</p>
             </div>
-            <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3">
               <p className="text-xs text-gray-400 mb-0.5">이번 주</p>
-              <p className="text-2xl font-bold text-blue-600">{stats.this_week}</p>
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.this_week}</p>
             </div>
             {stats.by_category.slice(0, 2).map(bc => {
               const cat = categories.find(c => c.id === bc.id)
               return (
-                <div key={bc.id} className="bg-white border border-gray-200 rounded-xl px-4 py-3">
+                <div key={bc.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3">
                   <p className="text-xs text-gray-400 mb-0.5">{cat ? `${cat.icon} ${cat.name}` : bc.id}</p>
-                  <p className="text-2xl font-bold text-gray-800">{bc.count}</p>
+                  <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{bc.count}</p>
                 </div>
               )
             })}
@@ -188,7 +188,7 @@ function MeetingsContent() {
         )}
 
         {/* 검색 + 필터 영역 */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4 space-y-3">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 mb-4 space-y-3">
           {/* 검색 바 */}
           <div className="relative">
             <svg
@@ -203,7 +203,7 @@ function MeetingsContent() {
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="회의 제목 또는 내용으로 검색..."
-              className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+              className="w-full pl-10 pr-10 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-gray-600"
             />
             {loading && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -216,7 +216,7 @@ function MeetingsContent() {
             <select
               value={categoryId}
               onChange={e => setCategoryId(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white cursor-pointer"
+              className="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-gray-50 dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-gray-600 cursor-pointer"
             >
               <option value="">전체 카테고리</option>
               {categories.map(cat => (
@@ -230,7 +230,7 @@ function MeetingsContent() {
                 type="date"
                 value={dateFrom}
                 onChange={e => setDateFrom(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                className="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-gray-600"
               />
               <span>~</span>
               <input
@@ -238,7 +238,7 @@ function MeetingsContent() {
                 value={dateTo}
                 onChange={e => setDateTo(e.target.value)}
                 min={dateFrom}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                className="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-gray-600"
               />
             </div>
 
@@ -259,7 +259,7 @@ function MeetingsContent() {
               <select
                 value={tagFilter}
                 onChange={e => setTagFilter(e.target.value)}
-                className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white cursor-pointer"
+                className="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-gray-50 dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-gray-600 cursor-pointer"
               >
                 <option value="">전체 태그</option>
                 {allTags.map(tag => (
@@ -300,7 +300,7 @@ function MeetingsContent() {
         {/* 카드 그리드 */}
         {!loading && data && data.items.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-gray-400 text-base mb-2">검색 결과가 없습니다</p>
+            <p className="text-gray-400 dark:text-gray-500 text-base mb-2">검색 결과가 없습니다</p>
             {hasFilters && (
               <button
                 onClick={clearFilters}
@@ -334,7 +334,7 @@ function MeetingsContent() {
 export default function MeetingsPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center">
+      <div className="min-h-screen bg-[#F8F9FA] dark:bg-gray-900 flex items-center justify-center">
         <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     }>

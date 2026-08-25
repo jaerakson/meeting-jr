@@ -316,7 +316,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
 
     if (status === 'error') {
       return (
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
           <div className="text-center">
             <div className="text-4xl mb-3">⚠️</div>
             <p className="font-medium text-gray-700 dark:text-gray-200">처리 실패</p>
@@ -347,14 +347,14 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
                       <button
                         onClick={handleCancelEditTranscript}
                         disabled={resummaryLoading}
-                        className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-40"
+                        className="text-xs px-2 py-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors disabled:opacity-40"
                       >
                         취소
                       </button>
                       <button
                         onClick={handleSaveTranscript}
                         disabled={resummaryLoading}
-                        className="text-xs px-3 py-1 border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 text-gray-700 rounded-md font-medium transition-colors"
+                        className="text-xs px-3 py-1 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 text-gray-700 dark:text-gray-200 rounded-md font-medium transition-colors"
                       >
                         {resummaryLoading ? '저장 중...' : '저장'}
                       </button>
@@ -489,7 +489,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
         {/* 햄버거 버튼 (모바일 전용) */}
         <button
           onClick={onOpenSidebar}
-          className="md:hidden p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors mr-2 flex-shrink-0"
+          className="md:hidden p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors mr-2 flex-shrink-0"
           aria-label="메뉴 열기"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -585,7 +585,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             </div>
           </>
         ) : (
-          <h1 className="text-base font-semibold text-gray-500">Meeting Jr.</h1>
+          <h1 className="text-base font-semibold text-gray-500 dark:text-gray-400">Meeting Jr.</h1>
         )}
       </div>
       {renderContent()}

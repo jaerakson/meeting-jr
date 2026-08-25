@@ -127,8 +127,8 @@ export default function ProgressCard({ jobId, onDone, onAwaitingEdit }: Progress
 
   return (
     <div className="flex items-center justify-center h-full p-4 md:p-8">
-      <div className="w-full max-w-md bg-white rounded-xl shadow-sm p-5 md:p-8">
-        <h2 className="text-lg font-bold text-gray-800 mb-6">처리 중...</h2>
+      <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 md:p-8">
+        <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-6">처리 중...</h2>
 
         <div className="space-y-4">
           {STAGES.map((stage) => {
@@ -147,14 +147,14 @@ export default function ProgressCard({ jobId, onDone, onAwaitingEdit }: Progress
                   </svg>
                 )}
                 {status === 'waiting' && (
-                  <span className="w-5 h-5 rounded-full border-2 border-gray-300 flex-shrink-0" />
+                  <span className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" />
                 )}
 
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
                     <span className={`text-sm font-medium ${
-                      status === 'done' ? 'text-green-600' :
-                      status === 'active' ? 'text-gray-800' :
+                      status === 'done' ? 'text-green-600 dark:text-green-400' :
+                      status === 'active' ? 'text-gray-800 dark:text-gray-100' :
                       'text-gray-400'
                     }`}>
                       {stage.label}
@@ -166,7 +166,7 @@ export default function ProgressCard({ jobId, onDone, onAwaitingEdit }: Progress
                     </span>
                   </div>
                   {status === 'active' && (
-                    <div className="mt-1.5 w-full bg-gray-200 rounded-full h-2">
+                    <div className="mt-1.5 w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
                       <div
                         className="bg-accent h-2 rounded-full transition-all duration-300"
                         style={{ width: `${state.progress}%` }}
@@ -180,7 +180,7 @@ export default function ProgressCard({ jobId, onDone, onAwaitingEdit }: Progress
         </div>
 
         {state.message && state.stage !== 'pending' && (
-          <p className="mt-4 text-sm text-gray-500">{state.message}</p>
+          <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">{state.message}</p>
         )}
 
         {state.stage === 'error' && (

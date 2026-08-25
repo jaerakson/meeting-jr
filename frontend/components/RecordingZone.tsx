@@ -221,8 +221,8 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
   // Claude 상태 확인 중
   if (!claudeStatus) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <div className="w-6 h-6 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
+      <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="w-6 h-6 border-2 border-gray-300 dark:border-gray-600 border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
@@ -230,14 +230,14 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
   // Claude CLI 미설치
   if (!claudeStatus.installed) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50 p-4">
-        <div className="bg-white rounded-2xl shadow-sm border p-8 w-full max-w-md text-center space-y-4">
+      <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 w-full max-w-md text-center space-y-4">
           <div className="text-3xl">🔧</div>
-          <h2 className="text-lg font-semibold text-gray-800">Claude CLI가 설치되어 있지 않습니다</h2>
-          <p className="text-sm text-gray-500">회의록 요약을 위해 Claude CLI 설치가 필요합니다.</p>
-          <div className="text-left bg-gray-50 rounded-lg p-4 space-y-2">
-            <p className="text-xs font-medium text-gray-600">터미널에서 실행하세요:</p>
-            <code className="block text-xs font-mono text-gray-800 bg-gray-100 rounded px-3 py-2">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Claude CLI가 설치되어 있지 않습니다</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">회의록 요약을 위해 Claude CLI 설치가 필요합니다.</p>
+          <div className="text-left bg-gray-50 dark:bg-gray-700 rounded-lg p-4 space-y-2">
+            <p className="text-xs font-medium text-gray-600 dark:text-gray-300">터미널에서 실행하세요:</p>
+            <code className="block text-xs font-mono text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-600 rounded px-3 py-2">
               npm install -g @anthropic-ai/claude-code
             </code>
           </div>
@@ -250,14 +250,14 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
   // Claude 로그아웃 상태
   if (!claudeStatus.logged_in) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50 p-4">
-        <div className="bg-white rounded-2xl shadow-sm border p-8 w-full max-w-md text-center space-y-4">
+      <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 w-full max-w-md text-center space-y-4">
           <div className="text-3xl">🔐</div>
-          <h2 className="text-lg font-semibold text-gray-800">Claude 로그인이 필요합니다</h2>
-          <p className="text-sm text-gray-500">회의록 요약을 위해 Claude CLI 로그인이 필요합니다.</p>
-          <div className="text-left bg-gray-50 rounded-lg p-4 space-y-2">
-            <p className="text-xs font-medium text-gray-600">터미널에서 아래 명령어를 실행하세요:</p>
-            <code className="block text-xs font-mono text-gray-800 bg-gray-100 rounded px-3 py-2">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Claude 로그인이 필요합니다</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">회의록 요약을 위해 Claude CLI 로그인이 필요합니다.</p>
+          <div className="text-left bg-gray-50 dark:bg-gray-700 rounded-lg p-4 space-y-2">
+            <p className="text-xs font-medium text-gray-600 dark:text-gray-300">터미널에서 아래 명령어를 실행하세요:</p>
+            <code className="block text-xs font-mono text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-600 rounded px-3 py-2">
               claude auth login
             </code>
             <p className="text-xs text-gray-400 pt-1">브라우저가 열리면 Anthropic 계정으로 로그인하세요.</p>
@@ -276,16 +276,16 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
   }
 
   return (
-    <div className="flex-1 flex items-center justify-center bg-gray-50 p-4">
-      <div className="bg-white rounded-2xl shadow-sm border p-6 md:p-10 w-full max-w-lg text-center">
+    <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 md:p-10 w-full max-w-lg text-center">
         {/* Tab switcher */}
-        <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-6">
+        <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1 mb-6">
           <button
             onClick={() => setActiveTab('record')}
             className={`flex-1 py-2 px-4 rounded-md text-sm transition-colors ${
               activeTab === 'record'
-                ? 'bg-white shadow-sm text-gray-800 font-medium'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-800 dark:text-gray-100 font-medium'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
             }`}
           >
             녹음
@@ -294,8 +294,8 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
             onClick={() => setActiveTab('upload')}
             className={`flex-1 py-2 px-4 rounded-md text-sm transition-colors ${
               activeTab === 'upload'
-                ? 'bg-white shadow-sm text-gray-800 font-medium'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-800 dark:text-gray-100 font-medium'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
             }`}
           >
             파일 업로드
@@ -307,10 +307,10 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
           <>
             <div className="flex items-center justify-center gap-3 mb-6">
               {isRecording && <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse flex-shrink-0" />}
-              <span className="text-4xl md:text-5xl font-mono font-light text-gray-800 tracking-widest">{formatTime(seconds)}</span>
+              <span className="text-4xl md:text-5xl font-mono font-light text-gray-800 dark:text-gray-100 tracking-widest">{formatTime(seconds)}</span>
             </div>
             {isRecording && (
-              <canvas ref={canvasRef} width={400} height={60} className="w-full mb-6 rounded-lg bg-gray-50" />
+              <canvas ref={canvasRef} width={400} height={60} className="w-full mb-6 rounded-lg bg-gray-50 dark:bg-gray-700" />
             )}
             {!isRecording && !audioBlob && (
               <>
@@ -325,7 +325,7 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
                   <select
                     value={language}
                     onChange={e => setLanguage(e.target.value)}
-                    className="px-2 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="px-2 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="ko">🇰🇷 한국어</option>
                     <option value="en">🇺🇸 English</option>
@@ -336,8 +336,8 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
                 <button onClick={startRecording} className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center mx-auto mb-4 transition-colors shadow-lg">
                   <span className="w-5 h-5 rounded-full bg-white" />
                 </button>
-                <p className="text-sm text-gray-400">버튼을 눌러 녹음을 시작하세요</p>
-                <p className="text-xs text-gray-300 mt-2">Space: 녹음 시작/중지</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500">버튼을 눌러 녹음을 시작하세요</p>
+                <p className="text-xs text-gray-300 dark:text-gray-600 mt-2">Space: 녹음 시작/중지</p>
               </>
             )}
             {isRecording && (
@@ -349,7 +349,7 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
               <div className="space-y-3 mt-2">
                 {uploading && <p className="text-blue-500 text-sm animate-pulse">서버로 전송 중...</p>}
                 {uploadDone && <p className="text-green-600 text-sm font-medium">전송 완료 -- 처리 중...</p>}
-                <button onClick={downloadAudio} className="text-sm px-4 py-2 border rounded-lg hover:bg-gray-50 text-gray-600 transition-colors">
+                <button onClick={downloadAudio} className="text-sm px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors">
                   ↓ 음성 다운로드 (.webm)
                 </button>
               </div>
@@ -371,7 +371,7 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
               <select
                 value={language}
                 onChange={e => setLanguage(e.target.value)}
-                className="px-2 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-2 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="ko">🇰🇷 한국어</option>
                 <option value="en">🇺🇸 English</option>
@@ -393,14 +393,14 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
               onClick={() => !fileUploading && fileInputRef.current?.click()}
               className={`border-2 border-dashed rounded-xl p-8 cursor-pointer transition-colors ${
                 isDragging
-                  ? 'border-blue-400 bg-blue-50'
-                  : 'border-gray-300 hover:border-gray-400 bg-gray-50'
+                  ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/30'
+                  : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 bg-gray-50 dark:bg-gray-700'
               }`}
             >
               {fileUploading ? (
                 <div className="flex flex-col items-center gap-3">
                   <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                  <p className="text-sm text-blue-600 font-medium">업로드 중...</p>
+                  <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">업로드 중...</p>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-3">
@@ -408,7 +408,7 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
                   <div>
-                    <p className="text-sm font-medium text-gray-700">파일을 여기에 끌어다 놓거나 클릭하세요</p>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-200">파일을 여기에 끌어다 놓거나 클릭하세요</p>
                     <p className="text-xs text-gray-400 mt-1">지원 형식: {ALLOWED_DISPLAY}</p>
                   </div>
                 </div>

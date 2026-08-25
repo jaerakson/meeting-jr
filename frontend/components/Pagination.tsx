@@ -30,7 +30,7 @@ export default function Pagination({ page, pages, onPageChange }: PaginationProp
       <button
         onClick={() => onPageChange(page - 1)}
         disabled={page === 1}
-        className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
         ←
       </button>
@@ -47,7 +47,7 @@ export default function Pagination({ page, pages, onPageChange }: PaginationProp
             className={`w-9 h-9 text-sm rounded-lg border transition-colors ${
               p === page
                 ? 'bg-blue-600 text-white border-blue-600 font-medium'
-                : 'border-gray-300 hover:bg-gray-50 text-gray-700'
+                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
             }`}
           >
             {p}
@@ -58,7 +58,7 @@ export default function Pagination({ page, pages, onPageChange }: PaginationProp
       <button
         onClick={() => onPageChange(page + 1)}
         disabled={page === pages}
-        className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
         →
       </button>

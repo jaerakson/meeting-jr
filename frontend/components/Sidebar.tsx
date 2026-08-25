@@ -253,7 +253,7 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
       {/* 컨텍스트 메뉴 */}
       {contextMenu && (
         <div
-          className="fixed bg-white text-gray-800 rounded-lg shadow-xl border border-gray-200 py-1 z-50"
+          className="fixed bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 py-1 z-50"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <button
@@ -261,7 +261,7 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
               handleDelete(contextMenu.jobId)
               setContextMenu(null)
             }}
-            className="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 text-red-600"
+            className="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-red-600 dark:text-red-400"
           >
             삭제
           </button>

@@ -139,7 +139,7 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
         onLoadedMetadata={() => setDuration(audioRef.current?.duration ?? 0)}
         onEnded={() => setPlaying(false)}
       />
-      <div className="flex items-center gap-3 px-4 py-2 border-b bg-white flex-shrink-0">
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
         <button
           onClick={togglePlay}
           className="w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center flex-shrink-0 transition-colors"
@@ -150,7 +150,7 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
           }
         </button>
         <div
-          className="flex-1 h-1.5 bg-gray-200 rounded-full cursor-pointer relative"
+          className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full cursor-pointer relative"
           onClick={e => {
             if (!audioRef.current || !duration) return
             const r = e.currentTarget.getBoundingClientRect()
@@ -162,10 +162,10 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
             style={{ width: duration ? `${(currentTime / duration) * 100}%` : '0%' }}
           />
         </div>
-        <span className="text-xs text-gray-500 font-mono flex-shrink-0">
+        <span className="text-xs text-gray-500 dark:text-gray-400 font-mono flex-shrink-0">
           {fmt(currentTime)}{duration > 0 && isFinite(duration) ? ` / ${fmt(duration)}` : ''}
         </span>
-        <button onClick={download} className="text-xs px-2 py-1 border rounded hover:bg-gray-50 text-gray-600 transition-colors flex-shrink-0">
+        <button onClick={download} className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors flex-shrink-0">
           ↓ 다운로드
         </button>
       </div>
@@ -174,9 +174,9 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
       <div className="flex-1 flex flex-col md:flex-row min-h-0">
 
         {/* 화자 패널 — 모바일: 수평 스크롤, 데스크탑: 사이드 패널 */}
-        <div className="md:w-44 flex-shrink-0 border-b md:border-b-0 md:border-r bg-gray-50 flex flex-col">
-          <div className="px-3 py-2 border-b">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">참석자</span>
+        <div className="md:w-44 flex-shrink-0 border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex flex-col">
+          <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">참석자</span>
           </div>
           <div className="flex md:flex-col overflow-x-auto md:overflow-y-auto p-2 gap-2 md:space-y-1.5">
             {speakers.map(sp => {
@@ -190,12 +190,12 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
                   className={`flex-shrink-0 md:flex-shrink rounded-lg p-2 border cursor-pointer transition-all ${
                     isSelected
                       ? `${c.bg} border-current ring-1 ${c.ring}`
-                      : 'bg-white border-gray-200 hover:border-gray-300'
+                      : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:border-gray-300'
                   }`}
                 >
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.dot}`} />
-                    <span className="text-xs font-mono text-gray-500 truncate leading-none">{sp}</span>
+                    <span className="text-xs font-mono text-gray-500 dark:text-gray-400 truncate leading-none">{sp}</span>
                   </div>
                   <input
                     type="text"
@@ -203,9 +203,9 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
                     value={names[sp] || ''}
                     onChange={e => setNames(prev => ({ ...prev, [sp]: e.target.value }))}
                     onClick={e => e.stopPropagation()}
-                    className="w-full border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white dark:bg-gray-600 dark:text-gray-200"
                   />
-                  <div className="text-xs text-gray-400 mt-1">{count}개 발화</div>
+                  <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">{count}개 발화</div>
                 </div>
               )
             })}
@@ -230,7 +230,7 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
                       ? `${c.rowBg} ring-1 ring-inset ${c.ring}`
                       : isHighlighted
                       ? c.rowBg
-                      : 'hover:bg-gray-50'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-700'
                   } ${isDimmed ? 'opacity-30' : ''}`}
                 >
                   {/* 타임스탬프 — 클릭 시 해당 지점 재생 */}
@@ -252,7 +252,7 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
                   </button>
 
                   {/* 발화 텍스트 — 클릭 시 인라인 편집 */}
-                  <div className="flex-1 text-sm text-gray-800 min-w-0">
+                  <div className="flex-1 text-sm text-gray-800 dark:text-gray-200 min-w-0">
                     {editId === line.id ? (
                       <input
                         autoFocus
@@ -283,9 +283,9 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
       </div>
 
       {/* ── 하단 버튼 ── */}
-      <div className="px-4 py-3 border-t bg-white flex-shrink-0 space-y-2">
+      <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0 space-y-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500 flex-shrink-0">카테고리:</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">카테고리:</span>
           <CategorySelect value={categoryId} onChange={setCategoryId} className="flex-1" />
         </div>
         <button
