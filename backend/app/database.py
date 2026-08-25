@@ -24,7 +24,7 @@ def _get_conn() -> sqlite3.Connection:
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
-    """sqlite3.Row -> dict 변환. speakers JSON 문자열은 파싱."""
+    """sqlite3.Row -> dict 변환. speakers/action_items JSON 문자열은 파싱."""
     d = dict(row)
     if d.get("speakers"):
         try:
@@ -33,6 +33,13 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
             d["speakers"] = {}
     else:
         d["speakers"] = {}
+    if d.get("action_items"):
+        try:
+            d["action_items"] = json.loads(d["action_items"])
+        except (json.JSONDecodeError, TypeError):
+            d["action_items"] = []
+    else:
+        d["action_items"] = []
     return d
 
 
@@ -48,6 +55,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("notion_page_id", "TEXT"),
         ("category_id", "TEXT"),
         ("language", "TEXT"),
+        ("action_items", "TEXT"),
     ]:
         if col not in existing:
             conn.execute(f"ALTER TABLE meetings ADD COLUMN {col} {definition}")
@@ -400,6 +408,19 @@ def delete_category(cat_id: str) -> bool:
         cursor = conn.execute("DELETE FROM categories WHERE id = ?", (cat_id,))
         conn.commit()
         return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def update_job_action_items(job_id: str, action_items: list[dict]) -> None:
+    """action_items를 JSON으로 저장한다."""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE meetings SET action_items = ? WHERE id = ?",
+            (json.dumps(action_items, ensure_ascii=False), job_id),
+        )
+        conn.commit()
     finally:
         conn.close()
 

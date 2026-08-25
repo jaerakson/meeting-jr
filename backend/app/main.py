@@ -11,6 +11,8 @@ import json
 import os
 import uuid
 
+import re
+
 import aiofiles
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, Request, UploadFile, HTTPException
@@ -34,6 +36,7 @@ from .database import (
     update_category,
     delete_category,
     update_job_category,
+    update_job_action_items,
 )
 from .job_queue import job_queue, start_worker, progress_store, update_progress
 from .settings_manager import get_settings_status, get_setting, set_setting, SETTING_KEYS
@@ -367,6 +370,18 @@ async def run_summary(job_id: str, script_path: str, speaker_map: dict, category
                         update_job_title(job_id, auto_title)
                     break
 
+        # 액션 아이템 파싱
+        action_items = []
+        for line in summary.splitlines():
+            m = re.match(r'^-\s*\[[ xX]\]\s*(?:@(\S+)\s*-?\s*)?(.+)$', line.strip())
+            if m:
+                done = '[x]' in line.lower()
+                assignee = m.group(1) or ''
+                text = m.group(2).strip()
+                action_items.append({"text": text, "assignee": assignee, "done": done})
+        if action_items:
+            update_job_action_items(job_id, action_items)
+
         update_job_result(job_id, summary=summary, status="done")
         update_progress(job_id, {
             "stage": "done",
@@ -484,6 +499,24 @@ async def patch_summary(job_id: str, body: dict):
     output_path.write_text(summary, encoding="utf-8")
 
     return {"status": "updated", "job_id": job_id}
+
+
+# ---------------------------------------------------------------------------
+# 9-c) PATCH /api/jobs/{job_id}/action-items
+# ---------------------------------------------------------------------------
+
+@app.patch("/api/jobs/{job_id}/action-items")
+async def patch_action_items(job_id: str, body: dict):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+
+    action_items = body.get("action_items")
+    if action_items is None or not isinstance(action_items, list):
+        raise HTTPException(status_code=422, detail="action_items 리스트가 필요합니다.")
+
+    update_job_action_items(job_id, action_items)
+    return get_job(job_id)
 
 
 # ---------------------------------------------------------------------------
