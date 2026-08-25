@@ -70,7 +70,7 @@ export default function MeetingCard({ job, searchQuery }: MeetingCardProps) {
 
   return (
     <div
-      onClick={() => router.push(`/?job=${job.id}`)}
+      onClick={() => router.push(`/meetings/${job.id}`)}
       className="bg-white border border-gray-200 rounded-xl p-4 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all flex flex-col gap-2 min-h-[140px]"
     >
       {/* 제목 + 상태 뱃지 */}
