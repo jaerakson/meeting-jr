@@ -1,3 +1,17 @@
+## 2026-08-27 (작업 PC: 로컬) — 세션 47 (하네스 최종 프로세스 정립)
+- 브랜치: main (1c97a50)
+- 완료:
+  - 하네스 팀 구조·프로세스 최종 정립 (8개 파일 수정)
+  - 프로세스 A(새 기능): PM brainstorming → 사용자 승인 → director → TDD → 개발 → QA → 코드리뷰 → 머지
+  - 프로세스 B(버그): director 분석 → TDD → 개발 → QA → 코드리뷰 → 머지
+  - TDD 도입: qa-engineer가 구현 전 테스트 먼저 작성
+  - 팀리드 상황 판단: 기획→PM, 버그→director, 기능→director
+  - 시스템 제약 반영: teammate 소환 불가 → 팀리드만 소환, director는 SendMessage 코디네이션
+  - 보고 체계: 팀원→director→팀리드→사용자 (기획안만 사용자 승인)
+- 다음 할 일: 다음 기능/버그 수정
+- 관련 파일: .claude/skills/meeting-jr-dev/SKILL.md, .claude/agents/*.md, CLAUDE.md
+- 푸시 여부: origin/main 푸시 완료 (1c97a50)
+
 ## 2026-08-27 (작업 PC: 로컬) — 세션 46 (speaker_map 이름 파싱 + 하네스 재정비 PR #61)
 - 브랜치: main (PR #61 squash 머지, 10279a0)
 - 완료:
