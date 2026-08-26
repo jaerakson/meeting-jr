@@ -1,3 +1,14 @@
+## 2026-08-26 (작업 PC: 로컬) — 세션 44 (diarization 재실행 프로필 추출 PR #59)
+- 브랜치: main (PR #59 squash 머지, bfab3b6)
+- 완료:
+  - _diarization.json 없지만 _16k.wav 있는 기존 회의에서 프로필 추출 시 diarization 자동 재실행
+  - audio_processor.py: run_diarization_and_save() 함수 추가 (pyannote 독립 실행 + JSON 저장)
+  - main.py: save-speaker-profile 엔드포인트에서 wav 있으면 재실행 분기 추가
+  - 절차: ai-engineer → qa-engineer (전항목 PASS) → 코드 리뷰 (이슈 0건) → 머지
+- 다음 할 일: 실제 테스트 (주일 예배 → 목사님 프로필 추출)
+- 관련 파일: backend/app/audio_processor.py, backend/app/main.py
+- 푸시 여부: origin/main 푸시 완료 (bfab3b6)
+
 ## 2026-08-26 (작업 PC: 로컬) — 세션 43 (프로필 추출 화자 이름 매칭 PR #58)
 - 브랜치: main (PR #58 squash 머지, 396e471)
 - 완료:
