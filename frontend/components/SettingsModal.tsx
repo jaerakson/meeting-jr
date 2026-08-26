@@ -1009,7 +1009,7 @@ export default function SettingsModal({ onClose, isDirtyRef }: Props) {
                           <option value="">화자 선택...</option>
                           {extractSpeakers.map(sp => (
                             <option key={sp} value={sp}>
-                              {extractSpeakerMap[sp] ? `${extractSpeakerMap[sp]} (${sp})` : sp}
+                              {extractSpeakerMap[sp] && extractSpeakerMap[sp] !== sp ? `${extractSpeakerMap[sp]} (${sp})` : sp}
                             </option>
                           ))}
                         </select>
