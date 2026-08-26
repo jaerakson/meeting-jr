@@ -1,3 +1,14 @@
+## 2026-08-26 (작업 PC: 로컬) — 세션 41 (목소리 프로필 추출 버그 수정 PR #56)
+- 브랜치: main (PR #56 squash 머지, adde99f)
+- 완료:
+  - 설정 > 목소리 프로필 > "기존 회의에서 추출" 버튼 무반응 버그 수정
+  - 프론트엔드: fetch 응답 상태(res.ok) 체크 추가, 에러 시 alert 표시, extracting 로딩 상태 추가
+  - 백엔드: txt 업로드 회의에서 프로필 추출 시도 시 사용자 친화적 에러 메시지 반환
+  - QA 검증 15/15 PASS, 백엔드 테스트 90건 전체 pass
+- 다음 할 일: 다음 기능 기획
+- 관련 파일: frontend/components/SettingsModal.tsx, backend/app/main.py
+- 푸시 여부: origin/main 푸시 완료 (adde99f)
+
 ## 2026-08-26 (작업 PC: 로컬) — 세션 40 (PDF 다크모드 + 트랜스크립트 제거 PR #55)
 - 브랜치: main (PR #55 squash 머지, 3260bdd)
 - 완료:
