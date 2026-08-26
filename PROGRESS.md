@@ -1,3 +1,16 @@
+## 2026-08-26 (작업 PC: 로컬) — 세션 42 (설정 모달 사이드바 이동 버그 수정 PR #57)
+- 브랜치: main (PR #57 squash 머지, d0cfc34)
+- 완료:
+  - 설정 화면이 열려있을 때 사이드바에서 회의록 클릭 시 설정을 닫고 해당 회의록으로 이동하도록 수정
+  - SettingsModal에 isDirtyRef prop 추가 (API 키 입력 중, 카테고리 편집 중일 때 dirty 판단)
+  - dirty 상태에서 이동 시 "변경사항을 저장하지 않고 이동하시겠습니까?" confirm 대화상자 표시
+  - 새 녹음 버튼에도 동일한 dirty check 적용
+  - TypeScript 타입 체크 통과, 백엔드 테스트 90건 전체 pass
+  - 코드리뷰: 이슈 없음 (통과)
+- 다음 할 일: 다음 기능/버그 수정
+- 관련 파일: frontend/app/page.tsx, frontend/components/SettingsModal.tsx
+- 푸시 여부: origin/main 푸시 완료 (d0cfc34)
+
 ## 2026-08-26 (작업 PC: 로컬) — 세션 41 (목소리 프로필 추출 버그 수정 PR #56)
 - 브랜치: main (PR #56 squash 머지, adde99f)
 - 완료:
