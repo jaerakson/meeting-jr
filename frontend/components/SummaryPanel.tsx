@@ -326,7 +326,7 @@ export default function SummaryPanel({ summary, jobId, initialRating, onSummaryU
   }
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div className="flex-1 min-h-0 flex flex-col bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
       {/* 헤더: 탭 + 버튼 */}
       <div className="flex items-center border-b border-gray-200 dark:border-gray-700 px-3 min-w-0">
         {isEditing ? (
