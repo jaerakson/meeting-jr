@@ -33,6 +33,7 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
   const [language, setLanguage] = useState('ko')
   const [notes, setNotes] = useState<RecordingNote[]>([])
   const [noteInput, setNoteInput] = useState('')
+  const notesRef = useRef<RecordingNote[]>([])
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const isCancelRef = useRef(false)
@@ -42,12 +43,20 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
   const animFrameRef = useRef<number>(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const updateNotes = (updater: (prev: RecordingNote[]) => RecordingNote[]) => {
+    setNotes(prev => {
+      const next = updater(prev)
+      notesRef.current = next
+      return next
+    })
+  }
+
   const addBookmark = () => {
     const note: RecordingNote = {
       id: crypto.randomUUID(),
       timestamp: seconds,
     }
-    setNotes(prev => [...prev, note])
+    updateNotes(prev => [...prev, note])
   }
 
   const addNote = () => {
@@ -58,21 +67,22 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
       timestamp: seconds,
       content: text,
     }
-    setNotes(prev => [...prev, note])
+    updateNotes(prev => [...prev, note])
     setNoteInput('')
   }
 
   const removeNote = (id: string) => {
-    setNotes(prev => prev.filter(n => n.id !== id))
+    updateNotes(prev => prev.filter(n => n.id !== id))
   }
 
   const sendNotes = async (jobId: string) => {
-    if (notes.length === 0) return
+    const current = notesRef.current
+    if (current.length === 0) return
     try {
       await fetch(`/api/jobs/${jobId}/notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes }),
+        body: JSON.stringify({ notes: current }),
       })
     } catch {
       // silent fail - notes are non-critical
@@ -154,7 +164,7 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
           setIsRecording(false)
           setIsPaused(false)
           setSeconds(0)
-          setNotes([])
+          updateNotes(() => [])
           setNoteInput('')
           chunksRef.current = []
           return
@@ -227,7 +237,7 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
       const res = await fetch('/api/record', { method: 'POST', body: formData })
       const data = await res.json()
       await sendNotes(data.job_id)
-      setNotes([])
+      updateNotes(() => [])
       setUploadDone(true)
       onRecordingComplete(data.job_id)
     } catch {
