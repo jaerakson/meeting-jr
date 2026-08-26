@@ -1,3 +1,19 @@
+## 2026-08-26 (작업 PC: 로컬) — 세션 37 (녹음 중 메모 + 북마크 PR #52)
+- 브랜치: main (PR #52 squash 머지, 6a12472)
+- 완료:
+  - 기능 B (트랜스크립트 전문 검색): PR #51로 이미 머지됨 확인, 스킵
+  - 기능 A (녹음 중 메모 + 북마크):
+    - recording_notes 테이블 신규 (database.py)
+    - POST/GET/DELETE /api/jobs/{job_id}/notes API 3개
+    - RecordingZone: 녹음 중 메모 입력 + 북마크(깃발) 버튼, notesRef로 stale closure 방지
+    - MainArea: done 상태에서 녹음 중 메모 표시 + 타임스탬프 클릭 시 오디오 이동
+    - RecordingNote 인터페이스 (types/index.ts)
+    - test_recording_notes.py 5건 추가 (전체 86 pass)
+  - 코드리뷰: stale closure bug 발견 → notesRef 사용으로 수정 후 머지
+- 다음 할 일: 다음 기능 기획
+- 관련 파일: backend/app/{database,main}.py, frontend/components/{RecordingZone,MainArea}.tsx, frontend/types/index.ts, backend/tests/test_recording_notes.py
+- 푸시 여부: origin/main 푸시 완료 (6a12472)
+
 ## 2026-08-26 (작업 PC: 로컬) — 세션 35 (타임스탬프→오디오 이동 + 카테고리 프롬프트 템플릿 PR #50)
 - 브랜치: main (PR #50 squash 머지, 2f1980a)
 - 완료:
