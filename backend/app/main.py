@@ -216,6 +216,9 @@ async def upload_file(
         await job_queue.put(job_id)
     elif ext in TEXT_EXTENSIONS:
         transcript_content = save_path.read_text(encoding="utf-8")
+        # 화자 자동 추출 (SPEAKER_XX 또는 "[MM:SS] 이름:" 패턴)
+        speaker_pattern = re.compile(r'\[[\d:]+\]\s+(SPEAKER_\d+|\w+):')
+        found_speakers = sorted(set(speaker_pattern.findall(transcript_content)))
         create_job(job_id, filename, title=title, category_id=effective_category_id, language=lang)
         update_job_result(job_id, transcript=transcript_content)
         update_job_status(job_id, "awaiting_edit")
@@ -224,7 +227,9 @@ async def upload_file(
             "progress": 100,
             "message": "편집 대기 중",
             "transcript": transcript_content,
-            "speakers": {},
+            "speakers": found_speakers,
+            "suggested_names": {},
+            "suggested_speakers": {},
         })
 
     return {"job_id": job_id, "filename": filename}
