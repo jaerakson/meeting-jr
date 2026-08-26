@@ -7,7 +7,8 @@
   - 헤더 영역(제목/날짜/이름) 자동 건너뛰기 (false positive 방지: `\d{2}:\d{2}` 엄격 매칭)
   - suggested_names에 원본 화자 이름 매핑 (TranscriptEditor에서 자동 표시)
   - 테스트 4건 추가 (ClovaNote 업로드 통합, 표준/ClovaNote/미인식 형식 단위 테스트, 전체 90 pass)
-- 다음 할 일: 실제 ClovaNote 파일로 E2E 테스트 (프론트엔드 TranscriptEditor 동작 확인)
+- E2E 테스트 완료: 실제 ClovaNote 파일(회의록.txt, 참석자 5명/91발화) 브라우저 업로드 → 화자 자동 파싱 → TranscriptEditor 렌더링 → 문서 생성(Claude 요약) → done 전환 모두 정상
+- 다음 할 일: 다음 기능 기획
 - 관련 파일: backend/app/main.py, backend/tests/test_upload.py
 - 푸시 여부: origin/main 푸시 완료 (e1a8393)
 
