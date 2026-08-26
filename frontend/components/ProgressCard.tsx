@@ -67,7 +67,7 @@ export default function ProgressCard({ jobId, onDone, onAwaitingEdit }: Progress
             es.close()
             onAwaitingEdit(
               data.transcript || '',
-              data.speakers || [],
+              Array.isArray(data.speakers) ? data.speakers : Object.keys(data.speakers || {}),
               data.suggested_names || {},
               data.suggested_speakers || {},
             )
