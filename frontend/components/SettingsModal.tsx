@@ -6,6 +6,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 
 interface Props {
   onClose: () => void
+  isDirtyRef?: React.MutableRefObject<boolean>
 }
 
 const KEY_LABELS: Record<string, string> = {
@@ -24,7 +25,7 @@ const CLAUDE_MODELS = [
 
 type Tab = 'general' | 'categories' | 'speakers'
 
-export default function SettingsModal({ onClose }: Props) {
+export default function SettingsModal({ onClose, isDirtyRef }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('general')
   const [status, setStatus] = useState<SettingsStatus | null>(null)
   const [values, setValues] = useState<Record<string, string>>({
@@ -219,6 +220,15 @@ export default function SettingsModal({ onClose }: Props) {
   const [showNewCatForm, setShowNewCatForm] = useState(false)
   const [newCatForm, setNewCatForm] = useState({ name: '', icon: '📋', description: '', prompt: '{script}', prompt_template: '', model: 'claude-sonnet-4-6' })
   const [previewPrompt, setPreviewPrompt] = useState<string | null>(null)
+
+  // dirty state 추적: 부모 컴포넌트가 참조할 수 있도록 ref에 반영
+  useEffect(() => {
+    if (!isDirtyRef) return
+    const hasApiKeyChanges = Object.values(values).some(v => v !== '')
+    const hasCatEdit = editingCatId !== null || showNewCatForm
+    const dirty = hasApiKeyChanges || hasCatEdit
+    isDirtyRef.current = dirty
+  }, [isDirtyRef, values, editingCatId, showNewCatForm])
 
   const loadCategories = () => {
     fetch('/api/categories').then(r => r.json()).then(setCategories).catch(() => {})
