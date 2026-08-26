@@ -47,7 +47,13 @@ director 에이전트는 아키텍처·UX·기술 세부사항에 대해 자율�
 3. `git push origin feature/<기능명>` 후 PR 생성
 4. **[필수] `/code-review:code-review` 스킬로 코드 리뷰** ← 반드시 실행, 생략 불가
 5. 리뷰 통과 후 `gh pr merge --squash --delete-branch` 로 머지
-6. `git checkout main && git pull && git branch -D feature/<기능명>` 로컬 브랜치 정리
+6. 로컬 브랜치 전체 정리 (main 제외 모든 브랜치 삭제):
+```bash
+git checkout main && git pull
+git branch | grep -v '^\* main' | xargs git branch -D
+git remote prune origin
+```
+> ⚠️ **`feature/<기능명>` 브랜치만 삭제하지 말 것.** 작업 중 생성된 임시 브랜치(pr-check, test 등)도 함께 삭제한다.
 
 > ⚠️ **코드 리뷰 없이 머지 절대 금지.** director 에이전트는 PR 생성 후 반드시 `/code-review:code-review` 스킬을 실행하고 리뷰 결과를 확인한 뒤 머지한다.
 
