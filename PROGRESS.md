@@ -1,3 +1,14 @@
+## 2026-08-27 (작업 PC: 로컬) — 세션 48 (프로필 추출 버그 수정 PR #62)
+- 브랜치: main (PR #62 squash 머지, d065e3e)
+- 완료:
+  - Backend: save_speaker_profile에서 매핑된 화자 이름(김팀장 등)으로 diarization 역조회 로직 추가
+  - Frontend: TranscriptEditor에서 suggestedNames를 names 초기값으로 사전 입력 (빈 문자열 대신)
+  - TDD: qa-engineer 테스트 먼저 작성 → backend-dev/frontend-dev 구현 → qa 재검증 (93/93 통과)
+  - 코드리뷰: /code-review 스킬 실행, 80점 이상 이슈 없음 → 통과
+- 다음 할 일: 다음 기능/버그 수정
+- 관련 파일: backend/app/main.py, backend/tests/test_speaker_profile.py, frontend/components/TranscriptEditor.tsx, frontend/__tests__/TranscriptEditor.test.tsx
+- 푸시 여부: origin/main 푸시 완료 (d065e3e)
+
 ## 2026-08-27 (작업 PC: 로컬) — 세션 47 (하네스 최종 프로세스 정립)
 - 브랜치: main (1c97a50)
 - 완료:
