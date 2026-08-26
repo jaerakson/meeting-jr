@@ -217,8 +217,7 @@ async def upload_file(
     elif ext in TEXT_EXTENSIONS:
         transcript_content = save_path.read_text(encoding="utf-8")
         # 화자 자동 추출 (SPEAKER_XX 또는 "[MM:SS] 이름:" 패턴)
-        import re
-        speaker_pattern = re.compile(r'\[[\d:]+\]\s+(SPEAKER_\d+|[^:]+):')
+        speaker_pattern = re.compile(r'\[[\d:]+\]\s+(SPEAKER_\d+|\w+):')
         found_speakers = sorted(set(speaker_pattern.findall(transcript_content)))
         create_job(job_id, filename, title=title, category_id=effective_category_id, language=lang)
         update_job_result(job_id, transcript=transcript_content)
