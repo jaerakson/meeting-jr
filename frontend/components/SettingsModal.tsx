@@ -41,6 +41,7 @@ export default function SettingsModal({ onClose }: Props) {
   const [saved, setSaved] = useState(false)
   const [claudeStatus, setClaudeStatus] = useState<ClaudeStatus | null>(null)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [denoiseEnabled, setDenoiseEnabled] = useState(false)
 
   // 화자 관련 상태
   const [speakers, setSpeakers] = useState<string[]>([])
@@ -223,6 +224,10 @@ export default function SettingsModal({ onClose }: Props) {
       .then(r => r.json())
       .then(setClaudeStatus)
       .catch(console.error)
+    fetch('/api/settings/denoise')
+      .then(r => r.json())
+      .then(data => setDenoiseEnabled(data.enabled))
+      .catch(() => {})
     loadCategories()
     loadSpeakers()
     loadVoiceProfiles()
@@ -249,6 +254,15 @@ export default function SettingsModal({ onClose }: Props) {
     } finally {
       setLoggingOut(false)
     }
+  }
+
+  const handleDenoiseToggle = async (enabled: boolean) => {
+    setDenoiseEnabled(enabled)
+    await fetch('/api/settings/denoise', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    }).catch(() => {})
   }
 
   const handleBackup = () => {
@@ -480,6 +494,26 @@ export default function SettingsModal({ onClose }: Props) {
                     </p>
                   )}
                 </div>
+              </div>
+
+              {/* 노이즈 제거 토글 */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div>
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-100">노이즈 제거</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {denoiseEnabled ? '배경음·에코 감소 활성화됨' : '배경음·에코가 심한 환경에서 STT 품질 향상'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleDenoiseToggle(!denoiseEnabled)}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${
+                    denoiseEnabled ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                    denoiseEnabled ? 'translate-x-5' : ''
+                  }`} />
+                </button>
               </div>
 
               {/* API 키 섹션 */}

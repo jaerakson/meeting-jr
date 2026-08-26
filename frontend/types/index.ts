@@ -46,6 +46,7 @@ export interface Job {
   tags?: string[]
   snippet?: string
   suggested_speakers?: Record<string, { name: string; confidence: number }>
+  rating?: number
 }
 
 export interface RelatedMeeting {

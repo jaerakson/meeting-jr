@@ -191,6 +191,11 @@ export default function MeetingCard({ job, searchQuery, onBookmark, onDelete, se
         {actionCount > 0 && (
           <span className="text-xs text-blue-600 font-medium">액션 아이템 {actionCount}건</span>
         )}
+        {job.rating && (
+          <span className="text-xs text-yellow-500">
+            {'★'.repeat(job.rating)}{'☆'.repeat(5 - job.rating)}
+          </span>
+        )}
         {job.notion_url && (
           <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded-full flex items-center gap-0.5">
             <svg className="w-2.5 h-2.5" viewBox="0 0 100 100" fill="currentColor">
