@@ -259,6 +259,9 @@ async def convert_audio(
     })
 
     def _convert() -> float:
+        from .settings_manager import get_setting
+        denoise_enabled = get_setting("AUDIO_DENOISE") == "true"
+
         probe = ffmpeg.probe(str(input_path))
         # format.duration이 없는 webm 등에 대한 폴백
         fmt = probe.get("format", {})
@@ -272,13 +275,23 @@ async def convert_audio(
                 if "duration" in s:
                     duration = float(s["duration"])
                     break
-        (
-            ffmpeg
-            .input(str(input_path))
-            .output(str(output_path), ar=16000, ac=1, f="wav")
-            .overwrite_output()
-            .run(quiet=True)
-        )
+
+        stream = ffmpeg.input(str(input_path))
+        if denoise_enabled:
+            stream = stream.audio.filter("afftdn", nf=-25).filter("highpass", f=200).filter("lowpass", f=3000)
+            (
+                ffmpeg
+                .output(stream, str(output_path), ar=16000, ac=1, f="wav")
+                .overwrite_output()
+                .run(quiet=True)
+            )
+        else:
+            (
+                ffmpeg
+                .output(stream, str(output_path), ar=16000, ac=1, f="wav")
+                .overwrite_output()
+                .run(quiet=True)
+            )
         return duration
 
     duration = await asyncio.to_thread(_convert)

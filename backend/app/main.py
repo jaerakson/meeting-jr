@@ -54,6 +54,7 @@ from .database import (
     delete_voice_profile,
     get_voice_profile_threshold,
     set_voice_profile_threshold,
+    update_job_rating,
 )
 from .job_queue import job_queue, start_worker, progress_store, update_progress
 from .settings_manager import get_settings_status, get_setting, set_setting, SETTING_KEYS
@@ -1527,3 +1528,57 @@ async def save_speaker_profile(job_id: str, body: dict):
         # 새 프로필 생성
         result = create_voice_profile(profile_name, new_emb.tobytes(), len(new_emb))
         return result
+
+
+# ---------------------------------------------------------------------------
+# 노이즈 제거 설정
+# ---------------------------------------------------------------------------
+
+@app.get("/api/settings/denoise")
+async def get_denoise_setting():
+    value = get_setting("AUDIO_DENOISE") or "false"
+    return {"enabled": value == "true"}
+
+
+@app.put("/api/settings/denoise")
+async def set_denoise_setting(body: dict):
+    enabled = bool(body.get("enabled", False))
+    set_setting("AUDIO_DENOISE", "true" if enabled else "false")
+    return {"enabled": enabled}
+
+
+# ---------------------------------------------------------------------------
+# 요약 품질 피드백 (별점)
+# ---------------------------------------------------------------------------
+
+@app.patch("/api/jobs/{job_id}/rating")
+async def rate_job(job_id: str, body: dict):
+    """별점(1~5) 저장."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+    rating = body.get("rating")
+    if not isinstance(rating, int) or not (1 <= rating <= 5):
+        raise HTTPException(status_code=422, detail="rating은 1~5 정수여야 합니다.")
+    update_job_rating(job_id, rating)
+    return {"ok": True, "rating": rating}
+
+
+@app.get("/api/stats/ratings")
+async def get_ratings_stats():
+    """카테고리별 평균 평점."""
+    from .database import _get_conn as _db_conn
+    conn = _db_conn()
+    try:
+        rows = conn.execute("""
+            SELECT category_id, AVG(rating) as avg_rating, COUNT(rating) as count
+            FROM meetings
+            WHERE rating IS NOT NULL AND status = 'done'
+            GROUP BY category_id
+        """).fetchall()
+    finally:
+        conn.close()
+    return [
+        {"category_id": r[0] or "meeting", "avg_rating": round(r[1], 1), "count": r[2]}
+        for r in rows
+    ]

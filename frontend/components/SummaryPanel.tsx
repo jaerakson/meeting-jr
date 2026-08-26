@@ -6,6 +6,7 @@ import { ActionItem } from '@/types'
 interface SummaryPanelProps {
   summary: string
   jobId: string
+  initialRating?: number
   onSummaryUpdate?: (newSummary: string) => void
   speakers?: Record<string, string>
   actionItems?: ActionItem[]
@@ -142,7 +143,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
   return nodes
 }
 
-export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers, actionItems: initialActionItems, categoryId: initialCategoryId }: SummaryPanelProps) {
+export default function SummaryPanel({ summary, jobId, initialRating, onSummaryUpdate, speakers, actionItems: initialActionItems, categoryId: initialCategoryId }: SummaryPanelProps) {
   const [activeTab, setActiveTab] = useState<typeof TABS[number]>('핵심 요약')
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(summary)
@@ -150,6 +151,9 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
   const [nameMap, setNameMap] = useState<Record<string, string>>({})
   const [copyFeedback, setCopyFeedback] = useState(false)
   const [actionItems, setActionItems] = useState<ActionItem[]>(initialActionItems || [])
+  const [rating, setRating] = useState(initialRating || 0)
+  const [hoverRating, setHoverRating] = useState(0)
+  const [ratingSaved, setRatingSaved] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
   const [showRegenModal, setShowRegenModal] = useState(false)
   const [regenCategoryId, setRegenCategoryId] = useState(initialCategoryId || 'meeting')
@@ -166,6 +170,8 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
     setNameMap({})
     setActionItems(initialActionItems || [])
     setRegenCategoryId(initialCategoryId || 'meeting')
+    setRating(initialRating || 0)
+    setHoverRating(0)
   }, [jobId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // initialActionItems가 외부에서 바뀌면 동기화
@@ -251,6 +257,17 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
       setIsSaving(false)
       setIsEditing(false)
     }
+  }
+
+  const handleRate = async (r: number) => {
+    setRating(r)
+    await fetch(`/api/jobs/${jobId}/rating`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rating: r }),
+    }).catch(() => {})
+    setRatingSaved(true)
+    setTimeout(() => setRatingSaved(false), 1500)
   }
 
   const handleRegenerate = async () => {
@@ -407,6 +424,25 @@ export default function SummaryPanel({ summary, jobId, onSummaryUpdate, speakers
         ) : (
           <div>{renderMarkdown(currentContent)}</div>
         )}
+      </div>
+      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 px-4 pb-3">
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">요약 품질 평가</p>
+        <div className="flex items-center gap-1">
+          {[1,2,3,4,5].map(i => (
+            <button
+              key={i}
+              onMouseEnter={() => setHoverRating(i)}
+              onMouseLeave={() => setHoverRating(0)}
+              onClick={() => handleRate(i)}
+              className={`text-xl transition-colors ${
+                i <= (hoverRating || rating)
+                  ? 'text-yellow-400'
+                  : 'text-gray-300 dark:text-gray-600'
+              }`}
+            >★</button>
+          ))}
+          {ratingSaved && <span className="text-xs text-green-600 dark:text-green-400 ml-2">피드백 감사합니다</span>}
+        </div>
       </div>
       {showRegenModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
