@@ -80,6 +80,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("memo", "TEXT"),
         ("tags", "TEXT"),
         ("suggested_speakers", "TEXT"),
+        ("rating", "INTEGER"),
     ]:
         if col not in existing:
             conn.execute(f"ALTER TABLE meetings ADD COLUMN {col} {definition}")
@@ -559,6 +560,19 @@ def get_all_tags() -> list[str]:
             except (json.JSONDecodeError, TypeError):
                 pass
         return sorted(tag_set)
+    finally:
+        conn.close()
+
+
+def update_job_rating(job_id: str, rating: int) -> None:
+    """별점(1~5)을 저장한다."""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE meetings SET rating = ? WHERE id = ?",
+            (rating, job_id),
+        )
+        conn.commit()
     finally:
         conn.close()
 
