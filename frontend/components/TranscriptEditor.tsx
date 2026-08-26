@@ -57,7 +57,7 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
       if (suggestedSpeakers?.[s]) {
         m[s] = suggestedSpeakers[s].name
       } else {
-        m[s] = ''
+        m[s] = suggestedNames[s] || ''
       }
     })
     return m

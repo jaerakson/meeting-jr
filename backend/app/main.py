@@ -1630,6 +1630,16 @@ async def save_speaker_profile(job_id: str, body: dict):
 
     diar_data = json.loads(diar_path.read_text(encoding="utf-8"))
     speaker_segs = diar_data.get(speaker_label)
+
+    # speaker_label이 매핑된 이름(예: "김팀장")인 경우, job.speakers에서 역조회
+    if not speaker_segs:
+        job_speakers = job.get("speakers") or {}
+        for key, val in job_speakers.items():
+            if val == speaker_label and key in diar_data:
+                speaker_label = key
+                speaker_segs = diar_data[key]
+                break
+
     if not speaker_segs:
         raise HTTPException(status_code=422, detail=f"화자 {speaker_label}의 구간을 찾을 수 없습니다.")
 
