@@ -394,15 +394,24 @@ def search_jobs(
         pages = max(1, (total + limit - 1) // limit)
         items = [_row_to_dict(r) for r in rows]
 
-        # 검색어가 있을 때 snippet 추가
+        # 검색어가 있을 때 snippet + snippet_source 추가
         if q:
             for item in items:
-                snippet = (
-                    _extract_snippet(item.get("title") or "", q)
-                    or _extract_snippet(item.get("summary") or "", q)
-                    or _extract_snippet(item.get("transcript") or "", q)
-                )
-                item["snippet"] = snippet
+                title_snip = _extract_snippet(item.get("title") or "", q)
+                summary_snip = _extract_snippet(item.get("summary") or "", q)
+                transcript_snip = _extract_snippet(item.get("transcript") or "", q)
+                if title_snip:
+                    item["snippet"] = title_snip
+                    item["snippet_source"] = "title"
+                elif summary_snip:
+                    item["snippet"] = summary_snip
+                    item["snippet_source"] = "summary"
+                elif transcript_snip:
+                    item["snippet"] = transcript_snip
+                    item["snippet_source"] = "transcript"
+                else:
+                    item["snippet"] = ""
+                    item["snippet_source"] = ""
 
         return {
             "items": items,

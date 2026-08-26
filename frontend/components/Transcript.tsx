@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useEffect, useRef, useState } from 'react'
+import { useMemo, useEffect, useRef, useState, ReactNode } from 'react'
 
 interface TranscriptProps {
   transcript: string
@@ -8,6 +8,7 @@ interface TranscriptProps {
   onTimeClick: (sec: number) => void
   editable?: boolean
   onTranscriptChange?: (transcript: string) => void
+  searchQuery?: string
 }
 
 interface TranscriptLine {
@@ -50,7 +51,24 @@ function serializeLines(lines: TranscriptLine[]): string {
   return lines.map(l => `[${l.timeStr}] ${l.speaker}: ${l.text}`).join('\n')
 }
 
-export default function Transcript({ transcript, currentTime, onTimeClick, editable, onTranscriptChange }: TranscriptProps) {
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function highlightSearchText(text: string, query: string | undefined): ReactNode {
+  if (!query || !text) return text
+  const escaped = escapeRegExp(query)
+  const regex = new RegExp(`(${escaped})`, 'gi')
+  const parts = text.split(regex)
+  if (parts.length === 1) return text
+  return parts.map((part, i) =>
+    regex.test(part)
+      ? <mark key={i} className="bg-yellow-200 dark:bg-yellow-700 text-inherit rounded-sm px-0.5">{part}</mark>
+      : part
+  )
+}
+
+export default function Transcript({ transcript, currentTime, onTimeClick, editable, onTranscriptChange, searchQuery }: TranscriptProps) {
   const parsedLines = useMemo(() => parseTranscript(transcript), [transcript])
   const [editLines, setEditLines] = useState<TranscriptLine[]>([])
   const [editIdx, setEditIdx] = useState<number | null>(null)
@@ -60,6 +78,8 @@ export default function Transcript({ transcript, currentTime, onTimeClick, edita
   const [renameText, setRenameText] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
   const activeRef = useRef<HTMLDivElement>(null)
+  const searchMatchRef = useRef<HTMLDivElement>(null)
+  const searchScrolledRef = useRef(false)
 
   // editable 모드 진입 시 로컬 편집 라인 초기화
   useEffect(() => {
@@ -93,11 +113,31 @@ export default function Transcript({ transcript, currentTime, onTimeClick, edita
     return idx
   }, [lines, currentTime, editable])
 
+  // 검색어가 포함된 첫 번째 라인 인덱스
+  const firstSearchMatchIdx = useMemo(() => {
+    if (!searchQuery || editable) return -1
+    const q = searchQuery.toLowerCase()
+    return lines.findIndex(l => l.text.toLowerCase().includes(q) || l.speaker.toLowerCase().includes(q))
+  }, [lines, searchQuery, editable])
+
+  // 검색어 변경 시 스크롤 플래그 리셋
   useEffect(() => {
-    if (!editable && activeRef.current) {
+    searchScrolledRef.current = false
+  }, [searchQuery])
+
+  // 검색 매치가 있으면 첫 매치로 자동 스크롤 (최초 1회)
+  useEffect(() => {
+    if (firstSearchMatchIdx >= 0 && searchMatchRef.current && !searchScrolledRef.current) {
+      searchScrolledRef.current = true
+      searchMatchRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [firstSearchMatchIdx])
+
+  useEffect(() => {
+    if (!editable && !searchQuery && activeRef.current) {
       activeRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
-  }, [activeIdx, editable])
+  }, [activeIdx, editable, searchQuery])
 
   const saveEdit = (idx: number, text: string) => {
     const updated = editLines.map((l, i) => i === idx ? { ...l, text } : l)
@@ -140,14 +180,19 @@ export default function Transcript({ transcript, currentTime, onTimeClick, edita
         const colorIdx = speakerColorMap.get(line.speaker) ?? 0
         const color = SPEAKER_COLORS[colorIdx]
         const isActive = idx === activeIdx
+        const isSearchMatch = !editable && searchQuery && (
+          line.text.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          line.speaker.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+        const isFirstMatch = idx === firstSearchMatchIdx
 
         return (
           <div
             key={idx}
-            ref={isActive ? activeRef : undefined}
+            ref={isFirstMatch ? searchMatchRef : (isActive ? activeRef : undefined)}
             className={`rounded-xl p-3 transition-all ${color.bg} ${
-              isActive ? 'ring-2 ring-accent ring-offset-1' : ''
-            }`}
+              isActive && !searchQuery ? 'ring-2 ring-accent ring-offset-1' : ''
+            } ${isSearchMatch ? 'ring-2 ring-yellow-400 ring-offset-1' : ''}`}
           >
             <div className="mb-1">
               {editable && editingSpeakerIdx === idx ? (
@@ -233,7 +278,9 @@ export default function Transcript({ transcript, currentTime, onTimeClick, edita
                 }}
                 title={editable ? '클릭하여 편집' : undefined}
               >
-                {line.text || <span className="text-gray-300 italic">(빈 발화)</span>}
+                {line.text
+                  ? (searchQuery && !editable ? highlightSearchText(line.text, searchQuery) : line.text)
+                  : <span className="text-gray-300 italic">(빈 발화)</span>}
               </p>
             )}
           </div>

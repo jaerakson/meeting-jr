@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useEffect, useCallback, use } from 'react'
+import { useState, useEffect, useCallback, use, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Job } from '@/types'
 import Sidebar from '@/components/Sidebar'
 import MainArea from '@/components/MainArea'
 
-export default function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+function MeetingDetailContent({ id }: { id: string }) {
+  const searchParams = useSearchParams()
+  const searchQuery = searchParams.get('q') || ''
   const [jobs, setJobs] = useState<Job[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -55,7 +57,22 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
         onJobsChange={fetchJobs}
         onNewRecording={(jobId: string) => { window.location.href = `/meetings/${jobId}` }}
         onOpenSidebar={() => setSidebarOpen(true)}
+        searchQuery={searchQuery}
       />
     </div>
+  )
+}
+
+export default function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
+
+  return (
+    <Suspense fallback={
+      <div className="flex h-dvh items-center justify-center">
+        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <MeetingDetailContent id={id} />
+    </Suspense>
   )
 }
