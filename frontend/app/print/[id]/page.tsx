@@ -27,32 +27,6 @@ function markdownToHtml(md: string): string {
     .replace(/^(?!<[hblctp])/gm, '')
 }
 
-// 스크립트 파싱 (화자별 컬러)
-function parseTranscript(transcript: string) {
-  const lines = transcript.split('\n').filter(Boolean)
-  const speakerColors: Record<string, string> = {}
-  const COLORS = ['#2563EB', '#16A34A', '#EA580C', '#7C3AED', '#DC2626']
-  let colorIdx = 0
-
-  return lines.map((line, i) => {
-    const match = line.match(/^\[(\d+:\d+(?::\d+)?)\]\s+([^:]+):\s*(.*)$/)
-    if (!match) return <p key={i} className="text-gray-500 text-sm">{line}</p>
-    const [, time, speaker, text] = match
-    if (!speakerColors[speaker]) {
-      speakerColors[speaker] = COLORS[colorIdx++ % COLORS.length]
-    }
-    return (
-      <div key={i} className="flex gap-3 py-1.5 border-b border-gray-100">
-        <span className="text-xs text-gray-400 w-12 shrink-0 pt-0.5">{time}</span>
-        <span className="text-xs font-semibold shrink-0 pt-0.5" style={{ color: speakerColors[speaker] }}>
-          {speaker}
-        </span>
-        <span className="text-sm text-gray-800">{text}</span>
-      </div>
-    )
-  })
-}
-
 export default function PrintPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const [job, setJob] = useState<Job | null>(null)
@@ -80,7 +54,7 @@ export default function PrintPage({ params }: { params: Promise<{ id: string }> 
   }
 
   if (!job) {
-    return <div className="p-8 text-gray-500">회의를 찾을 수 없습니다.</div>
+    return <div style={{ padding: 32, color: '#6b7280' }}>회의를 찾을 수 없습니다.</div>
   }
 
   const createdAt = job.created_at
@@ -90,6 +64,18 @@ export default function PrintPage({ params }: { params: Promise<{ id: string }> 
   return (
     <>
       <style>{`
+        /* PDF/인쇄 페이지는 항상 라이트 모드 강제 */
+        html, body {
+          background: #ffffff !important;
+          color: #1a1a1a !important;
+          color-scheme: light !important;
+        }
+        /* 다크모드 Tailwind 클래스 무력화: dark: 프리픽스 스타일 전부 리셋 */
+        .dark, [data-theme="dark"] {
+          color-scheme: light !important;
+          background-color: #ffffff !important;
+          color: #1a1a1a !important;
+        }
         @page {
           size: A4;
           margin: 20mm 15mm;
@@ -102,24 +88,30 @@ export default function PrintPage({ params }: { params: Promise<{ id: string }> 
           h3 { font-size: 11pt; }
           table { border-collapse: collapse; width: 100%; }
           td, th { border: 1px solid #ccc; padding: 4px 8px; font-size: 9pt; }
-          blockquote { border-left: 3px solid #ccc; margin: 0; padding-left: 12px; color: #555; }
+          blockquote { border-left: 3px solid #ccc; margin: 0; padding-left: 12px; color: #555 !important; }
           .page-break { page-break-before: always; }
-          .transcript-section { page-break-before: always; }
         }
-        body { font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; color: #1a1a1a; }
-        h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
-        h2 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; color: #1e293b; }
-        h3 { font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
-        p { margin: 6px 0; line-height: 1.6; font-size: 13px; }
+        body { font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; color: #1a1a1a !important; background: #ffffff !important; }
+        h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; color: #1a1a1a !important; }
+        h2 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; color: #1e293b !important; }
+        h3 { font-size: 13px; font-weight: 600; margin: 14px 0 6px; color: #1a1a1a !important; }
+        p { margin: 6px 0; line-height: 1.6; font-size: 13px; color: #1a1a1a !important; }
         ul, ol { margin: 4px 0; padding-left: 20px; }
-        li { margin: 3px 0; font-size: 13px; line-height: 1.5; }
-        blockquote { border-left: 3px solid #94a3b8; margin: 8px 0; padding: 6px 12px; background: #f8fafc; color: #475569; border-radius: 0 4px 4px 0; }
+        li { margin: 3px 0; font-size: 13px; line-height: 1.5; color: #1a1a1a !important; }
+        blockquote { border-left: 3px solid #94a3b8; margin: 8px 0; padding: 6px 12px; background: #f8fafc !important; color: #475569 !important; border-radius: 0 4px 4px 0; }
         table { border-collapse: collapse; width: 100%; margin: 8px 0; }
-        td, th { border: 1px solid #d1d5db; padding: 5px 10px; font-size: 12px; }
-        th { background: #f1f5f9; font-weight: 600; }
-        code { background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+        td, th { border: 1px solid #d1d5db; padding: 5px 10px; font-size: 12px; color: #1a1a1a !important; }
+        th { background: #f1f5f9 !important; font-weight: 600; }
+        code { background: #f1f5f9 !important; padding: 1px 4px; border-radius: 3px; font-size: 11px; color: #1a1a1a !important; }
         hr { border: none; border-top: 1px solid #e5e7eb; margin: 16px 0; }
         .todo { list-style: none; }
+        /* 인쇄 페이지 컨테이너 명시적 라이트 색상 */
+        .print-container { background: #ffffff !important; color: #1a1a1a !important; }
+        .print-container * { background-color: transparent !important; }
+        .print-container blockquote { background: #f8fafc !important; }
+        .print-container th { background: #f1f5f9 !important; }
+        .print-container code { background: #f1f5f9 !important; }
+        .print-meta { color: #6b7280 !important; }
       `}</style>
 
       {/* 인쇄 버튼 (화면에서만 표시) */}
@@ -138,11 +130,11 @@ export default function PrintPage({ params }: { params: Promise<{ id: string }> 
         </button>
       </div>
 
-      <div className="max-w-[800px] mx-auto px-8 py-10">
+      <div className="print-container" style={{ maxWidth: 800, margin: '0 auto', padding: '40px 32px', background: '#ffffff', color: '#1a1a1a' }}>
         {/* 헤더 */}
-        <div className="border-b-2 border-gray-800 pb-4 mb-6">
+        <div style={{ borderBottom: '2px solid #1f2937', paddingBottom: 16, marginBottom: 24 }}>
           <h1>{job.title || '회의록'}</h1>
-          <div className="flex gap-6 mt-2 text-sm text-gray-500">
+          <div className="print-meta" style={{ display: 'flex', gap: 24, marginTop: 8, fontSize: 14 }}>
             <span>일시: {createdAt}</span>
             {job.speakers && Object.keys(job.speakers).length > 0 && (
               <span>참석자: {Object.values(job.speakers).join(', ')}</span>
@@ -161,15 +153,7 @@ export default function PrintPage({ params }: { params: Promise<{ id: string }> 
           </div>
         )}
 
-        {/* 스크립트 */}
-        {job.transcript && (
-          <div className="transcript-section mt-8">
-            <h2>대화 스크립트</h2>
-            <div className="mt-3">
-              {parseTranscript(job.transcript)}
-            </div>
-          </div>
-        )}
+        {/* 대화 스크립트는 PDF에서 제외 (요약만 포함) */}
       </div>
     </>
   )
