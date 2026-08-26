@@ -365,7 +365,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             fallbackDuration={job.duration_sec}
           />
           <div className="flex-1 flex flex-col md:flex-row min-h-0">
-            <div className="md:w-[55%] flex flex-col min-h-0 border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 h-1/2 md:h-auto">
+            <div className="md:w-[55%] flex flex-col min-h-0 border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 h-1/2 md:h-full">
               <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-between flex-shrink-0">
                 <span className="text-xs font-medium text-gray-500 dark:text-gray-400">대화 스크립트</span>
                 <div className="flex items-center gap-2">
@@ -433,7 +433,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
                 searchQuery={searchQuery}
               />
             </div>
-            <div className="md:w-[45%] flex flex-col min-h-0 p-4 h-1/2 md:h-auto">
+            <div className="md:w-[45%] flex flex-col min-h-0 p-4 h-1/2 md:h-full overflow-y-auto">
               <SummaryPanel summary={job.summary || ''} jobId={job.id} initialRating={job.rating} onSummaryUpdate={onJobsChange} speakers={job.speakers} actionItems={job.action_items} categoryId={job.category_id} onTimeClick={handleTimeClick} />
               {recordingNotes.length > 0 && (
                 <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
