@@ -61,6 +61,7 @@ export default function SettingsModal({ onClose, isDirtyRef }: Props) {
   const [extractSpeakerLabel, setExtractSpeakerLabel] = useState('')
   const [extractProfileName, setExtractProfileName] = useState('')
   const [extractSpeakers, setExtractSpeakers] = useState<string[]>([])
+  const [extractSpeakerMap, setExtractSpeakerMap] = useState<Record<string, string>>({})
   const [extracting, setExtracting] = useState(false)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
@@ -970,14 +971,17 @@ export default function SettingsModal({ onClose, isDirtyRef }: Props) {
                         const jobId = e.target.value || null
                         setExtractFromJob(jobId)
                         setExtractSpeakerLabel('')
+                        setExtractProfileName('')
                         if (jobId) {
                           const job = doneJobs.find(j => j.id === jobId)
                           if (job?.speakers) {
                             setExtractSpeakers(Object.keys(job.speakers))
+                            setExtractSpeakerMap(job.speakers)
                           } else {
                             fetch(`/api/jobs/${jobId}`).then(r => r.json()).then((j: Job) => {
                               setExtractSpeakers(j.speakers ? Object.keys(j.speakers) : [])
-                            }).catch(() => setExtractSpeakers([]))
+                              setExtractSpeakerMap(j.speakers ?? {})
+                            }).catch(() => { setExtractSpeakers([]); setExtractSpeakerMap({}) })
                           }
                         }
                       }}
@@ -992,12 +996,21 @@ export default function SettingsModal({ onClose, isDirtyRef }: Props) {
                       <>
                         <select
                           value={extractSpeakerLabel}
-                          onChange={e => setExtractSpeakerLabel(e.target.value)}
+                          onChange={e => {
+                            const label = e.target.value
+                            setExtractSpeakerLabel(label)
+                            const mappedName = extractSpeakerMap[label]
+                            if (mappedName) {
+                              setExtractProfileName(mappedName)
+                            }
+                          }}
                           className="w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
                         >
                           <option value="">화자 선택...</option>
                           {extractSpeakers.map(sp => (
-                            <option key={sp} value={sp}>{sp}</option>
+                            <option key={sp} value={sp}>
+                              {extractSpeakerMap[sp] ? `${extractSpeakerMap[sp]} (${sp})` : sp}
+                            </option>
                           ))}
                         </select>
                         <input
