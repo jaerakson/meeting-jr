@@ -1,5 +1,5 @@
 ## 2026-08-27 (작업 PC: 로컬) — 세션 49 (PR #63~#67: diarization DB + SummaryPanel + 프로필 추출 + 음성 매칭 UX)
-- 브랜치: main (PR #63 0daed85, #64 937b501, #65 2d88f25, #66 bd33196, #67 8b62f3c)
+- 브랜치: main (PR #63 0daed85, #64 937b501, #65 2d88f25, #66 bd33196, #67 8b62f3c, hotfix fb5ef77)
 - 완료:
   - **PR #63 - Diarization DB 통합:**
     - meetings.diarization TEXT 컬럼 추가, DB 우선 조회 + lazy migration
@@ -16,11 +16,14 @@
     - MainArea: "🎤 음성 매칭" 버튼 + 결과 모달 + 전체 적용
     - _extract_and_match_speakers() 공통 함수 추출 (job_queue 인라인 → 재사용)
     - 코드리뷰 수정: handleApplyMatch null 필터링 + res.ok 검증
+  - **Hotfix fb5ef77 - rematch 모달 키 불일치 수정:**
+    - 모달이 speakers 키(아빠) 대신 rematchResult 키(SPEAKER_XX)로 순회하도록 수정
+    - Playwright 검증: SPEAKER_00 → 아빠 (100%) 매칭 + 전체 적용 성공 확인
   - 전체 105개 테스트 통과, 5건 코드리뷰 통과
 - 현재 상태: 안정
 - 다음 할 일: 다음 기능/버그 수정
 - 관련 파일: backend/app/database.py, job_queue.py, main.py, tests/test_speaker_profile.py, test_rematch_api.py, frontend/components/MainArea.tsx, SummaryPanel.tsx, TranscriptEditor.tsx
-- 푸시 여부: origin/main 푸시 완료 (8b62f3c)
+- 푸시 여부: origin/main 푸시 완료 (fb5ef77)
 
 ---
 
