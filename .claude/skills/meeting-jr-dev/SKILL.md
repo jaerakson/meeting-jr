@@ -16,6 +16,19 @@ director (총괄+아키텍트)
   └── qa-engineer
 ```
 
+### 팀 운영 규칙
+
+- **간단한 작업**: 필요한 개발자 에이전트를 직접 Agent() 호출 → qa-engineer 호출 → 코드 리뷰. TeamCreate 불필요.
+- **복잡한 기능 (멀티 에이전트 협업 필요)**: TeamCreate → director 총괄 → 팀원 분배 → qa-engineer → 코드 리뷰.
+- **공통**: 오케스트레이터가 직접 코드 수정 금지. 개발자 에이전트 → qa-engineer → 코드 리뷰 절차는 항상 유지.
+
+에이전트 역할:
+- **director**: 원인 분석 → 작업 설계 → 팀원 분배 → 결과 검수 (복잡한 작업 시만 소환)
+- **backend-dev**: 백엔드 코드 수정
+- **frontend-dev**: 프론트엔드 코드 수정
+- **ai-engineer**: AI/오디오 파이프라인 수정
+- **qa-engineer**: 테스트 작성 및 검증
+
 ## Phase 0: 컨텍스트 확인
 
 시작 전 기존 작업 상태를 확인한다:
