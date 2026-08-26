@@ -449,16 +449,17 @@ def create_category(
     description: str,
     prompt: str,
     model: str = "claude-sonnet-4-6",
+    prompt_template: str = "",
 ) -> dict:
     """사용자 카테고리를 생성하고 반환."""
     conn = _get_conn()
     try:
         conn.execute(
             """
-            INSERT INTO categories (id, name, icon, description, prompt, is_builtin, sort_order, model)
-            VALUES (?, ?, ?, ?, ?, 0, 99, ?)
+            INSERT INTO categories (id, name, icon, description, prompt, is_builtin, sort_order, model, prompt_template)
+            VALUES (?, ?, ?, ?, ?, 0, 99, ?, ?)
             """,
-            (cat_id, name, icon, description, prompt, model),
+            (cat_id, name, icon, description, prompt, model, prompt_template),
         )
         conn.commit()
         return get_category(cat_id)

@@ -449,7 +449,7 @@ export default function SummaryPanel({ summary, jobId, initialRating, onSummaryU
                 />
                 <span className={`text-sm ${item.done ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>
                   {item.assignee && <span className="font-medium text-blue-600 mr-1">@{item.assignee}</span>}
-                  {item.text}
+                  {parseInlineTimestamps(item.text, onTimeClick)}
                 </span>
               </label>
             ))}

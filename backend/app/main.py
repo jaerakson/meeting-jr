@@ -1059,6 +1059,7 @@ async def restore_settings(file: UploadFile = File(...)):
                     cat_data.get("description", ""),
                     cat_data.get("prompt", "{script}"),
                     model=cat_data.get("model", "claude-sonnet-4-6"),
+                    prompt_template=cat_data.get("prompt_template", ""),
                 )
         restored["categories"] = True
 
@@ -1118,8 +1119,9 @@ async def create_category_endpoint(body: dict):
         raise HTTPException(status_code=422, detail="prompt에 {script} 플레이스홀더가 필요합니다.")
 
     model = (body.get("model") or "claude-sonnet-4-6").strip()
+    prompt_template = (body.get("prompt_template") or "").strip()
     cat_id = str(uuid.uuid4())
-    return create_category(cat_id, name, icon, description, prompt, model=model)
+    return create_category(cat_id, name, icon, description, prompt, model=model, prompt_template=prompt_template)
 
 
 @app.patch("/api/categories/{cat_id}")
