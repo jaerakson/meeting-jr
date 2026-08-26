@@ -1,3 +1,18 @@
+## 2026-08-26 (작업 PC: 로컬) — 세션 40 (PDF 다크모드 + 트랜스크립트 제거 PR #55)
+- 브랜치: main (PR #55 squash 머지, 3260bdd)
+- 완료:
+  - 다크모드에서 PDF 저장 시 흰 배경에 흰 글자 출력 문제 수정
+    - html/body에 color-scheme: light 강제, .dark 클래스 무력화
+    - 모든 텍스트 요소에 !important로 명시적 라이트 색상 지정
+    - Tailwind className → inline style로 컨테이너 색상 고정
+  - PDF에서 대화 스크립트(트랜스크립트) 섹션 완전 제거, 요약만 포함
+  - 미사용 parseTranscript 함수 제거
+  - 코드리뷰: 이슈 없음 (통과)
+  - 백엔드 테스트 90건 전체 pass
+- 다음 할 일: 다음 기능 기획
+- 관련 파일: frontend/app/print/[id]/page.tsx
+- 푸시 여부: origin/main 푸시 완료 (3260bdd)
+
 ## 2026-08-26 (작업 PC: 로컬) — 세션 39 (ClovaNote txt 형식 파싱 수정 PR #54)
 - 브랜치: main (PR #54 squash 머지, e1a8393)
 - 완료:
