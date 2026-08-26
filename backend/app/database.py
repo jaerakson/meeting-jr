@@ -147,6 +147,15 @@ def init_db() -> None:
                 updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS recording_notes (
+                id         TEXT PRIMARY KEY,
+                job_id     TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+                timestamp  REAL NOT NULL,
+                content    TEXT,
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+            )
+        """)
         _migrate(conn)
         # categories 테이블 마이그레이션: model 컬럼
         cat_cols = {row[1] for row in conn.execute("PRAGMA table_info(categories)")}
@@ -754,3 +763,52 @@ def set_voice_profile_threshold(threshold: float) -> None:
     """매칭 임계값 저장."""
     from .settings_manager import set_setting
     set_setting("VOICE_MATCH_THRESHOLD", str(threshold))
+
+
+# ---------------------------------------------------------------------------
+# Recording Notes CRUD
+# ---------------------------------------------------------------------------
+
+def save_recording_notes(job_id: str, notes: list[dict]) -> list[dict]:
+    """녹음 중 메모/북마크 일괄 저장. notes: [{id, timestamp, content?}]"""
+    conn = _get_conn()
+    try:
+        for note in notes:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO recording_notes (id, job_id, timestamp, content)
+                VALUES (?, ?, ?, ?)
+                """,
+                (note["id"], job_id, note["timestamp"], note.get("content", "")),
+            )
+        conn.commit()
+        return get_recording_notes(job_id)
+    finally:
+        conn.close()
+
+
+def get_recording_notes(job_id: str) -> list[dict]:
+    """해당 job의 녹음 노트 목록 (timestamp 오름차순)."""
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM recording_notes WHERE job_id = ? ORDER BY timestamp ASC",
+            (job_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def delete_recording_note(job_id: str, note_id: str) -> bool:
+    """개별 노트 삭제. 성공 시 True."""
+    conn = _get_conn()
+    try:
+        cursor = conn.execute(
+            "DELETE FROM recording_notes WHERE id = ? AND job_id = ?",
+            (note_id, job_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        conn.close()

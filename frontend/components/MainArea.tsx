@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Job, Category, RelatedMeeting } from '@/types'
+import { Job, Category, RelatedMeeting, RecordingNote } from '@/types'
 import { useRouter } from 'next/navigation'
 import RecordingZone from './RecordingZone'
 import CategorySelect from './CategorySelect'
@@ -43,6 +43,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   const [resummarizeCategory, setResummarizeCategory] = useState<string>('meeting')
   const [categories, setCategories] = useState<Category[]>([])
   const [relatedMeetings, setRelatedMeetings] = useState<RelatedMeeting[]>([])
+  const [recordingNotes, setRecordingNotes] = useState<RecordingNote[]>([])
   const [memo, setMemo] = useState('')
   const [memoSaved, setMemoSaved] = useState(false)
   const [tags, setTags] = useState<string[]>([])
@@ -55,8 +56,13 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
         .then(r => r.json())
         .then(data => setRelatedMeetings(data.items || []))
         .catch(() => setRelatedMeetings([]))
+      fetch(`/api/jobs/${job.id}/notes`)
+        .then(r => r.json())
+        .then(data => setRecordingNotes(Array.isArray(data) ? data : []))
+        .catch(() => setRecordingNotes([]))
     } else {
       setRelatedMeetings([])
+      setRecordingNotes([])
     }
   }, [job?.id, job?.status])
 
@@ -428,6 +434,34 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             </div>
             <div className="md:w-[45%] flex flex-col min-h-0 p-4 h-1/2 md:h-auto">
               <SummaryPanel summary={job.summary || ''} jobId={job.id} initialRating={job.rating} onSummaryUpdate={onJobsChange} speakers={job.speakers} actionItems={job.action_items} categoryId={job.category_id} onTimeClick={handleTimeClick} />
+              {recordingNotes.length > 0 && (
+                <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
+                  <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">녹음 중 메모</h3>
+                  <div className="space-y-1.5">
+                    {recordingNotes.map(note => {
+                      const mins = Math.floor(note.timestamp / 60)
+                      const secs = Math.floor(note.timestamp % 60)
+                      const ts = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+                      return (
+                        <div
+                          key={note.id}
+                          className="flex items-center gap-2 text-xs px-2.5 py-1.5 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        >
+                          <button
+                            onClick={() => handleTimeClick(note.timestamp)}
+                            className="text-blue-500 hover:text-blue-700 font-mono flex-shrink-0 hover:underline"
+                          >
+                            [{ts}]
+                          </button>
+                          <span className="text-gray-600 dark:text-gray-300 flex-1">
+                            {note.content || '⚑ 북마크'}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
                 <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">태그</h3>
                 <div className="flex flex-wrap gap-1.5 mb-2">

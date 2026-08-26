@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { ClaudeStatus } from '@/types'
+import { ClaudeStatus, RecordingNote } from '@/types'
 import CategorySelect from './CategorySelect'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 
@@ -31,6 +31,8 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
   const [fileError, setFileError] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [language, setLanguage] = useState('ko')
+  const [notes, setNotes] = useState<RecordingNote[]>([])
+  const [noteInput, setNoteInput] = useState('')
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const isCancelRef = useRef(false)
@@ -39,6 +41,43 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animFrameRef = useRef<number>(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const addBookmark = () => {
+    const note: RecordingNote = {
+      id: crypto.randomUUID(),
+      timestamp: seconds,
+    }
+    setNotes(prev => [...prev, note])
+  }
+
+  const addNote = () => {
+    const text = noteInput.trim()
+    if (!text) return
+    const note: RecordingNote = {
+      id: crypto.randomUUID(),
+      timestamp: seconds,
+      content: text,
+    }
+    setNotes(prev => [...prev, note])
+    setNoteInput('')
+  }
+
+  const removeNote = (id: string) => {
+    setNotes(prev => prev.filter(n => n.id !== id))
+  }
+
+  const sendNotes = async (jobId: string) => {
+    if (notes.length === 0) return
+    try {
+      await fetch(`/api/jobs/${jobId}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes }),
+      })
+    } catch {
+      // silent fail - notes are non-critical
+    }
+  }
 
   const handleCategoryChange = (id: string) => {
     setCategoryId(id)
@@ -115,6 +154,8 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
           setIsRecording(false)
           setIsPaused(false)
           setSeconds(0)
+          setNotes([])
+          setNoteInput('')
           chunksRef.current = []
           return
         }
@@ -185,6 +226,8 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
     try {
       const res = await fetch('/api/record', { method: 'POST', body: formData })
       const data = await res.json()
+      await sendNotes(data.job_id)
+      setNotes([])
       setUploadDone(true)
       onRecordingComplete(data.job_id)
     } catch {
@@ -396,6 +439,48 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
                 <p className="text-sm text-gray-400 dark:text-gray-500">버튼을 눌러 녹음을 시작하세요</p>
                 <p className="text-xs text-gray-300 dark:text-gray-600 mt-2">Space: 녹음 시작 / 일시정지 / 재개</p>
               </>
+            )}
+            {isRecording && (
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={noteInput}
+                    onChange={e => setNoteInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNote() } }}
+                    placeholder="메모 입력..."
+                    className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={addNote}
+                    disabled={!noteInput.trim()}
+                    className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-40 transition-colors flex-shrink-0"
+                    title="메모 추가"
+                  >
+                    메모
+                  </button>
+                  <button
+                    onClick={addBookmark}
+                    className="w-10 h-10 flex items-center justify-center text-lg bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-900/40 dark:hover:bg-yellow-900/70 text-yellow-600 dark:text-yellow-400 rounded-lg transition-colors flex-shrink-0"
+                    title="북마크 추가"
+                  >
+                    ⚑
+                  </button>
+                </div>
+                {notes.length > 0 && (
+                  <div className="max-h-28 overflow-y-auto space-y-1 text-left">
+                    {notes.map(n => (
+                      <div key={n.id} className="flex items-center gap-2 text-xs px-2 py-1 bg-gray-50 dark:bg-gray-700 rounded">
+                        <span className="text-blue-500 font-mono flex-shrink-0">{formatTime(n.timestamp)}</span>
+                        <span className="text-gray-600 dark:text-gray-300 flex-1 truncate">
+                          {n.content || '⚑ 북마크'}
+                        </span>
+                        <button onClick={() => removeNote(n.id)} className="text-gray-400 hover:text-red-400 flex-shrink-0">&times;</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
             {isRecording && (
               <div className="flex items-center justify-center gap-4 mb-4">

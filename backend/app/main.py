@@ -55,6 +55,9 @@ from .database import (
     get_voice_profile_threshold,
     set_voice_profile_threshold,
     update_job_rating,
+    save_recording_notes,
+    get_recording_notes,
+    delete_recording_note,
 )
 from .job_queue import job_queue, start_worker, progress_store, update_progress
 from .settings_manager import get_settings_status, get_setting, set_setting, SETTING_KEYS
@@ -1177,6 +1180,39 @@ async def reset_category_prompt(cat_id: str):
         raise HTTPException(status_code=422, detail="해당 카테고리의 기본 프롬프트가 없습니다.")
 
     return update_category(cat_id, prompt=DEFAULT_PROMPTS[cat_id])
+
+
+# ---------------------------------------------------------------------------
+# Recording Notes API
+# ---------------------------------------------------------------------------
+
+@app.post("/api/jobs/{job_id}/notes")
+async def save_notes(job_id: str, body: dict):
+    """녹음 중 메모/북마크 일괄 저장."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+    notes = body.get("notes")
+    if not isinstance(notes, list):
+        raise HTTPException(status_code=422, detail="notes 리스트가 필요합니다.")
+    return save_recording_notes(job_id, notes)
+
+
+@app.get("/api/jobs/{job_id}/notes")
+async def list_notes(job_id: str):
+    """해당 job의 노트 목록."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+    return get_recording_notes(job_id)
+
+
+@app.delete("/api/jobs/{job_id}/notes/{note_id}")
+async def remove_note(job_id: str, note_id: str):
+    """개별 노트 삭제."""
+    if not delete_recording_note(job_id, note_id):
+        raise HTTPException(status_code=404, detail="노트를 찾을 수 없습니다.")
+    return {"status": "deleted", "id": note_id}
 
 
 # ---------------------------------------------------------------------------
