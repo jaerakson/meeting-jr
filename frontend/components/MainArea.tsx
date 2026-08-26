@@ -757,11 +757,11 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
               <p className="text-sm text-gray-500">등록된 음성 프로필이 없거나 매칭되는 화자가 없습니다.</p>
             ) : (
               <div className="space-y-2">
-                {job && Object.keys(job.speakers || {}).map(sp => {
-                  const match = rematchResult[sp]
+                {Object.entries(rematchResult).map(([sp, match]) => {
+                  const displayName = (job?.speakers || {})[sp] || sp
                   return (
                     <div key={sp} className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                      <span className="text-sm font-mono text-gray-500 dark:text-gray-400">{sp}</span>
+                      <span className="text-sm font-mono text-gray-500 dark:text-gray-400">{displayName}</span>
                       <span className="text-sm text-gray-400 mx-2">→</span>
                       {match ? (
                         <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
