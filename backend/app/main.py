@@ -1653,32 +1653,40 @@ async def save_speaker_profile(job_id: str, body: dict):
                 break
 
     # identity mapping ({아빠: 아빠}) 등으로 SPEAKER_XX 매핑이 소실된 경우,
-    # transcript 타임스탬프와 diarization 세그먼트를 교차 비교하여 추론
+    # transcript 구간과 diarization 세그먼트를 교차 비교하여 추론
     if not speaker_segs:
-        import re
         transcript = job.get("transcript") or ""
-        # transcript에서 해당 화자의 타임스탬프(초) 추출
-        speaker_times: list[float] = []
+        # transcript의 모든 발화 시작 시각을 파싱하여 각 화자의 구간을 구성
+        utterances: list[tuple[float, str]] = []  # (start_sec, speaker_name)
         for line in transcript.split("\n"):
-            m = re.match(r"\[(\d+):(\d+)\]\s*" + re.escape(speaker_label) + r"\s*:", line)
+            m = re.match(r"\[(\d+):(\d+)\]\s*(.+?):", line)
             if m:
-                speaker_times.append(int(m.group(1)) * 60 + int(m.group(2)))
-        if speaker_times:
-            # 각 SPEAKER_XX 키별로 타임스탬프 매칭 점수 계산
-            best_key = None
-            best_score = 0
-            for diar_key, segs in diar_data.items():
-                score = 0
-                for t in speaker_times:
+                t = int(m.group(1)) * 60 + int(m.group(2))
+                utterances.append((t, m.group(3).strip()))
+        if utterances:
+            # 각 발화의 시작~다음 발화 시작까지를 해당 화자의 구간으로 설정
+            target_ranges: list[tuple[float, float]] = []
+            for i, (t, name) in enumerate(utterances):
+                if name == speaker_label:
+                    end_t = utterances[i + 1][0] if i + 1 < len(utterances) else t + 30.0
+                    target_ranges.append((t, end_t))
+            if target_ranges:
+                # 각 SPEAKER_XX의 세그먼트가 target 구간에 겹치는 비율로 점수 계산
+                best_key = None
+                best_score = 0.0
+                for diar_key, segs in diar_data.items():
+                    score = 0.0
                     for seg in segs:
-                        if seg["start"] - 2.0 <= t <= seg["end"] + 2.0:
-                            score += 1
-                            break
-                if score > best_score:
-                    best_score = score
-                    best_key = diar_key
-            if best_key and best_score >= 1:
-                speaker_segs = diar_data[best_key]
+                        for rng_start, rng_end in target_ranges:
+                            overlap = min(seg["end"], rng_end) - max(seg["start"], rng_start)
+                            if overlap > 0:
+                                score += overlap
+                                break
+                    if score > best_score:
+                        best_score = score
+                        best_key = diar_key
+                if best_key and best_score > 0:
+                    speaker_segs = diar_data[best_key]
 
     if not speaker_segs:
         raise HTTPException(status_code=422, detail=f"화자 {speaker_label}의 구간을 찾을 수 없습니다.")
