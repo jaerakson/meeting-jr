@@ -25,9 +25,10 @@ interface Props {
   onOpenSidebar: () => void
   onExpandSidebar?: () => void
   sidebarCollapsed?: boolean
+  searchQuery?: string
 }
 
-export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSidebar, onExpandSidebar, sidebarCollapsed }: Props) {
+export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSidebar, onExpandSidebar, sidebarCollapsed, searchQuery }: Props) {
   const router = useRouter()
   const audioPlayerRef = useRef<AudioPlayerHandle>(null)
   const [currentTime, setCurrentTime] = useState(0)
@@ -422,6 +423,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
                 onTimeClick={handleTimeClick}
                 editable={isEditingTranscript}
                 onTranscriptChange={setLocalTranscript}
+                searchQuery={searchQuery}
               />
             </div>
             <div className="md:w-[45%] flex flex-col min-h-0 p-4 h-1/2 md:h-auto">

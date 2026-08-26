@@ -86,7 +86,10 @@ export default function MeetingCard({ job, searchQuery, onBookmark, onDelete, se
     if (selectMode && onSelect) {
       onSelect(job.id)
     } else {
-      router.push(`/meetings/${job.id}`)
+      const url = searchQuery
+        ? `/meetings/${job.id}?q=${encodeURIComponent(searchQuery)}`
+        : `/meetings/${job.id}`
+      router.push(url)
     }
   }
 
@@ -169,11 +172,16 @@ export default function MeetingCard({ job, searchQuery, onBookmark, onDelete, se
 
       {/* 요약 미리보기 또는 검색 snippet */}
       {(job.snippet || summaryPreview) && (
-        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed flex-1">
-          {job.snippet
-            ? highlightText(job.snippet, searchQuery)
-            : highlightText(summaryPreview, searchQuery)}
-        </p>
+        <div className="flex-1">
+          {job.snippet && job.snippet_source === 'transcript' && (
+            <span className="text-[10px] text-orange-600 dark:text-orange-400 font-medium mb-0.5 block">본문에서 발견</span>
+          )}
+          <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed">
+            {job.snippet
+              ? highlightText(job.snippet, searchQuery)
+              : highlightText(summaryPreview, searchQuery)}
+          </p>
+        </div>
       )}
 
       {/* 태그 */}

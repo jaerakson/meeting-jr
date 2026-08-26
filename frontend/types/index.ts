@@ -46,6 +46,7 @@ export interface Job {
   memo?: string
   tags?: string[]
   snippet?: string
+  snippet_source?: 'title' | 'summary' | 'transcript' | ''
   suggested_speakers?: Record<string, { name: string; confidence: number }>
   rating?: number
 }
