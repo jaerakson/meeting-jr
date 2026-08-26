@@ -1,3 +1,18 @@
+## 2026-08-26 (작업 PC: 로컬) — 세션 34 (노이즈 제거 + 요약 별점 PR #49)
+- 브랜치: main (PR #49 squash 머지, 36bc929)
+- 완료:
+  - 오디오 노이즈 제거: FFmpeg afftdn/highpass/lowpass 필터 조건부 적용 (설정 ON/OFF)
+  - GET/PUT /api/settings/denoise 엔드포인트
+  - SettingsModal 일반 탭 노이즈 제거 토글 스위치
+  - 요약 품질 별점: jobs 테이블 rating 컬럼 추가
+  - PATCH /api/jobs/{id}/rating, GET /api/stats/ratings API
+  - SummaryPanel ★★★★★ 별점 UI + 저장 확인 메시지
+  - MeetingCard 카드 하단 별점 표시
+  - 코드리뷰: 80점 이상 이슈 없음 → 통과
+- 다음 할 일: 실서버 테스트 (노이즈 제거 ON/OFF 효과, 별점 저장 확인)
+- 관련 파일: backend/app/{audio_processor,database,main}.py, frontend/components/{SettingsModal,SummaryPanel,MeetingCard,MainArea}.tsx, frontend/types/index.ts
+- 푸시 여부: origin/main 푸시 완료 (36bc929)
+
 ## 2026-08-26 (작업 PC: 로컬) — 세션 33 (목소리 프로필 자동 매칭 PR #48)
 - 브랜치: main (PR #48 squash 머지, 632daa3)
 - 완료:
