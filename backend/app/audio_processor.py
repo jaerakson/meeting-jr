@@ -369,6 +369,36 @@ async def run_diarization(
     return diarization
 
 
+async def run_diarization_and_save(wav_path: str, job_id: str) -> dict:
+    """
+    diarization을 실행하고 _diarization.json으로 저장한다.
+
+    progress_callback 없이 독립적으로 실행 가능한 버전.
+    _diarization.json이 없는 기존 회의에 대해 프로필 추출 시 사용.
+
+    Returns:
+        diar_segments: {"SPEAKER_00": [{"start": ..., "end": ..., "speaker": ...}, ...], ...}
+    """
+    def _noop_progress(job_id, data):
+        pass
+
+    diarization = await run_diarization(wav_path, _noop_progress, job_id)
+
+    diar_segments: dict[str, list[dict]] = {}
+    for turn, _, speaker in diarization.itertracks(yield_label=True):
+        diar_segments.setdefault(speaker, []).append({
+            "start": round(turn.start, 3),
+            "end": round(turn.end, 3),
+            "speaker": speaker,
+        })
+
+    diar_path = INPUT_DIR / f"{job_id}_diarization.json"
+    diar_path.write_text(json.dumps(diar_segments, ensure_ascii=False), encoding="utf-8")
+    logger.info("diarization JSON 재생성 완료: %s", diar_path)
+
+    return diar_segments
+
+
 # ---------------------------------------------------------------------------
 # 3. MLX-Whisper STT
 # ---------------------------------------------------------------------------

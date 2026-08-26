@@ -1602,7 +1602,22 @@ async def save_speaker_profile(job_id: str, body: dict):
     # diarization 세그먼트 파일에서 화자 구간 로드
     diar_path = INPUT_DIR / f"{job_id}_diarization.json"
     if not diar_path.exists():
-        raise HTTPException(status_code=422, detail="텍스트로 업로드된 회의는 음성 프로필을 추출할 수 없습니다. 음성 녹음 회의에서 추출해주세요.")
+        # _16k.wav가 있으면 diarization 재실행
+        wav_path_for_diar = INPUT_DIR / f"{job_id}_16k.wav"
+        if wav_path_for_diar.exists():
+            from .audio_processor import run_diarization_and_save
+            try:
+                await run_diarization_and_save(str(wav_path_for_diar), job_id)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"화자 분리 재실행에 실패했습니다: {e}",
+                )
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail="텍스트로 업로드된 회의는 음성 프로필을 추출할 수 없습니다. 음성 녹음 회의에서 추출해주세요.",
+            )
 
     diar_data = json.loads(diar_path.read_text(encoding="utf-8"))
     speaker_segs = diar_data.get(speaker_label)
