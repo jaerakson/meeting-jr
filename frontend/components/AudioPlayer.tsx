@@ -10,6 +10,7 @@ export interface AudioPlayerHandle {
 interface AudioPlayerProps {
   audioSrc: string
   onTimeUpdate: (sec: number) => void
+  fallbackDuration?: number
 }
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2]
@@ -20,37 +21,80 @@ function formatTime(sec: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(function AudioPlayer({ audioSrc, onTimeUpdate }, ref) {
+const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(function AudioPlayer({ audioSrc, onTimeUpdate, fallbackDuration }, ref) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [speed, setSpeed] = useState(1)
+  const durationFixAttempted = useRef(false)
+
+  const trySetDuration = useCallback((audio: HTMLAudioElement) => {
+    const d = audio.duration
+    if (isFinite(d) && d > 0) {
+      setDuration(d)
+      return true
+    }
+    return false
+  }, [])
 
   const handleTimeUpdate = useCallback(() => {
     const audio = audioRef.current
     if (!audio) return
     setCurrentTime(audio.currentTime)
     onTimeUpdate(audio.currentTime)
+    // webm duration fix: once playback starts, duration often becomes available
+    if (!isFinite(audio.duration) || audio.duration === 0) return
+    setDuration(prev => (prev === 0 || !isFinite(prev)) ? audio.duration : prev)
   }, [onTimeUpdate])
 
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
+    durationFixAttempted.current = false
 
-    const onLoaded = () => setDuration(audio.duration || 0)
+    const onDurationAvailable = () => {
+      if (trySetDuration(audio)) return
+      // webm workaround: seek to a large value to force browser to compute duration
+      if (!durationFixAttempted.current) {
+        durationFixAttempted.current = true
+        const prevTime = audio.currentTime
+        const onSeeked = () => {
+          audio.removeEventListener('seeked', onSeeked)
+          if (trySetDuration(audio)) {
+            // Restore original position
+            audio.currentTime = prevTime
+          } else if (fallbackDuration && fallbackDuration > 0) {
+            setDuration(fallbackDuration)
+            audio.currentTime = prevTime
+          }
+        }
+        audio.addEventListener('seeked', onSeeked)
+        // Seek to near-end to force duration calculation
+        audio.currentTime = 1e10
+      }
+    }
     const onEnded = () => setIsPlaying(false)
 
-    audio.addEventListener('loadedmetadata', onLoaded)
+    audio.addEventListener('loadedmetadata', onDurationAvailable)
+    audio.addEventListener('durationchange', onDurationAvailable)
     audio.addEventListener('timeupdate', handleTimeUpdate)
     audio.addEventListener('ended', onEnded)
 
     return () => {
-      audio.removeEventListener('loadedmetadata', onLoaded)
+      audio.removeEventListener('loadedmetadata', onDurationAvailable)
+      audio.removeEventListener('durationchange', onDurationAvailable)
       audio.removeEventListener('timeupdate', handleTimeUpdate)
       audio.removeEventListener('ended', onEnded)
     }
-  }, [handleTimeUpdate])
+  }, [handleTimeUpdate, trySetDuration, fallbackDuration])
+
+  // Apply fallback duration if audio duration stays unavailable
+  useEffect(() => {
+    if ((!isFinite(duration) || duration === 0) && fallbackDuration && fallbackDuration > 0) {
+      setDuration(fallbackDuration)
+    }
+  }, [fallbackDuration, duration])
 
   const togglePlay = () => {
     const audio = audioRef.current
@@ -119,7 +163,7 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(function Aud
 
   return (
     <div className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-      <audio ref={audioRef} src={audioSrc} preload="metadata" />
+      <audio ref={audioRef} src={audioSrc} preload="auto" />
 
       {/* 재생/일시정지 버튼 */}
       <button

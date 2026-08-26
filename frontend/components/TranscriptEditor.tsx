@@ -144,7 +144,14 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
         ref={audioRef}
         src={`/api/jobs/${jobId}/audio`}
         onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime ?? 0)}
-        onLoadedMetadata={() => setDuration(audioRef.current?.duration ?? 0)}
+        onLoadedMetadata={() => {
+          const d = audioRef.current?.duration ?? 0
+          if (isFinite(d) && d > 0) setDuration(d)
+        }}
+        onDurationChange={() => {
+          const d = audioRef.current?.duration ?? 0
+          if (isFinite(d) && d > 0) setDuration(d)
+        }}
         onEnded={() => setPlaying(false)}
       />
       <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
