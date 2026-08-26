@@ -5,7 +5,8 @@
   - audio_processor.py: run_diarization_and_save() 함수 추가 (pyannote 독립 실행 + JSON 저장)
   - main.py: save-speaker-profile 엔드포인트에서 wav 있으면 재실행 분기 추가
   - 절차: ai-engineer → qa-engineer (전항목 PASS) → 코드 리뷰 (이슈 0건) → 머지
-- 다음 할 일: 실제 테스트 (주일 예배 → 목사님 프로필 추출)
+- E2E 테스트 완료: 주일 예배 → 목사님(SPEAKER_00) 프로필 추출 성공 (pyannote/embedding 모델 수락 필요 — gated repo)
+- 다음 할 일: 다음 기능/버그 수정
 - 관련 파일: backend/app/audio_processor.py, backend/app/main.py
 - 푸시 여부: origin/main 푸시 완료 (bfab3b6)
 
