@@ -1457,6 +1457,98 @@ async def match_speaker_to_profiles(speaker_embedding: np.ndarray) -> dict | Non
     return None
 
 
+async def _extract_and_match_speakers(
+    job_id: str,
+    *,
+    wav_path: str | None = None,
+    diar_segments: dict | None = None,
+) -> dict | None:
+    """각 화자별 embedding 추출 → match_speaker_to_profiles 호출.
+
+    Returns:
+        {"SPEAKER_00": {"name": ..., "confidence": ..., "profile_id": ...} or None, ...}
+        diarization 없으면 None 반환.
+    """
+    from .audio_processor import extract_speaker_embedding
+    from .database import get_job_diarization
+
+    if diar_segments is None:
+        diar_segments = get_job_diarization(job_id)
+        if not diar_segments:
+            diar_path = INPUT_DIR / f"{job_id}_diarization.json"
+            if diar_path.exists():
+                diar_segments = json.loads(diar_path.read_text(encoding="utf-8"))
+                update_job_result(job_id, diarization=diar_segments)
+
+    if not diar_segments:
+        return None
+
+    if wav_path is None:
+        wav_path = str(INPUT_DIR / f"{job_id}_16k.wav")
+
+    result: dict = {}
+    for speaker_label, segs in diar_segments.items():
+        sorted_segs = sorted(segs, key=lambda s: s["end"] - s["start"], reverse=True)
+        selected = sorted_segs[:3]
+        embeddings = []
+        for seg in selected:
+            try:
+                emb = extract_speaker_embedding(wav_path, seg["start"], seg["end"])
+                embeddings.append(emb)
+            except Exception:
+                continue
+        if embeddings:
+            avg_emb = np.mean(embeddings, axis=0).astype(np.float32)
+            match_result = await match_speaker_to_profiles(avg_emb)
+            result[speaker_label] = match_result
+        else:
+            result[speaker_label] = None
+
+    return result
+
+
+@app.post("/api/jobs/{job_id}/rematch")
+async def rematch_speakers(job_id: str):
+    """완료된 회의의 화자를 voice profile과 재매칭."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+    if job["status"] != "done":
+        raise HTTPException(status_code=400, detail="완료된 회의만 재매칭할 수 있습니다.")
+
+    result = await _extract_and_match_speakers(job_id)
+    if result is None:
+        raise HTTPException(status_code=422, detail="화자 분리 데이터가 없습니다.")
+
+    return {"matches": result}
+
+
+@app.post("/api/jobs/{job_id}/apply-match")
+async def apply_match(job_id: str, body: dict):
+    """매칭된 화자명을 transcript와 speakers에 적용."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+    if job["status"] != "done":
+        raise HTTPException(status_code=400, detail="완료된 회의만 매칭 적용할 수 있습니다.")
+
+    matches = body.get("matches", {})
+    if not matches:
+        return {"ok": True}
+
+    transcript = job.get("transcript", "")
+    for old_name, new_name in matches.items():
+        transcript = transcript.replace(f"{old_name}:", f"{new_name}:")
+
+    speakers = job.get("speakers") or {}
+    if isinstance(speakers, str):
+        speakers = json.loads(speakers)
+    speakers.update(matches)
+
+    update_job_result(job_id, transcript=transcript, speakers=speakers)
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------------------
 # Voice Profiles API
 # ---------------------------------------------------------------------------
