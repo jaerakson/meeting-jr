@@ -205,10 +205,10 @@ export default function SettingsModal({ onClose }: Props) {
   // 카테고리 관련 상태
   const [categories, setCategories] = useState<Category[]>([])
   const [editingCatId, setEditingCatId] = useState<string | null>(null)
-  const [editCatForm, setEditCatForm] = useState({ name: '', icon: '', description: '', prompt: '', model: 'claude-sonnet-4-6' })
+  const [editCatForm, setEditCatForm] = useState({ name: '', icon: '', description: '', prompt: '', prompt_template: '', model: 'claude-sonnet-4-6' })
   const [catSaving, setCatSaving] = useState(false)
   const [showNewCatForm, setShowNewCatForm] = useState(false)
-  const [newCatForm, setNewCatForm] = useState({ name: '', icon: '📋', description: '', prompt: '{script}', model: 'claude-sonnet-4-6' })
+  const [newCatForm, setNewCatForm] = useState({ name: '', icon: '📋', description: '', prompt: '{script}', prompt_template: '', model: 'claude-sonnet-4-6' })
   const [previewPrompt, setPreviewPrompt] = useState<string | null>(null)
 
   const loadCategories = () => {
@@ -324,7 +324,7 @@ export default function SettingsModal({ onClose }: Props) {
 
   const handleEditCat = (cat: Category) => {
     setEditingCatId(cat.id)
-    setEditCatForm({ name: cat.name, icon: cat.icon, description: cat.description, prompt: cat.prompt, model: cat.model || 'claude-sonnet-4-6' })
+    setEditCatForm({ name: cat.name, icon: cat.icon, description: cat.description, prompt: cat.prompt, prompt_template: cat.prompt_template || '', model: cat.model || 'claude-sonnet-4-6' })
     setShowNewCatForm(false)
   }
 
@@ -375,7 +375,7 @@ export default function SettingsModal({ onClose }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newCatForm),
       })
-      setNewCatForm({ name: '', icon: '📋', description: '', prompt: '{script}', model: 'claude-sonnet-4-6' })
+      setNewCatForm({ name: '', icon: '📋', description: '', prompt: '{script}', prompt_template: '', model: 'claude-sonnet-4-6' })
       setShowNewCatForm(false)
       loadCategories()
     } catch {
@@ -712,6 +712,17 @@ export default function SettingsModal({ onClose }: Props) {
                           placeholder="{script} 위치에 스크립트가 삽입됩니다."
                         />
                       </div>
+                      <div>
+                        <label className="text-xs text-gray-500 dark:text-gray-400">요약 프롬프트 템플릿</label>
+                        <textarea
+                          value={editCatForm.prompt_template}
+                          onChange={e => setEditCatForm(p => ({ ...p, prompt_template: e.target.value }))}
+                          rows={3}
+                          className="w-full mt-1 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs font-mono text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                          placeholder="예) 기술 의사결정 위주로 요약하고, 아키텍처 변경사항을 별도 섹션으로 작성해줘"
+                        />
+                        <p className="text-xs text-gray-400 mt-0.5">비워두면 기본 프롬프트로 요약합니다</p>
+                      </div>
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleSaveCat(cat.id)}
@@ -775,6 +786,17 @@ export default function SettingsModal({ onClose }: Props) {
                     className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs font-mono text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
                     placeholder="{script} 위치에 스크립트가 삽입됩니다."
                   />
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400">요약 프롬프트 템플릿</label>
+                    <textarea
+                      value={newCatForm.prompt_template}
+                      onChange={e => setNewCatForm(p => ({ ...p, prompt_template: e.target.value }))}
+                      rows={3}
+                      className="w-full mt-1 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs font-mono text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                      placeholder="예) 기술 의사결정 위주로 요약하고, 아키텍처 변경사항을 별도 섹션으로 작성해줘"
+                    />
+                    <p className="text-xs text-gray-400 mt-0.5">비워두면 기본 프롬프트로 요약합니다</p>
+                  </div>
                   <div className="flex gap-2">
                     <button
                       onClick={handleCreateCat}

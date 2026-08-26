@@ -7,7 +7,7 @@ import RecordingZone from './RecordingZone'
 import CategorySelect from './CategorySelect'
 import ProgressCard from './ProgressCard'
 import TranscriptEditor from './TranscriptEditor'
-import AudioPlayer from './AudioPlayer'
+import AudioPlayer, { AudioPlayerHandle } from './AudioPlayer'
 import Transcript from './Transcript'
 import SummaryPanel from './SummaryPanel'
 
@@ -29,6 +29,7 @@ interface Props {
 
 export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSidebar, onExpandSidebar, sidebarCollapsed }: Props) {
   const router = useRouter()
+  const audioPlayerRef = useRef<AudioPlayerHandle>(null)
   const [currentTime, setCurrentTime] = useState(0)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleValue, setTitleValue] = useState('')
@@ -140,7 +141,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   }
 
   const handleTimeClick = useCallback((sec: number) => {
-    window.dispatchEvent(new CustomEvent('audio-seek', { detail: { time: sec } }))
+    audioPlayerRef.current?.seekTo(sec)
   }, [])
 
   const downloadTranscript = () => {
@@ -351,6 +352,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
       return (
         <div className="flex-1 flex flex-col min-h-0">
           <AudioPlayer
+            ref={audioPlayerRef}
             audioSrc={`/api/jobs/${job.id}/audio`}
             onTimeUpdate={setCurrentTime}
           />
@@ -423,7 +425,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
               />
             </div>
             <div className="md:w-[45%] flex flex-col min-h-0 p-4 h-1/2 md:h-auto">
-              <SummaryPanel summary={job.summary || ''} jobId={job.id} initialRating={job.rating} onSummaryUpdate={onJobsChange} speakers={job.speakers} actionItems={job.action_items} categoryId={job.category_id} />
+              <SummaryPanel summary={job.summary || ''} jobId={job.id} initialRating={job.rating} onSummaryUpdate={onJobsChange} speakers={job.speakers} actionItems={job.action_items} categoryId={job.category_id} onTimeClick={handleTimeClick} />
               <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
                 <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">태그</h3>
                 <div className="flex flex-wrap gap-1.5 mb-2">

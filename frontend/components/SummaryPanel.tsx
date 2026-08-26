@@ -11,6 +11,7 @@ interface SummaryPanelProps {
   speakers?: Record<string, string>
   actionItems?: ActionItem[]
   categoryId?: string
+  onTimeClick?: (seconds: number) => void
 }
 
 const TABS = ['핵심 요약', '주요 논의', '결정 사항', '액션 아이템'] as const
@@ -41,7 +42,39 @@ function extractSection(markdown: string, sectionName: string): string {
   return contentLines.join('\n').trim()
 }
 
-function renderMarkdown(text: string): React.ReactNode[] {
+function parseInlineTimestamps(text: string, onTimeClick?: (seconds: number) => void): React.ReactNode {
+  if (!onTimeClick) return text
+  const regex = /\[(\d{1,2}):(\d{2})\]/g
+  const parts: React.ReactNode[] = []
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  let keyIdx = 0
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index))
+    }
+    const minutes = parseInt(match[1], 10)
+    const seconds = parseInt(match[2], 10)
+    const totalSeconds = minutes * 60 + seconds
+    parts.push(
+      <button
+        key={`ts-${keyIdx++}`}
+        onClick={() => onTimeClick(totalSeconds)}
+        className="text-xs text-blue-500 hover:text-blue-700 hover:underline font-mono bg-blue-50 dark:bg-blue-900/30 px-1 py-0.5 rounded cursor-pointer transition-colors"
+      >
+        {match[0]}
+      </button>
+    )
+    lastIndex = regex.lastIndex
+  }
+
+  if (lastIndex === 0) return text
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex))
+  return <>{parts}</>
+}
+
+function renderMarkdown(text: string, onTimeClick?: (seconds: number) => void): React.ReactNode[] {
   const lines = text.split('\n')
   const nodes: React.ReactNode[] = []
 
@@ -58,7 +91,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
     if (line.startsWith('# ')) {
       nodes.push(
         <h1 key={i} className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">
-          {line.slice(2)}
+          {parseInlineTimestamps(line.slice(2), onTimeClick)}
         </h1>
       )
       continue
@@ -68,7 +101,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
     if (line.startsWith('## ')) {
       nodes.push(
         <h2 key={i} className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2 mt-3">
-          {line.slice(3)}
+          {parseInlineTimestamps(line.slice(3), onTimeClick)}
         </h2>
       )
       continue
@@ -78,7 +111,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
     if (line.startsWith('### ')) {
       nodes.push(
         <h3 key={i} className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1 mt-2">
-          {line.slice(4)}
+          {parseInlineTimestamps(line.slice(4), onTimeClick)}
         </h3>
       )
       continue
@@ -90,7 +123,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
       nodes.push(
         <div key={i} className="flex items-start gap-2 py-0.5">
           <input type="checkbox" disabled className="mt-1 flex-shrink-0" />
-          <span className="text-sm text-gray-700 dark:text-gray-300">{content}</span>
+          <span className="text-sm text-gray-700 dark:text-gray-300">{parseInlineTimestamps(content, onTimeClick)}</span>
         </div>
       )
       continue
@@ -102,7 +135,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
       nodes.push(
         <div key={i} className="flex items-start gap-2 py-0.5">
           <input type="checkbox" disabled checked className="mt-1 flex-shrink-0" />
-          <span className="text-sm text-gray-500 line-through">{content}</span>
+          <span className="text-sm text-gray-500 line-through">{parseInlineTimestamps(content, onTimeClick)}</span>
         </div>
       )
       continue
@@ -114,7 +147,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
       nodes.push(
         <div key={i} className="flex items-start gap-2 py-0.5 pl-1">
           <span className="text-gray-400 mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full bg-gray-400" />
-          <span className="text-sm text-gray-700 dark:text-gray-300">{content}</span>
+          <span className="text-sm text-gray-700 dark:text-gray-300">{parseInlineTimestamps(content, onTimeClick)}</span>
         </div>
       )
       continue
@@ -126,7 +159,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
       nodes.push(
         <div key={i} className="flex items-start gap-2 py-0.5 pl-1">
           <span className="text-sm text-gray-500 dark:text-gray-400 flex-shrink-0 font-medium">{numberedMatch[1]}.</span>
-          <span className="text-sm text-gray-700 dark:text-gray-300">{numberedMatch[2]}</span>
+          <span className="text-sm text-gray-700 dark:text-gray-300">{parseInlineTimestamps(numberedMatch[2], onTimeClick)}</span>
         </div>
       )
       continue
@@ -135,7 +168,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
     // 일반 텍스트
     nodes.push(
       <p key={i} className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-        {line}
+        {parseInlineTimestamps(line, onTimeClick)}
       </p>
     )
   }
@@ -143,7 +176,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
   return nodes
 }
 
-export default function SummaryPanel({ summary, jobId, initialRating, onSummaryUpdate, speakers, actionItems: initialActionItems, categoryId: initialCategoryId }: SummaryPanelProps) {
+export default function SummaryPanel({ summary, jobId, initialRating, onSummaryUpdate, speakers, actionItems: initialActionItems, categoryId: initialCategoryId, onTimeClick }: SummaryPanelProps) {
   const [activeTab, setActiveTab] = useState<typeof TABS[number]>('핵심 요약')
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(summary)
@@ -422,7 +455,7 @@ export default function SummaryPanel({ summary, jobId, initialRating, onSummaryU
             ))}
           </div>
         ) : (
-          <div>{renderMarkdown(currentContent)}</div>
+          <div>{renderMarkdown(currentContent, onTimeClick)}</div>
         )}
       </div>
       <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 px-4 pb-3">
