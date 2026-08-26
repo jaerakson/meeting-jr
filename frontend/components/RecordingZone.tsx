@@ -400,19 +400,19 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
             {isRecording && (
               <div className="flex items-center justify-center gap-4 mb-4">
                 {isPaused ? (
-                  <button onClick={resumeRecording} className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center transition-colors shadow-lg" title="재개">
+                  <button onClick={resumeRecording} className="w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center transition-colors shadow-lg" title="재개">
                     <svg className="w-6 h-6 ml-1" fill="currentColor" viewBox="0 0 24 24"><polygon points="8,5 19,12 8,19" /></svg>
                   </button>
                 ) : (
-                  <button onClick={pauseRecording} className="w-16 h-16 rounded-full bg-yellow-500 hover:bg-yellow-600 text-white flex items-center justify-center transition-colors shadow-lg" title="일시정지">
+                  <button onClick={pauseRecording} className="w-14 h-14 rounded-full bg-yellow-500 hover:bg-yellow-600 text-white flex items-center justify-center transition-colors shadow-lg" title="일시정지">
                     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" /><rect x="14" y="5" width="4" height="14" /></svg>
                   </button>
                 )}
-                <button onClick={stopRecording} className="w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-800 text-white flex items-center justify-center transition-colors shadow-lg" title="중지 및 처리">
+                <button onClick={stopRecording} className="w-14 h-14 rounded-full bg-gray-700 hover:bg-gray-800 text-white flex items-center justify-center transition-colors shadow-lg" title="중지 및 처리">
                   <span className="w-4 h-4 rounded bg-white" />
                 </button>
-                <button onClick={cancelRecording} className="w-10 h-10 rounded-full bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/70 text-red-500 dark:text-red-400 flex items-center justify-center transition-colors shadow-sm" title="녹음 삭제">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <button onClick={cancelRecording} className="w-14 h-14 rounded-full bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/70 text-red-500 dark:text-red-400 flex items-center justify-center transition-colors shadow-sm" title="녹음 삭제">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
                 </button>
