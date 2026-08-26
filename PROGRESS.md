@@ -1,3 +1,15 @@
+## 2026-08-26 (작업 PC: 로컬) — 세션 38 (txt 업로드 speakers 타입 불일치 수정 PR #53)
+- 브랜치: main (PR #53 squash 머지, f33d5cc)
+- 완료:
+  - 백엔드: txt 업로드 시 speakers를 빈 딕셔너리({}) → 화자 파싱 배열([])로 변경
+  - 백엔드: `\w+` regex로 `[MM:SS] SPEAKER_XX:` 패턴 자동 파싱, suggested_names/suggested_speakers 필드 추가
+  - 프론트: ProgressCard.tsx에 Array.isArray 방어 코드 추가 (딕셔너리→배열 변환)
+  - 중복 import re 제거 (모듈 최상단에 이미 존재)
+  - 코드리뷰: regex `[^:]+` 과도한 패턴 → `\w+`로 제한 (비화자 텍스트 캡처 방지)
+- 다음 할 일: 다음 기능 기획
+- 관련 파일: backend/app/main.py, frontend/components/ProgressCard.tsx
+- 푸시 여부: origin/main 푸시 완료 (f33d5cc)
+
 ## 2026-08-26 (작업 PC: 로컬) — 세션 37 (녹음 중 메모 + 북마크 PR #52)
 - 브랜치: main (PR #52 squash 머지, 6a12472)
 - 완료:
