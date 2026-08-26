@@ -1,3 +1,16 @@
+## 2026-08-26 (작업 PC: 로컬) — 세션 39 (ClovaNote txt 형식 파싱 수정 PR #54)
+- 브랜치: main (PR #54 squash 머지, e1a8393)
+- 완료:
+  - 백엔드: `_parse_txt_transcript()` 함수 추가 — ClovaNote 내보내기 형식 자동 감지 및 표준 형식 변환
+  - ClovaNote 형식: `참석자 N MM:SS\n텍스트` → `[MM:SS] SPEAKER_XX: 텍스트` 변환
+  - 멀티라인 발화 텍스트를 단일 줄로 병합
+  - 헤더 영역(제목/날짜/이름) 자동 건너뛰기 (false positive 방지: `\d{2}:\d{2}` 엄격 매칭)
+  - suggested_names에 원본 화자 이름 매핑 (TranscriptEditor에서 자동 표시)
+  - 테스트 4건 추가 (ClovaNote 업로드 통합, 표준/ClovaNote/미인식 형식 단위 테스트, 전체 90 pass)
+- 다음 할 일: 실제 ClovaNote 파일로 E2E 테스트 (프론트엔드 TranscriptEditor 동작 확인)
+- 관련 파일: backend/app/main.py, backend/tests/test_upload.py
+- 푸시 여부: origin/main 푸시 완료 (e1a8393)
+
 ## 2026-08-26 (작업 PC: 로컬) — 세션 38 (txt 업로드 speakers 타입 불일치 수정 PR #53)
 - 브랜치: main (PR #53 squash 머지, f33d5cc)
 - 완료:
