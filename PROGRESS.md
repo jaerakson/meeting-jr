@@ -1,3 +1,15 @@
+## 2026-08-27 (작업 PC: 로컬) — 세션 46 (speaker_map 이름 파싱 + 하네스 재정비 PR #61)
+- 브랜치: main (PR #61 squash 머지, 10279a0)
+- 완료:
+  - Backend: finalize 시 identity-mapped speaker_map 감지 → transcript에서 실제 이름 파싱 (이름 자체를 키로 사용)
+  - Frontend: 드롭다운에서 key===value일 때 중복 표시 방지
+  - 코드리뷰: sorted keys vs appearance order 매핑 버그 발견 → 수정 후 재리뷰 통과
+  - 하네스 전면 재정비: 팀 구조(director 최상위), Phase 0~5 재구성, brainstorming/worktree 추가
+  - teammate 소환 제약 발견: flat 구조 → 팀리드만 소환 가능, 스킬/에이전트 문서 반영
+- 다음 할 일: 다음 기능/버그 수정
+- 관련 파일: backend/app/main.py, frontend/components/SettingsModal.tsx, .claude/skills, .claude/agents
+- 푸시 여부: origin/main 푸시 완료 (72f0220)
+
 ## 2026-08-27 (작업 PC: 로컬) — 세션 45 (오디오 시크바 + duration 수정 PR #60)
 - 브랜치: main (PR #60 squash 머지, 7d5c365)
 - 완료:
