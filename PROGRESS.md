@@ -1,3 +1,17 @@
+## 2026-08-27 (작업 PC: 로컬) — 세션 45 (오디오 시크바 + duration 수정 PR #60)
+- 브랜치: main (PR #60 squash 머지, 7d5c365)
+- 완료:
+  - AudioPlayer: webm duration Infinity 문제 해결 (durationchange + seek-to-end 워크어라운드 + fallbackDuration 3단계 폴백)
+  - 시크바 클릭/드래그 탐색 활성화 (duration 정상화로 disabled 해제)
+  - MainArea: job.duration_sec를 fallbackDuration prop으로 전달
+  - TranscriptEditor: onDurationChange 핸들러 추가
+  - preload="metadata" → "auto" 변경
+  - 하네스 스킬 호출 시 무조건 TeamCreate 규칙 추가 (별도 창 표시)
+  - 절차: frontend-dev → qa-engineer (전항목 PASS) → 코드 리뷰 (이슈 0건) → 머지
+- 다음 할 일: 다음 기능/버그 수정
+- 관련 파일: frontend/components/AudioPlayer.tsx, MainArea.tsx, TranscriptEditor.tsx
+- 푸시 여부: origin/main 푸시 완료 (dc53501)
+
 ## 2026-08-26 (작업 PC: 로컬) — 세션 44 (diarization 재실행 프로필 추출 PR #59)
 - 브랜치: main (PR #59 squash 머지, bfab3b6)
 - 완료:
