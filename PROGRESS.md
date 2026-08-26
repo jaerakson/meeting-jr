@@ -1,4 +1,23 @@
-## 2026-08-27 (작업 PC: 로컬) — 세션 49 (diarization DB 통합 PR #63 + SummaryPanel 수정 PR #64)
+## 2026-08-27 (작업 PC: 로컬) — 세션 49 (PR #63~#66: diarization DB + SummaryPanel + 프로필 추출)
+- 브랜치: main (PR #63 0daed85, #64 937b501, #65 2d88f25, #66 bd33196)
+- 완료:
+  - **PR #63 - Diarization DB 통합:**
+    - meetings.diarization TEXT 컬럼 추가, DB 우선 조회 + lazy migration
+  - **PR #64 - SummaryPanel 높이 붕괴 수정:**
+    - md:h-auto → md:h-full, SummaryPanel flex-1 min-h-0, 하단 섹션 max-h-[35%] 래퍼
+  - **PR #65 - Identity-mapped speakers 프로필 추출 수정:**
+    - speakers {아빠: 아빠} 형태에서 SPEAKER_XX 매핑 소실 → transcript 타임스탬프 교차 비교 폴백
+  - **PR #66 - 타임스탬프 매칭 개선:**
+    - ±2초 포인트 매칭 → 구간 overlap 면적 매칭 (실제 데이터로 아빠 프로필 추출 성공 확인)
+  - 전체 96개 테스트 통과, 4건 코드리뷰 통과
+- 현재 상태: 안정
+- 다음 할 일: 다음 기능/버그 수정
+- 관련 파일: backend/app/database.py, job_queue.py, main.py, tests/test_speaker_profile.py, frontend/components/MainArea.tsx, SummaryPanel.tsx
+- 푸시 여부: origin/main 푸시 완료 (bd33196)
+
+---
+
+## 2026-08-27 (작업 PC: 로컬) — 세션 49 이전 기록 (diarization DB 통합 PR #63 + SummaryPanel 수정 PR #64)
 - 브랜치: main (PR #63 squash 머지 0daed85, PR #64 squash 머지 937b501)
 - 완료:
   - **PR #63 - Diarization DB 통합:**
