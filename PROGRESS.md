@@ -1,3 +1,21 @@
+## 2026-08-27 (작업 PC: 로컬) — 세션 49 (diarization DB 통합 PR #63 + SummaryPanel 수정 PR #64)
+- 브랜치: main (PR #63 squash 머지 0daed85, PR #64 squash 머지 937b501)
+- 완료:
+  - **PR #63 - Diarization DB 통합:**
+    - meetings.diarization TEXT 컬럼 추가 (마이그레이션)
+    - get_job_diarization() 경량 조회 헬퍼
+    - job_queue: process_audio 결과의 diarization을 DB에 저장
+    - save_speaker_profile: DB 우선 → 파일 폴백(lazy migration) → WAV 재실행 3단계 로직
+    - 테스트 2개 추가 (DB-only, lazy migration), 전체 95개 통과
+  - **PR #64 - SummaryPanel 높이 붕괴 버그 수정:**
+    - 원인: md:h-auto가 flex stretch 무효화 → SummaryPanel 2px 붕괴 → overflow-hidden 클리핑
+    - 수정: md:h-full + SummaryPanel flex-1 min-h-0 + 하단 섹션 max-h-[35%] 래퍼
+    - Playwright 검증: 385px 높이 + 탭/편집 버튼 동작 확인
+  - 두 PR 모두 코드리뷰 통과 (80점 이상 이슈 없음)
+- 다음 할 일: 다음 기능/버그 수정
+- 관련 파일: backend/app/database.py, backend/app/job_queue.py, backend/app/main.py, backend/tests/test_speaker_profile.py, frontend/components/MainArea.tsx, frontend/components/SummaryPanel.tsx
+- 푸시 여부: origin/main 푸시 완료 (0daed85)
+
 ## 2026-08-27 (작업 PC: 로컬) — 세션 48 (프로필 추출 버그 수정 PR #62)
 - 브랜치: main (PR #62 squash 머지, d065e3e)
 - 완료:
