@@ -96,6 +96,7 @@ async def generate_summary(
     progress_callback=None,
     model: str = "claude-sonnet-4-6",
     prompt_template: str | None = None,
+    extra_instructions: str | None = None,
 ) -> str:
     """
     화자 이름이 매핑된 스크립트를 Claude CLI로 요약한다.
@@ -138,6 +139,8 @@ async def generate_summary(
 
     # 4. Claude CLI로 요약 생성
     template = prompt_template if prompt_template else DEFAULT_PROMPT
+    if extra_instructions and extra_instructions.strip():
+        template = f"## 요약 지침\n{extra_instructions.strip()}\n\n{template}"
     if "{script}" in template:
         prompt = template.replace("{script}", script_content)
     else:

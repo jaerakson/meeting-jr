@@ -14,6 +14,7 @@ export interface Category {
   icon: string
   description: string
   prompt: string
+  prompt_template?: string
   model: string
   is_builtin: number
   sort_order: number

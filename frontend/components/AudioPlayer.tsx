@@ -1,7 +1,11 @@
 'use client'
 
-import { useRef, useState, useEffect, useCallback } from 'react'
+import { useRef, useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
+
+export interface AudioPlayerHandle {
+  seekTo: (seconds: number) => void
+}
 
 interface AudioPlayerProps {
   audioSrc: string
@@ -16,7 +20,7 @@ function formatTime(sec: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-export default function AudioPlayer({ audioSrc, onTimeUpdate }: AudioPlayerProps) {
+const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(function AudioPlayer({ audioSrc, onTimeUpdate }, ref) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -100,21 +104,18 @@ export default function AudioPlayer({ audioSrc, onTimeUpdate }: AudioPlayerProps
     }, []),
   })
 
-  // 외부에서 시크
-  useEffect(() => {
-    const handler = (e: CustomEvent<{ time: number }>) => {
+  useImperativeHandle(ref, () => ({
+    seekTo: (seconds: number) => {
       const audio = audioRef.current
       if (!audio) return
-      audio.currentTime = e.detail.time
-      setCurrentTime(e.detail.time)
+      audio.currentTime = seconds
+      setCurrentTime(seconds)
       if (!isPlaying) {
         audio.play()
         setIsPlaying(true)
       }
-    }
-    window.addEventListener('audio-seek' as string, handler as EventListener)
-    return () => window.removeEventListener('audio-seek' as string, handler as EventListener)
-  }, [isPlaying])
+    },
+  }), [isPlaying])
 
   return (
     <div className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
@@ -168,4 +169,6 @@ export default function AudioPlayer({ audioSrc, onTimeUpdate }: AudioPlayerProps
       </span>
     </div>
   )
-}
+})
+
+export default AudioPlayer

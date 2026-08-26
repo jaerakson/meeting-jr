@@ -357,6 +357,7 @@ async def run_summary(job_id: str, script_path: str, speaker_map: dict, category
         cat = get_category(category_id)
         _model = (cat.get("model") if cat else None) or get_setting("CLAUDE_MODEL") or "claude-sonnet-4-6"
         _prompt = cat["prompt"] if cat else (get_setting("CLAUDE_PROMPT") or None)
+        _prompt_template = (cat.get("prompt_template") if cat else None) or None
 
         summary = await generate_summary(
             script_path,
@@ -365,6 +366,7 @@ async def run_summary(job_id: str, script_path: str, speaker_map: dict, category
             lambda jid, data: update_progress(jid, data),
             model=_model,
             prompt_template=_prompt,
+            extra_instructions=_prompt_template,
         )
 
         output_path = OUTPUT_DIR / f"{job_id}_요약.md"
@@ -982,6 +984,7 @@ async def backup_settings():
             "prompt": cat["prompt"],
             "is_builtin": cat["is_builtin"],
             "model": cat.get("model", "claude-sonnet-4-6"),
+            "prompt_template": cat.get("prompt_template") or "",
         })
 
     backup = {
@@ -1047,7 +1050,7 @@ async def restore_settings(file: UploadFile = File(...)):
                 continue
             existing_cat = get_category(cat_id)
             if existing_cat:
-                update_category(cat_id, prompt=cat_data.get("prompt", existing_cat["prompt"]), model=cat_data.get("model", "claude-sonnet-4-6"))
+                update_category(cat_id, prompt=cat_data.get("prompt", existing_cat["prompt"]), model=cat_data.get("model", "claude-sonnet-4-6"), prompt_template=cat_data.get("prompt_template", ""))
             elif not cat_data.get("is_builtin"):
                 create_category(
                     cat_id,
@@ -1056,6 +1059,7 @@ async def restore_settings(file: UploadFile = File(...)):
                     cat_data.get("description", ""),
                     cat_data.get("prompt", "{script}"),
                     model=cat_data.get("model", "claude-sonnet-4-6"),
+                    prompt_template=cat_data.get("prompt_template", ""),
                 )
         restored["categories"] = True
 
@@ -1115,8 +1119,9 @@ async def create_category_endpoint(body: dict):
         raise HTTPException(status_code=422, detail="prompt에 {script} 플레이스홀더가 필요합니다.")
 
     model = (body.get("model") or "claude-sonnet-4-6").strip()
+    prompt_template = (body.get("prompt_template") or "").strip()
     cat_id = str(uuid.uuid4())
-    return create_category(cat_id, name, icon, description, prompt, model=model)
+    return create_category(cat_id, name, icon, description, prompt, model=model, prompt_template=prompt_template)
 
 
 @app.patch("/api/categories/{cat_id}")
@@ -1140,6 +1145,8 @@ async def update_category_endpoint(cat_id: str, body: dict):
         kwargs["prompt"] = p
     if "model" in body:
         kwargs["model"] = body["model"]
+    if "prompt_template" in body:
+        kwargs["prompt_template"] = body["prompt_template"]
 
     return update_category(cat_id, **kwargs)
 
