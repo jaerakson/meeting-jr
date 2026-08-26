@@ -49,6 +49,9 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
   const [copied, setCopied] = useState(false)
+  const [rematchLoading, setRematchLoading] = useState(false)
+  const [rematchResult, setRematchResult] = useState<Record<string, {name: string; confidence: number; profile_id: string}> | null>(null)
+  const [showRematchModal, setShowRematchModal] = useState(false)
 
   useEffect(() => {
     if (job?.status === 'done' && job.id) {
@@ -269,6 +272,52 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
       alert('Notion 내보내기 요청에 실패했습니다.')
     } finally {
       setNotionLoading(false)
+    }
+  }
+
+  const handleRematch = async () => {
+    if (!job) return
+    setRematchLoading(true)
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/rematch`, { method: 'POST' })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.detail || '매칭 실패')
+        return
+      }
+      const data = await res.json()
+      setRematchResult(data.matches || {})
+      setShowRematchModal(true)
+    } catch {
+      alert('음성 매칭 요청에 실패했습니다.')
+    } finally {
+      setRematchLoading(false)
+    }
+  }
+
+  const handleApplyMatch = async () => {
+    if (!job || !rematchResult) return
+    const matches: Record<string, string> = {}
+    for (const [label, info] of Object.entries(rematchResult)) {
+      if (info) matches[label] = info.name
+    }
+    if (Object.keys(matches).length === 0) return
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/apply-match`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matches }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.detail || '매칭 적용 실패')
+        return
+      }
+      setShowRematchModal(false)
+      setRematchResult(null)
+      onJobsChange()
+    } catch {
+      alert('매칭 적용에 실패했습니다.')
     }
   }
 
@@ -639,6 +688,15 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
                   PDF
                 </button>
               )}
+              {job.status === 'done' && (
+                <button
+                  onClick={handleRematch}
+                  disabled={rematchLoading}
+                  className="text-xs md:text-sm px-2 md:px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-60 flex items-center gap-1.5 transition-colors"
+                >
+                  {rematchLoading ? '매칭 중...' : '🎤 음성 매칭'}
+                </button>
+              )}
               <button
                 onClick={handleExportNotion}
                 disabled={notionLoading}
@@ -684,6 +742,51 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
               <button
                 onClick={() => setShowResummarizeModal(false)}
                 className="w-full py-2 text-sm text-gray-400 hover:text-gray-600"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showRematchModal && rematchResult && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-96 space-y-4">
+            <h3 className="font-semibold text-gray-800 dark:text-gray-100">음성 매칭 결과</h3>
+            {Object.keys(rematchResult).length === 0 ? (
+              <p className="text-sm text-gray-500">등록된 음성 프로필이 없거나 매칭되는 화자가 없습니다.</p>
+            ) : (
+              <div className="space-y-2">
+                {job && Object.keys(job.speakers || {}).map(sp => {
+                  const match = rematchResult[sp]
+                  return (
+                    <div key={sp} className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                      <span className="text-sm font-mono text-gray-500 dark:text-gray-400">{sp}</span>
+                      <span className="text-sm text-gray-400 mx-2">→</span>
+                      {match ? (
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                          {match.name} <span className="text-xs text-blue-500">({Math.round(match.confidence)}%)</span>
+                        </span>
+                      ) : (
+                        <span className="text-sm text-gray-400 italic">매칭 없음</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              {Object.keys(rematchResult).length > 0 && (
+                <button
+                  onClick={handleApplyMatch}
+                  className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  전체 적용
+                </button>
+              )}
+              <button
+                onClick={() => { setShowRematchModal(false); setRematchResult(null) }}
+                className="w-full py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
               >
                 취소
               </button>

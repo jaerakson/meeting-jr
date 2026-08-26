@@ -79,25 +79,14 @@ async def start_worker() -> None:
             diar_segments = result.get("diarization_segments", {})
             if wav_path and diar_segments:
                 try:
-                    from .audio_processor import extract_speaker_embedding
-                    from .main import match_speaker_to_profiles
-                    import numpy as _np
-
-                    for speaker_label, segs in diar_segments.items():
-                        sorted_segs = sorted(segs, key=lambda s: s["end"] - s["start"], reverse=True)
-                        selected = sorted_segs[:3]
-                        embeddings = []
-                        for seg in selected:
-                            try:
-                                emb = extract_speaker_embedding(wav_path, seg["start"], seg["end"])
-                                embeddings.append(emb)
-                            except Exception:
-                                continue
-                        if embeddings:
-                            avg_emb = _np.mean(embeddings, axis=0).astype(_np.float32)
-                            match_result = await match_speaker_to_profiles(avg_emb)
-                            if match_result:
-                                suggested_speakers[speaker_label] = match_result
+                    from .main import _extract_and_match_speakers
+                    match_result = await _extract_and_match_speakers(
+                        job_id, wav_path=wav_path, diar_segments=diar_segments,
+                    )
+                    if match_result:
+                        suggested_speakers = {
+                            k: v for k, v in match_result.items() if v is not None
+                        }
                 except Exception:
                     traceback.print_exc()
 

@@ -53,15 +53,11 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
   const [names, setNames] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {}
     initialSpeakers.forEach(s => {
-      // 자동 매칭 결과가 있으면 기본값으로 설정
-      if (suggestedSpeakers?.[s]) {
-        m[s] = suggestedSpeakers[s].name
-      } else {
-        m[s] = suggestedNames[s] || ''
-      }
+      m[s] = suggestedNames[s] || ''
     })
     return m
   })
+  const [appliedSpeakers, setAppliedSpeakers] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<string | null>(null)
   const [editId, setEditId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
@@ -99,6 +95,21 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
 
   const fmt = (s: number) =>
     `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+
+  const applySuggestion = (sp: string) => {
+    if (!suggestedSpeakers?.[sp]) return
+    setNames(prev => ({ ...prev, [sp]: suggestedSpeakers[sp].name }))
+    setAppliedSpeakers(prev => new Set(prev).add(sp))
+  }
+
+  const revertSuggestion = (sp: string) => {
+    setNames(prev => ({ ...prev, [sp]: suggestedNames[sp] || '' }))
+    setAppliedSpeakers(prev => {
+      const next = new Set(prev)
+      next.delete(sp)
+      return next
+    })
+  }
 
   const saveEdit = (id: string, text: string) => {
     setLines(prev => prev.map(l => l.id === id ? { ...l, text } : l))
@@ -223,9 +234,21 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
                   <div className="flex items-center gap-1 mt-1">
                     <span className="text-xs text-gray-400 dark:text-gray-500">{count}개 발화</span>
                     {suggestedSpeakers?.[sp] && (
-                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium">
-                        ✓ {Math.round(suggestedSpeakers[sp].confidence)}%
-                      </span>
+                      appliedSpeakers.has(sp) ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); revertSuggestion(sp) }}
+                          className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
+                        >
+                          ✓ {suggestedSpeakers[sp].name} 적용됨 ↩
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); applySuggestion(sp) }}
+                          className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-medium hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                        >
+                          👤 {suggestedSpeakers[sp].name} {Math.round(suggestedSpeakers[sp].confidence)}% 적용
+                        </button>
+                      )
                     )}
                   </div>
                 </div>
