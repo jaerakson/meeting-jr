@@ -1,3 +1,13 @@
+## 2026-08-26 (작업 PC: 로컬) — 세션 35 (타임스탬프→오디오 이동 + 카테고리 프롬프트 템플릿 PR #50)
+- 브랜치: main (PR #50 squash 머지, 2f1980a)
+- 완료:
+  - 타임스탬프 클릭→오디오 이동: AudioPlayer forwardRef+useImperativeHandle seekTo, MainArea audioPlayerRef, SummaryPanel parseInlineTimestamps
+  - 카테고리별 요약 프롬프트 템플릿: DB prompt_template 컬럼, CRUD API, SettingsModal textarea UI
+  - 코드리뷰 2건 수정: create_category prompt_template 누락 + 액션 아이템 타임스탬프 파싱
+- 다음 할 일: 3번(트랜스크립트 전문 검색) 또는 4번(녹음 중 북마크) 기획
+- 관련 파일: backend/app/{database,main,summarizer}.py, frontend/components/{AudioPlayer,MainArea,SummaryPanel,SettingsModal}.tsx, frontend/types/index.ts
+- 푸시 여부: origin/main 푸시 완료 (2f1980a)
+
 ## 2026-08-26 (작업 PC: 로컬) — 세션 34 (노이즈 제거 + 요약 별점 PR #49)
 - 브랜치: main (PR #49 squash 머지, 36bc929)
 - 완료:
@@ -9,7 +19,10 @@
   - SummaryPanel ★★★★★ 별점 UI + 저장 확인 메시지
   - MeetingCard 카드 하단 별점 표시
   - 코드리뷰: 80점 이상 이슈 없음 → 통과
-- 다음 할 일: 실서버 테스트 (노이즈 제거 ON/OFF 효과, 별점 저장 확인)
+- 테스트 완료:
+  - 별점 클릭 → PATCH 저장 → "피드백 감사합니다" 표시 → /meetings 카드 별 표시 ✓
+  - 노이즈 제거 토글 ON → API {"enabled": true} 저장 확인 ✓
+- 다음 할 일: 다음 기능 기획 (product-manager에게 요청)
 - 관련 파일: backend/app/{audio_processor,database,main}.py, frontend/components/{SettingsModal,SummaryPanel,MeetingCard,MainArea}.tsx, frontend/types/index.ts
 - 푸시 여부: origin/main 푸시 완료 (36bc929)
 
