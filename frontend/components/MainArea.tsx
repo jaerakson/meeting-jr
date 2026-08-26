@@ -362,6 +362,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             ref={audioPlayerRef}
             audioSrc={`/api/jobs/${job.id}/audio`}
             onTimeUpdate={setCurrentTime}
+            fallbackDuration={job.duration_sec}
           />
           <div className="flex-1 flex flex-col md:flex-row min-h-0">
             <div className="md:w-[55%] flex flex-col min-h-0 border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 h-1/2 md:h-auto">
