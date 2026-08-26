@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Job } from '@/types'
 import Sidebar from '@/components/Sidebar'
 import MainArea from '@/components/MainArea'
@@ -15,6 +15,7 @@ export default function Home() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showShortcutHelp, setShowShortcutHelp] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const settingsDirtyRef = useRef(false)
 
   useEffect(() => {
     setSidebarCollapsed(localStorage.getItem('sidebar-collapsed') === 'true')
@@ -72,6 +73,15 @@ export default function Home() {
 
   // Sidebar 클릭 시 URL 동기화
   const handleSelectJob = (id: string | null) => {
+    // 설정 모달이 열려있으면 닫기 (dirty 상태면 확인 대화상자)
+    if (showSettings) {
+      if (settingsDirtyRef.current) {
+        const confirmed = window.confirm('변경사항을 저장하지 않고 이동하시겠습니까?')
+        if (!confirmed) return
+      }
+      setShowSettings(false)
+      settingsDirtyRef.current = false
+    }
     setSelectedJobId(id)
     setSidebarOpen(false)
     if (id) {
@@ -114,7 +124,18 @@ export default function Home() {
           selectedJobId={selectedJobId}
           onSelectJob={handleSelectJob}
           onJobsChange={fetchJobs}
-          onNewRecording={() => { setSelectedJobId(null); setSidebarOpen(false) }}
+          onNewRecording={() => {
+            if (showSettings) {
+              if (settingsDirtyRef.current) {
+                const confirmed = window.confirm('변경사항을 저장하지 않고 이동하시겠습니까?')
+                if (!confirmed) return
+              }
+              setShowSettings(false)
+              settingsDirtyRef.current = false
+            }
+            setSelectedJobId(null)
+            setSidebarOpen(false)
+          }}
           onClose={() => setSidebarOpen(false)}
           onCollapse={toggleSidebarCollapsed}
           onShowSettings={() => setShowSettings(true)}
@@ -123,7 +144,7 @@ export default function Home() {
 
       {showSettings ? (
         <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
-          <SettingsModal onClose={() => setShowSettings(false)} />
+          <SettingsModal onClose={() => setShowSettings(false)} isDirtyRef={settingsDirtyRef} />
         </div>
       ) : (
         <MainArea
