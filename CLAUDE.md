@@ -20,7 +20,7 @@ M1 Mac 로컬 환경의 회의록 자동화 웹앱. 음성 파일 → 화자 분
 **팀 운영:**
 - meeting-jr-dev 스킬 호출 시 반드시 TeamCreate로 팀 구성 (별도 창 표시)
 - 간단한 작업: director가 필요한 개발자 + qa-engineer만 소환
-- 복잡한 기능(멀티 에이전트 협업 필요): director → product-manager 기획 → 팀원 분배
+- 복잡한 기능: director → product-manager(brainstorming) → 기획 → 팀원 분배
 - 공통: 오케스트레이터가 직접 코드를 수정하지 않는다. 개발자 에이전트 → qa-engineer → 코드 리뷰 절차는 항상 유지.
 - **에이전트는 반드시 별도 창(백그라운드)으로 실행한다** (`run_in_background: true`). 개발자 에이전트가 QA나 코드 리뷰를 대신하지 않는다.
 
