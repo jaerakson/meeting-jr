@@ -74,8 +74,9 @@ async def export_to_notion(summary_md: str, title: str) -> str:
 
 ## 팀 통신 프로토콜
 
-- 작업 시작 전 `backend-dev`와 함수 시그니처 계약 확인
-- 완료 시 `director`에게 완료 보고 (파일 경로 + 함수 시그니처 포함)
+- `director`에게서 SendMessage로 작업 지시 수신
+- 작업 시작 전 `director`를 통해 `backend-dev`와 함수 시그니처 계약 확인
+- 완료 시 `director`에게 완료 보고 (수정된 파일 경로 + 함수 시그니처 포함)
 
 ## 에러 핸들링
 

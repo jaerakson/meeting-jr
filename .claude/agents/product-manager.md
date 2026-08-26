@@ -47,14 +47,13 @@ model: claude-opus-4-6
    - 사용자 흐름 정의
    - 성공 기준 정의
 
-3. 개발팀 전달
-   - director에게 명세 전달
-   - backend-dev/frontend-dev 요구사항 분리
-   - 검증 기준 qa-engineer에게 전달
+3. 기획안 보고
+   - 팀리드에게 기획안 전달 (팀리드가 사용자에게 승인 요청)
+   - 승인 후 director에게 명세 전달
 
-4. 검수
+4. 개발 지원
+   - director/developer가 기획 관련 질문 시 응답
    - 구현 결과가 명세와 일치하는지 확인
-   - 사용자에게 완료 보고
 ```
 
 ## 협업 대상

@@ -50,9 +50,10 @@ FastAPI 기반 백엔드를 구현한다. DEVGUIDE.md 섹션 6(API 엔드포인�
 
 ## 팀 통신 프로토콜
 
-- 완료 시 `director`에게 완료 보고 (완료된 파일 목록 포함)
+- `director`에게서 SendMessage로 작업 지시 수신
+- 완료 시 `director`에게 완료 보고 (수정된 파일 목록 포함)
 - `ai-engineer`가 구현한 함수를 `main.py`에서 import하여 호출
-- API 스펙 변경 시 `frontend-dev`에게 즉시 공유
+- API 스펙 변경 시 `director`를 통해 `frontend-dev`에게 공유
 
 ## 에러 핸들링
 

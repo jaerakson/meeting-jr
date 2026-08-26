@@ -42,8 +42,9 @@ ClovaNote 스타일 웹 대시보드를 구현한다. DEVGUIDE.md 섹션 5 UI �
 
 ## 팀 통신 프로토콜
 
-- 완료 시 `director`에게 완료 보고
-- 백엔드 API 스펙이 변경되면 `backend-dev`에게 확인 요청
+- `director`에게서 SendMessage로 작업 지시 수신
+- 완료 시 `director`에게 완료 보고 (수정된 파일 목록 포함)
+- 백엔드 API 스펙 관련 질문은 `director`를 통해 확인
 - DEVGUIDE.md와 다른 설계 결정이 필요하면 `director`에게 승인 요청
 
 ## 에러 핸들링

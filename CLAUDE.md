@@ -19,10 +19,10 @@ M1 Mac 로컬 환경의 회의록 자동화 웹앱. 음성 파일 → 화자 분
 
 **팀 운영:**
 - meeting-jr-dev 스킬 호출 시 반드시 TeamCreate로 팀 구성 (별도 창 표시)
-- 간단한 작업: director가 필요한 개발자 + qa-engineer만 소환
-- 복잡한 기능: director → product-manager(brainstorming) → 기획 → 팀원 분배
-- 공통: 오케스트레이터가 직접 코드를 수정하지 않는다. 개발자 에이전트 → qa-engineer → 코드 리뷰 절차는 항상 유지.
-- **에이전트는 반드시 별도 창(백그라운드)으로 실행한다** (`run_in_background: true`). 개발자 에이전트가 QA나 코드 리뷰를 대신하지 않는다.
+- 팀리드가 상황 판단하여 적절한 에이전트를 먼저 소환 (기획→PM, 버그→director, 기능→director)
+- teammate는 다른 teammate 소환 불가 (시스템 제약) → 팀리드만 소환 가능
+- director가 팀원 요청 → 팀리드가 소환 → director가 SendMessage로 팀원 간 코디네이션
+- 공통: 오케스트레이터가 직접 코드를 수정하지 않는다. 개발자 에이전트 → qa-engineer → 코드 리뷰 절차는 항상 유지. 개발자 에이전트가 QA나 코드 리뷰를 대신하지 않는다.
 
 **총괄 자율 결정 권한:**
 director 에이전트는 아키텍처·UX·기술 세부사항에 대해 자율적으로 결정하고 진행한다.
@@ -36,6 +36,7 @@ director 에이전트는 아키텍처·UX·기술 세부사항에 대해 자율�
 **변경 이력:**
 | 날짜 | 변경 내용 | 대상 | 사유 |
 |------|----------|------|------|
+| 2026-08-27 | 하네스 팀 구조·프로세스 전면 재정비 | 전체 | TDD, 보고 체계, 소환 규칙, 팀리드 역할 명확화 |
 | 2026-08-23 | product-manager 에이전트 추가 | 하네스 팀 | 기획/명세 역할 분리 |
 | 2026-08-22 | DEVGUIDE.md 아키텍처/UX/기술 세부사항 보완 | DEVGUIDE.md | SQLite, Queue, Anthropic SDK, UX 기능 확정 |
 | 2026-08-22 | 초기 구성 | 전체 | - |
@@ -62,7 +63,7 @@ git remote prune origin
 ```
 > ⚠️ **`feature/<기능명>` 브랜치만 삭제하지 말 것.** 작업 중 생성된 임시 브랜치(pr-check, test 등)도 함께 삭제한다.
 
-> ⚠️ **코드 리뷰 없이 머지 절대 금지.** director 에이전트는 PR 생성 후 반드시 `/code-review:code-review` 스킬을 실행하고 리뷰 결과를 확인한 뒤 머지한다.
+> ⚠️ **코드 리뷰 없이 머지 절대 금지.** director가 PR 생성 후 팀리드에게 보고하고, 팀리드가 `/code-review:code-review` 스킬을 실행한다.
 
 **코드 리뷰 전 PR 생성 명령어:**
 ```bash
