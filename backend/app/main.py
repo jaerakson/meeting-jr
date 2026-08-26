@@ -216,11 +216,10 @@ async def upload_file(
         await job_queue.put(job_id)
     elif ext in TEXT_EXTENSIONS:
         transcript_content = save_path.read_text(encoding="utf-8")
-        # 화자 자동 추출 (SPEAKER_XX 또는 "[MM:SS] 이름:" 패턴)
-        speaker_pattern = re.compile(r'\[[\d:]+\]\s+(SPEAKER_\d+|\w+):')
-        found_speakers = sorted(set(speaker_pattern.findall(transcript_content)))
+        # ClovaNote 형식 감지 및 변환
+        transcript_content, found_speakers, suggested_names = _parse_txt_transcript(transcript_content)
         create_job(job_id, filename, title=title, category_id=effective_category_id, language=lang)
-        update_job_result(job_id, transcript=transcript_content)
+        update_job_result(job_id, transcript=transcript_content, speakers=suggested_names)
         update_job_status(job_id, "awaiting_edit")
         update_progress(job_id, {
             "stage": "awaiting_edit",
@@ -228,7 +227,7 @@ async def upload_file(
             "message": "편집 대기 중",
             "transcript": transcript_content,
             "speakers": found_speakers,
-            "suggested_names": {},
+            "suggested_names": suggested_names,
             "suggested_speakers": {},
         })
 
@@ -1315,6 +1314,80 @@ async def export_all_meetings():
         media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+def _parse_txt_transcript(raw: str) -> tuple[str, list[str], dict[str, str]]:
+    """텍스트 파일의 transcript를 파싱하여 표준 형식으로 변환하고 화자 목록을 반환한다.
+
+    지원 형식:
+      1) 표준: [MM:SS] SPEAKER_XX: 텍스트
+      2) ClovaNote: 참석자 N MM:SS\\n텍스트 (빈 줄로 구분)
+
+    Returns:
+        (변환된 transcript 문자열, 정렬된 화자 목록, suggested_names {SPEAKER_XX: 원본이름})
+    """
+    # 1) 표준 형식 검사
+    standard_pattern = re.compile(r'\[[\d:]+\]\s+(\S+):\s')
+    standard_speakers = sorted(set(standard_pattern.findall(raw)))
+    if standard_speakers:
+        return raw, standard_speakers, {}
+
+    # 2) ClovaNote 형식 변환
+    #    "참석자 N MM:SS" 또는 "화자이름 MM:SS" 패턴 (타임스탬프는 줄 끝)
+    clova_header = re.compile(r'^(.+?)\s+(\d{2}:\d{2})\s*$')
+    lines = raw.split('\n')
+    segments: list[tuple[str, str, list[str]]] = []  # (speaker, timestamp, text_lines)
+    current_speaker = None
+    current_ts = None
+    current_text: list[str] = []
+    # 헤더 건너뛰기: ClovaNote 파일 상단의 제목/날짜/이름 등
+    # 첫 번째 화자 헤더가 나올 때까지의 줄은 무시
+    started = False
+
+    for line in lines:
+        m = clova_header.match(line)
+        if m:
+            # 이전 세그먼트 저장
+            if current_speaker is not None and current_text:
+                segments.append((current_speaker, current_ts, current_text))
+            current_speaker = m.group(1).strip()
+            current_ts = m.group(2)
+            current_text = []
+            started = True
+        elif started:
+            stripped = line.strip()
+            if stripped:
+                current_text.append(stripped)
+            # 빈 줄은 무시 (세그먼트 구분자)
+
+    # 마지막 세그먼트 저장
+    if current_speaker is not None and current_text:
+        segments.append((current_speaker, current_ts, current_text))
+
+    if not segments:
+        # 어떤 형식도 감지 못함 — 원본 그대로 반환
+        return raw, [], {}
+
+    # 화자 ID 매핑 (원본 이름 → SPEAKER_XX)
+    unique_speakers = list(dict.fromkeys(s[0] for s in segments))
+    speaker_id_map = {name: f"SPEAKER_{i:02d}" for i, name in enumerate(unique_speakers)}
+
+    # 표준 형식으로 변환
+    result_lines = []
+    for speaker_name, ts, text_parts in segments:
+        speaker_id = speaker_id_map[speaker_name]
+        # MM:SS 형식 통일 (M:SS → 0M:SS)
+        parts = ts.split(':')
+        normalized_ts = f"{int(parts[0]):02d}:{int(parts[1]):02d}"
+        combined_text = ' '.join(text_parts)
+        result_lines.append(f"[{normalized_ts}] {speaker_id}: {combined_text}")
+
+    converted = '\n'.join(result_lines)
+    found_speakers = sorted(speaker_id_map.values())
+    # suggested_names: SPEAKER_XX → 원본 이름 (TranscriptEditor에서 화자 이름 자동 입력)
+    suggested_names = {sid: name for name, sid in speaker_id_map.items()}
+
+    return converted, found_speakers, suggested_names
 
 
 def _save_speakers(speaker_map: dict) -> None:
