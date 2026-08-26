@@ -33,11 +33,17 @@ director (총괄+아키텍트)
 
 ### 팀원 소환 규칙 (필수)
 
-> ⚠️ 팀원을 소환할 때 반드시 `team_name`과 `name` 파라미터를 지정해야 별도 창으로 표시된다.
-> `run_in_background: true`만으로는 별도 창이 안 뜬다.
+> ⚠️ **teammate는 다른 teammate를 소환할 수 없다** (시스템 제약: 팀 구조가 flat).
+> 팀원 소환은 **팀리드(오케스트레이터)만** 가능하다.
+
+**운영 방식:**
+1. 팀리드가 director를 소환 (`team_name` + `name` 필수 → 별도 창)
+2. director가 분석 후 **팀리드에게 필요한 팀원 목록을 보고**
+3. **팀리드가 직접** 개발자/qa-engineer를 소환 (`team_name` + `name` 필수)
+4. 소환된 팀원에게 director가 SendMessage로 작업 지시
 
 ```
-# 올바른 소환 방법 (별도 창 O)
+# 팀리드만 소환 가능 (별도 창 O)
 Agent(
   description="Backend: 작업 설명",
   subagent_type="backend-dev",
