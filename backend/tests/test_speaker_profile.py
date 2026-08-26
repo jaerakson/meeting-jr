@@ -36,22 +36,24 @@ def setup_job_with_diarization(tmp_path, client):
 
     input_dir = tmp_path / "input"
 
-    def _setup(speakers: dict, diarization: dict):
+    def _setup(speakers: dict, diarization: dict, *, save_diar_file: bool = True):
         # job 생성
         job = dbmod.create_job("test.webm", "meeting")
         job_id = job["id"]
 
-        # job을 done 상태로 + speakers 매핑 설정
+        # job을 done 상태로 + speakers 매핑 + diarization DB 저장
         dbmod.update_job_result(
             job_id,
             transcript="[00:00] SPEAKER_00: 안녕하세요\n[00:05] SPEAKER_01: 반갑습니다",
             speakers=speakers,
+            diarization=diarization,
             status="done",
         )
 
-        # diarization JSON 파일 생성
-        diar_path = input_dir / f"{job_id}_diarization.json"
-        diar_path.write_text(json.dumps(diarization), encoding="utf-8")
+        if save_diar_file:
+            # diarization JSON 파일 생성 (하위 호환)
+            diar_path = input_dir / f"{job_id}_diarization.json"
+            diar_path.write_text(json.dumps(diarization), encoding="utf-8")
 
         # 더미 WAV 파일 생성 (실제 embedding 추출은 mock)
         wav_path = input_dir / f"{job_id}_16k.wav"
@@ -149,3 +151,65 @@ def test_save_profile_with_identity_mapping(mock_emb, client, setup_job_with_dia
     data = res.json()
     assert "id" in data
     assert data["name"] == "테스트화자"
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 테스트 2-1: diarization 파일 없이 DB에만 있을 때 프로필 추출 성공
+# ─────────────────────────────────────────────────────────────────────
+@patch("app.audio_processor.extract_speaker_embedding", side_effect=_mock_embedding)
+def test_save_profile_db_only_no_file(mock_emb, client, setup_job_with_diarization):
+    """diarization JSON 파일이 없어도 DB에 저장된 데이터로 프로필 추출이 성공해야 한다."""
+    speakers = {"SPEAKER_00": "김팀장", "SPEAKER_01": "이대리"}
+    diarization = {
+        "SPEAKER_00": [{"start": 0.0, "end": 5.0}, {"start": 10.0, "end": 15.0}],
+        "SPEAKER_01": [{"start": 5.0, "end": 10.0}],
+    }
+
+    job_id = setup_job_with_diarization(speakers, diarization, save_diar_file=False)
+
+    res = client.post(
+        f"/api/jobs/{job_id}/save-speaker-profile",
+        json={"speaker_label": "SPEAKER_00", "profile_name": "김팀장"},
+    )
+
+    assert res.status_code == 200, f"DB-only diarization 프로필 추출 실패: {res.json()}"
+    data = res.json()
+    assert "id" in data
+    assert data["name"] == "김팀장"
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 테스트 2-2: 파일만 있고 DB에 없을 때 lazy migration 확인
+# ─────────────────────────────────────────────────────────────────────
+@patch("app.audio_processor.extract_speaker_embedding", side_effect=_mock_embedding)
+def test_save_profile_lazy_migration_from_file(mock_emb, tmp_path, client, setup_job_with_diarization):
+    """파일에만 diarization이 있을 때 프로필 추출 후 DB에 lazy migration되어야 한다."""
+    import app.database as dbmod
+
+    speakers = {"SPEAKER_00": "김팀장"}
+    diarization = {
+        "SPEAKER_00": [{"start": 0.0, "end": 5.0}, {"start": 10.0, "end": 15.0}],
+    }
+
+    job_id = setup_job_with_diarization(speakers, diarization, save_diar_file=True)
+
+    # DB에서 diarization 지우기 (파일만 남기기)
+    conn = dbmod._get_conn()
+    try:
+        conn.execute("UPDATE meetings SET diarization = NULL WHERE id = ?", (job_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    assert dbmod.get_job_diarization(job_id) is None
+
+    res = client.post(
+        f"/api/jobs/{job_id}/save-speaker-profile",
+        json={"speaker_label": "SPEAKER_00", "profile_name": "김팀장"},
+    )
+
+    assert res.status_code == 200
+    # lazy migration 확인: DB에 diarization이 저장되었는지
+    migrated = dbmod.get_job_diarization(job_id)
+    assert migrated is not None
+    assert "SPEAKER_00" in migrated
