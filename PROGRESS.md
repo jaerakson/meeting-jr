@@ -1,5 +1,5 @@
-## 2026-08-27 (작업 PC: 로컬) — 세션 49 (PR #63~#66: diarization DB + SummaryPanel + 프로필 추출)
-- 브랜치: main (PR #63 0daed85, #64 937b501, #65 2d88f25, #66 bd33196)
+## 2026-08-27 (작업 PC: 로컬) — 세션 49 (PR #63~#67: diarization DB + SummaryPanel + 프로필 추출 + 음성 매칭 UX)
+- 브랜치: main (PR #63 0daed85, #64 937b501, #65 2d88f25, #66 bd33196, #67 8b62f3c)
 - 완료:
   - **PR #63 - Diarization DB 통합:**
     - meetings.diarization TEXT 컬럼 추가, DB 우선 조회 + lazy migration
@@ -9,11 +9,18 @@
     - speakers {아빠: 아빠} 형태에서 SPEAKER_XX 매핑 소실 → transcript 타임스탬프 교차 비교 폴백
   - **PR #66 - 타임스탬프 매칭 개선:**
     - ±2초 포인트 매칭 → 구간 overlap 면적 매칭 (실제 데이터로 아빠 프로필 추출 성공 확인)
-  - 전체 96개 테스트 통과, 4건 코드리뷰 통과
+  - **PR #67 - 음성 매칭 UX 개선 + 기존 녹음 재매칭:**
+    - TranscriptEditor: 자동 채우기 제거 → 제안 칩 `👤 이름 85% [적용]` + 되돌리기
+    - POST /api/jobs/{id}/rematch: done 상태 회의에서 voice profile 재매칭
+    - POST /api/jobs/{id}/apply-match: 매칭 결과를 transcript/speakers에 반영
+    - MainArea: "🎤 음성 매칭" 버튼 + 결과 모달 + 전체 적용
+    - _extract_and_match_speakers() 공통 함수 추출 (job_queue 인라인 → 재사용)
+    - 코드리뷰 수정: handleApplyMatch null 필터링 + res.ok 검증
+  - 전체 105개 테스트 통과, 5건 코드리뷰 통과
 - 현재 상태: 안정
 - 다음 할 일: 다음 기능/버그 수정
-- 관련 파일: backend/app/database.py, job_queue.py, main.py, tests/test_speaker_profile.py, frontend/components/MainArea.tsx, SummaryPanel.tsx
-- 푸시 여부: origin/main 푸시 완료 (bd33196)
+- 관련 파일: backend/app/database.py, job_queue.py, main.py, tests/test_speaker_profile.py, test_rematch_api.py, frontend/components/MainArea.tsx, SummaryPanel.tsx, TranscriptEditor.tsx
+- 푸시 여부: origin/main 푸시 완료 (8b62f3c)
 
 ---
 
