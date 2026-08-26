@@ -69,6 +69,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
     except sqlite3.OperationalError:
         pass  # 이미 존재
 
+    # categories 테이블에 prompt_template 컬럼 추가
+    try:
+        conn.execute("ALTER TABLE categories ADD COLUMN prompt_template TEXT")
+    except sqlite3.OperationalError:
+        pass  # 이미 존재
+
     existing = {row[1] for row in conn.execute("PRAGMA table_info(meetings)")}
     for col, definition in [
         ("notion_url", "TEXT"),
@@ -462,7 +468,7 @@ def create_category(
 
 def update_category(cat_id: str, **kwargs) -> Optional[dict]:
     """카테고리 필드를 선택적으로 갱신한다."""
-    allowed = {"name", "icon", "description", "prompt", "model"}
+    allowed = {"name", "icon", "description", "prompt", "model", "prompt_template"}
     fields = [(k, v) for k, v in kwargs.items() if k in allowed]
     if not fields:
         return get_category(cat_id)
