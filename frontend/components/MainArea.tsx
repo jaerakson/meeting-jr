@@ -299,14 +299,20 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
     if (!job || !rematchResult) return
     const matches: Record<string, string> = {}
     for (const [label, info] of Object.entries(rematchResult)) {
-      matches[label] = info.name
+      if (info) matches[label] = info.name
     }
+    if (Object.keys(matches).length === 0) return
     try {
-      await fetch(`/api/jobs/${job.id}/apply-match`, {
+      const res = await fetch(`/api/jobs/${job.id}/apply-match`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ matches }),
       })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.detail || '매칭 적용 실패')
+        return
+      }
       setShowRematchModal(false)
       setRematchResult(null)
       onJobsChange()
