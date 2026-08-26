@@ -51,6 +51,14 @@ export interface Job {
   rating?: number
 }
 
+export interface RecordingNote {
+  id: string
+  job_id?: string
+  timestamp: number
+  content?: string
+  created_at?: string
+}
+
 export interface RelatedMeeting {
   id: string
   title: string
