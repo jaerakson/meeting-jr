@@ -973,14 +973,48 @@ export default function SettingsModal({ onClose, isDirtyRef }: Props) {
                         setExtractSpeakerLabel('')
                         setExtractProfileName('')
                         if (jobId) {
+                          const resolveSpeakerMap = (speakers: Record<string, string>, transcript?: string | null) => {
+                            const speakerKeys = Object.keys(speakers)
+                            setExtractSpeakers(speakerKeys)
+                            // speakers가 identity mapping이면 transcript에서 실제 이름 파싱
+                            const isIdentityMap = Object.entries(speakers).every(([k, v]) => k === v)
+                            if (isIdentityMap && transcript) {
+                              const namePattern = /\[\d{2}:\d{2}\]\s*(.+?):/g
+                              let match
+                              const foundNames: string[] = []
+                              const seen = new Set<string>()
+                              while ((match = namePattern.exec(transcript)) !== null) {
+                                const name = match[1].trim()
+                                if (!seen.has(name)) {
+                                  seen.add(name)
+                                  foundNames.push(name)
+                                }
+                              }
+                              if (foundNames.length > 0) {
+                                const sortedKeys = [...speakerKeys].sort()
+                                const newMap: Record<string, string> = {}
+                                sortedKeys.forEach((key, i) => {
+                                  newMap[key] = i < foundNames.length ? foundNames[i] : key
+                                })
+                                setExtractSpeakerMap(newMap)
+                              } else {
+                                setExtractSpeakerMap(speakers)
+                              }
+                            } else {
+                              setExtractSpeakerMap(speakers)
+                            }
+                          }
                           const job = doneJobs.find(j => j.id === jobId)
                           if (job?.speakers) {
-                            setExtractSpeakers(Object.keys(job.speakers))
-                            setExtractSpeakerMap(job.speakers)
+                            resolveSpeakerMap(job.speakers, job.transcript)
                           } else {
                             fetch(`/api/jobs/${jobId}`).then(r => r.json()).then((j: Job) => {
-                              setExtractSpeakers(j.speakers ? Object.keys(j.speakers) : [])
-                              setExtractSpeakerMap(j.speakers ?? {})
+                              if (j.speakers) {
+                                resolveSpeakerMap(j.speakers, j.transcript)
+                              } else {
+                                setExtractSpeakers([])
+                                setExtractSpeakerMap({})
+                              }
                             }).catch(() => { setExtractSpeakers([]); setExtractSpeakerMap({}) })
                           }
                         }

@@ -325,6 +325,21 @@ async def finalize_job(job_id: str, body: dict):
     if body_category_id:
         update_job_category(job_id, category_id)
 
+    # speaker_map이 identity mapping이면 transcript에서 실제 이름 파싱
+    if speaker_map and all(k == v for k, v in speaker_map.items()):
+        found_names = list(dict.fromkeys(
+            m.strip() for m in re.findall(r'\[\d{2}:\d{2}\]\s*(.+?):', transcript)
+        ))
+        if found_names:
+            speaker_keys = sorted(speaker_map.keys())
+            new_map = {}
+            for i, key in enumerate(speaker_keys):
+                if i < len(found_names):
+                    new_map[key] = found_names[i]
+                else:
+                    new_map[key] = key
+            speaker_map = new_map
+
     update_job_result(job_id, transcript=transcript, speakers=speaker_map)
 
     # speakers.json 업데이트 (이름 기억)
