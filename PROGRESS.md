@@ -1,3 +1,14 @@
+## 2026-08-26 (작업 PC: 로컬) — 세션 43 (프로필 추출 화자 이름 매칭 PR #58)
+- 브랜치: main (PR #58 squash 머지, 396e471)
+- 완료:
+  - 설정 > 목소리 프로필 > 기존 회의에서 추출 화자 드롭다운에 실제 이름 표시
+  - 이름 있으면 "목사님 (SPEAKER_00)" 형식, 없으면 기존대로 SPEAKER_XX
+  - 화자 선택 시 프로필 이름 자동 입력 (extractSpeakerMap 상태 추가)
+  - 절차: frontend-dev → qa-engineer (전항목 PASS) → 코드 리뷰 (이슈 0건) → 머지
+- 다음 할 일: 다음 기능/버그 수정
+- 관련 파일: frontend/components/SettingsModal.tsx
+- 푸시 여부: origin/main 푸시 완료 (396e471)
+
 ## 2026-08-26 (작업 PC: 로컬) — 세션 42 (설정 모달 사이드바 이동 버그 수정 PR #57)
 - 브랜치: main (PR #57 squash 머지, d0cfc34)
 - 완료:
