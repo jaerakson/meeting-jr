@@ -60,6 +60,7 @@ export default function SettingsModal({ onClose }: Props) {
   const [extractSpeakerLabel, setExtractSpeakerLabel] = useState('')
   const [extractProfileName, setExtractProfileName] = useState('')
   const [extractSpeakers, setExtractSpeakers] = useState<string[]>([])
+  const [extracting, setExtracting] = useState(false)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
 
@@ -174,18 +175,26 @@ export default function SettingsModal({ onClose }: Props) {
 
   const handleExtractFromJob = async () => {
     if (!extractFromJob || !extractSpeakerLabel || !extractProfileName.trim()) return
+    setExtracting(true)
     try {
-      await fetch(`/api/jobs/${extractFromJob}/save-speaker-profile`, {
+      const res = await fetch(`/api/jobs/${extractFromJob}/save-speaker-profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ speaker_label: extractSpeakerLabel, profile_name: extractProfileName.trim() }),
       })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: '프로필 추출에 실패했습니다.' }))
+        alert(err.detail || '프로필 추출에 실패했습니다.')
+        return
+      }
       setExtractFromJob(null)
       setExtractSpeakerLabel('')
       setExtractProfileName('')
       loadVoiceProfiles()
     } catch {
       alert('프로필 추출에 실패했습니다.')
+    } finally {
+      setExtracting(false)
     }
   }
 
@@ -990,10 +999,10 @@ export default function SettingsModal({ onClose }: Props) {
                         />
                         <button
                           onClick={handleExtractFromJob}
-                          disabled={!extractSpeakerLabel || !extractProfileName.trim()}
+                          disabled={!extractSpeakerLabel || !extractProfileName.trim() || extracting}
                           className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs rounded transition-colors"
                         >
-                          프로필 추출
+                          {extracting ? '추출 중...' : '프로필 추출'}
                         </button>
                       </>
                     )}

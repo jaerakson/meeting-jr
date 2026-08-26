@@ -1602,7 +1602,7 @@ async def save_speaker_profile(job_id: str, body: dict):
     # diarization 세그먼트 파일에서 화자 구간 로드
     diar_path = INPUT_DIR / f"{job_id}_diarization.json"
     if not diar_path.exists():
-        raise HTTPException(status_code=422, detail="Diarization 데이터가 없습니다.")
+        raise HTTPException(status_code=422, detail="텍스트로 업로드된 회의는 음성 프로필을 추출할 수 없습니다. 음성 녹음 회의에서 추출해주세요.")
 
     diar_data = json.loads(diar_path.read_text(encoding="utf-8"))
     speaker_segs = diar_data.get(speaker_label)
@@ -1612,7 +1612,7 @@ async def save_speaker_profile(job_id: str, body: dict):
     # WAV 파일 경로
     wav_path = INPUT_DIR / f"{job_id}_16k.wav"
     if not wav_path.exists():
-        raise HTTPException(status_code=422, detail="WAV 파일을 찾을 수 없습니다.")
+        raise HTTPException(status_code=422, detail="WAV 파일이 없어 음성 프로필을 추출할 수 없습니다. 음성 녹음 회의에서 추출해주세요.")
 
     from .audio_processor import extract_speaker_embedding
 
