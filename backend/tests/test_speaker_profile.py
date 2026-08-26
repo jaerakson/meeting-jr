@@ -213,3 +213,37 @@ def test_save_profile_lazy_migration_from_file(mock_emb, tmp_path, client, setup
     migrated = dbmod.get_job_diarization(job_id)
     assert migrated is not None
     assert "SPEAKER_00" in migrated
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 테스트 3-1: identity mapping ({아빠: 아빠})에서 타임스탬프 교차 비교
+# ─────────────────────────────────────────────────────────────────────
+@patch("app.audio_processor.extract_speaker_embedding", side_effect=_mock_embedding)
+def test_save_profile_with_name_key_identity_mapping(mock_emb, client, setup_job_with_diarization):
+    """speakers가 {아빠: 아빠}이고 diarization이 {SPEAKER_00: ...}일 때,
+    transcript 타임스탬프로 SPEAKER_XX를 추론하여 프로필 추출이 성공해야 한다."""
+    import app.database as dbmod
+
+    # identity mapping: 이름이 키
+    speakers = {"아빠": "아빠", "손주환": "손주환"}
+    diarization = {
+        "SPEAKER_00": [{"start": 0.0, "end": 5.0}, {"start": 10.0, "end": 15.0}],
+        "SPEAKER_01": [{"start": 5.0, "end": 10.0}, {"start": 20.0, "end": 25.0}],
+    }
+    # transcript에서 아빠는 [00:00], [00:10]에 발화 → SPEAKER_00과 일치
+    transcript = "[00:00] 아빠: 안녕\n[00:05] 손주환: 네\n[00:10] 아빠: 뭐해\n[00:20] 손주환: 놀아요"
+
+    job_id = setup_job_with_diarization(speakers, diarization)
+
+    # transcript 업데이트 (fixture는 기본 transcript 사용)
+    dbmod.update_job_result(job_id, transcript=transcript)
+
+    res = client.post(
+        f"/api/jobs/{job_id}/save-speaker-profile",
+        json={"speaker_label": "아빠", "profile_name": "아빠"},
+    )
+
+    assert res.status_code == 200, f"identity mapping 타임스탬프 추론 실패: {res.json()}"
+    data = res.json()
+    assert "id" in data
+    assert data["name"] == "아빠"

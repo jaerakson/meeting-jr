@@ -1652,6 +1652,34 @@ async def save_speaker_profile(job_id: str, body: dict):
                 speaker_segs = diar_data[key]
                 break
 
+    # identity mapping ({아빠: 아빠}) 등으로 SPEAKER_XX 매핑이 소실된 경우,
+    # transcript 타임스탬프와 diarization 세그먼트를 교차 비교하여 추론
+    if not speaker_segs:
+        import re
+        transcript = job.get("transcript") or ""
+        # transcript에서 해당 화자의 타임스탬프(초) 추출
+        speaker_times: list[float] = []
+        for line in transcript.split("\n"):
+            m = re.match(r"\[(\d+):(\d+)\]\s*" + re.escape(speaker_label) + r"\s*:", line)
+            if m:
+                speaker_times.append(int(m.group(1)) * 60 + int(m.group(2)))
+        if speaker_times:
+            # 각 SPEAKER_XX 키별로 타임스탬프 매칭 점수 계산
+            best_key = None
+            best_score = 0
+            for diar_key, segs in diar_data.items():
+                score = 0
+                for t in speaker_times:
+                    for seg in segs:
+                        if seg["start"] - 2.0 <= t <= seg["end"] + 2.0:
+                            score += 1
+                            break
+                if score > best_score:
+                    best_score = score
+                    best_key = diar_key
+            if best_key and best_score >= 1:
+                speaker_segs = diar_data[best_key]
+
     if not speaker_segs:
         raise HTTPException(status_code=422, detail=f"화자 {speaker_label}의 구간을 찾을 수 없습니다.")
 
