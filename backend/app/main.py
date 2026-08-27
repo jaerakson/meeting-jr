@@ -672,6 +672,66 @@ async def patch_summary(job_id: str, body: dict):
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
+# 크로스 회의 인사이트 API
+# ---------------------------------------------------------------------------
+
+@app.post("/api/insights")
+async def get_insights(body: dict):
+    question = body.get("question")
+    if question is None or not isinstance(question, str) or not question.strip():
+        raise HTTPException(status_code=422, detail="question이 필요합니다.")
+
+    keyword = body.get("keyword", "")
+    date_from = body.get("date_from", "")
+    date_to = body.get("date_to", "")
+
+    # done 상태 회의 필터링
+    if keyword:
+        result = search_jobs(q=keyword, date_from=date_from, date_to=date_to, limit=50)
+        meetings = [m for m in result["items"] if m["status"] == "done"]
+    else:
+        result = search_jobs(date_from=date_from, date_to=date_to, limit=50)
+        meetings = [m for m in result["items"] if m["status"] == "done"][:10]
+
+    if not meetings:
+        raise HTTPException(status_code=404, detail="관련 회의를 찾을 수 없습니다.")
+
+    # 회의 summaries 모아서 프롬프트 구성
+    context_parts = []
+    for m in meetings:
+        context_parts.append(
+            f"### {m['title']} ({m['created_at'][:10]})\n{m.get('summary', '') or ''}"
+        )
+    context = "\n\n---\n\n".join(context_parts)
+
+    prompt = (
+        f"다음은 여러 회의의 요약입니다:\n\n{context}\n\n"
+        f"위 회의들을 종합하여 다음 질문에 답변해주세요:\n{question.strip()}"
+    )
+
+    model = get_setting("CLAUDE_MODEL") or "claude-sonnet-4-6"
+
+    proc = await asyncio.create_subprocess_exec(
+        "claude", "-p", prompt, "--model", model,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        raise HTTPException(status_code=500, detail=f"Claude 질의 실패: {stderr.decode()}")
+
+    return {
+        "answer": stdout.decode().strip(),
+        "meeting_count": len(meetings),
+        "meetings": [
+            {"id": m["id"], "title": m["title"], "created_at": m["created_at"]}
+            for m in meetings
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
 # AI 추가 질의 API
 # ---------------------------------------------------------------------------
 
