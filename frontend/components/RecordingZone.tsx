@@ -180,7 +180,6 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
       setAudioBlob(null)
       setUploadDone(false)
       timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000)
-      drawWave()
     } catch {
       alert('마이크 접근 권한이 필요합니다.')
     }
@@ -200,7 +199,6 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
     if (mediaRecorderRef.current?.state === 'paused') {
       mediaRecorderRef.current.resume()
       timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000)
-      drawWave()
       setIsPaused(false)
     }
   }
@@ -298,6 +296,15 @@ export default function RecordingZone({ onRecordingComplete }: Props) {
       .then(setClaudeStatus)
       .catch(() => setClaudeStatus({ installed: false, logged_in: false }))
   }, [])
+
+  useEffect(() => {
+    if (isRecording && !isPaused && analyserRef.current && canvasRef.current) {
+      drawWave()
+    }
+    return () => {
+      cancelAnimationFrame(animFrameRef.current)
+    }
+  }, [isRecording, isPaused])
 
   useEffect(() => () => {
     if (timerRef.current) clearInterval(timerRef.current)
