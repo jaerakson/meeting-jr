@@ -688,7 +688,7 @@ async def get_insights(body: dict):
     # done 상태 회의 필터링
     if keyword:
         result = search_jobs(q=keyword, date_from=date_from, date_to=date_to, limit=50)
-        meetings = [m for m in result["items"] if m["status"] == "done"]
+        meetings = [m for m in result["items"] if m["status"] == "done"][:10]
     else:
         result = search_jobs(date_from=date_from, date_to=date_to, limit=50)
         meetings = [m for m in result["items"] if m["status"] == "done"][:10]
