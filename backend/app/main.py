@@ -672,6 +672,46 @@ async def patch_summary(job_id: str, body: dict):
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
+# AI 추가 질의 API
+# ---------------------------------------------------------------------------
+
+@app.post("/api/jobs/{job_id}/ask")
+async def ask_question(job_id: str, body: dict):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+    if job["status"] != "done":
+        raise HTTPException(status_code=400, detail="완료된 회의만 질의할 수 있습니다.")
+
+    question = body.get("question")
+    if question is None or not isinstance(question, str) or not question.strip():
+        raise HTTPException(status_code=422, detail="question이 필요합니다.")
+
+    transcript = job.get("transcript", "")
+    summary = job.get("summary", "")
+
+    prompt = (
+        f"다음은 회의 스크립트입니다:\n\n{transcript}\n\n"
+        f"다음은 회의 요약입니다:\n\n{summary}\n\n"
+        f"위 회의 내용을 바탕으로 다음 질문에 답변해주세요:\n{question.strip()}"
+    )
+
+    model = get_setting("CLAUDE_MODEL") or "claude-sonnet-4-6"
+
+    proc = await asyncio.create_subprocess_exec(
+        "claude", "-p", prompt, "--model", model,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        raise HTTPException(status_code=500, detail=f"Claude 질의 실패: {stderr.decode()}")
+
+    return {"answer": stdout.decode().strip()}
+
+
+# ---------------------------------------------------------------------------
 # 공유 링크 API
 # ---------------------------------------------------------------------------
 
