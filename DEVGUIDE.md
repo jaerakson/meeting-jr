@@ -290,6 +290,31 @@ meeting-jr/
 | GET | `/api/settings/default-title` | 기본 회의 제목 조회 |
 | GET | `/api/settings/claude-status` | Claude CLI 인증 상태 확인 |
 | POST | `/api/settings/claude-logout` | Claude CLI 로그아웃 |
+| POST | `/api/upload` | 파일 업로드 (오디오/txt), job_id 반환 |
+| PATCH | `/api/jobs/{job_id}/action-items` | 액션 아이템 수정 |
+| GET | `/api/action-items` | 통합 액션아이템 조회 (assignee/done 필터, 페이지네이션) |
+| POST | `/api/jobs/{job_id}/share` | 공유 토큰 생성 |
+| GET | `/api/shared/{token}` | 읽기 전용 공유 페이지 데이터 |
+| DELETE | `/api/jobs/{job_id}/share` | 공유 토큰 폐기 |
+| POST | `/api/jobs/{job_id}/ask` | AI 추가 질의 (claude -p) |
+| POST | `/api/insights` | 크로스 회의 인사이트 (keyword/날짜 필터 → claude -p) |
+| GET | `/api/jobs/{job_id}/participation` | 화자 발언 참여도 집계 |
+| GET | `/api/jobs/{job_id}/related` | 관련 회의 조회 (키워드 매칭) |
+| GET | `/api/jobs/{job_id}/followup` | 후속조치 대조 결과 조회 |
+| PATCH | `/api/jobs/{job_id}/followup` | 후속조치 사용자 확정/수정 |
+| POST | `/api/jobs/{job_id}/followup/generate` | 후속조치 대조 (재)생성 |
+| POST | `/api/series` | 회의 시리즈 생성 |
+| GET | `/api/series` | 시리즈 목록 |
+| GET | `/api/series/{id}` | 시리즈 상세 + 연결 회의 |
+| PATCH | `/api/series/{id}` | 시리즈 수정 |
+| DELETE | `/api/series/{id}` | 시리즈 삭제 |
+| PATCH | `/api/jobs/{job_id}/series` | 회의에 시리즈 할당/해제 |
+| GET | `/api/export` | 전체 회의 ZIP 내보내기 |
+| GET | `/api/categories` | 카테고리 목록 |
+| POST | `/api/categories` | 카테고리 생성 |
+| PATCH | `/api/categories/{id}` | 카테고리 수정 |
+| DELETE | `/api/categories/{id}` | 카테고리 삭제 |
+| PATCH | `/api/jobs/{job_id}/category` | 회의 카테고리 변경 |
 
 ### SSE 이벤트 형식
 ```json
@@ -379,3 +404,15 @@ npm run dev   # http://localhost:3000
 | 기본 회의 제목 | 설정 모달에서 입력, 미설정 시 '회의록' |
 | Notion 제목 형식 | `[회의날짜 HH:MM] 회의제목` + 페이지 상단에 업로드 일시 기록 |
 | 에이전트 팀 | product-manager → director → backend/frontend/ai-engineer → qa |
+| 파일 업로드 | 오디오(webm/mp3/m4a/wav) + ClovaNote txt 지원 |
+| txt 파싱 | 표준(`[MM:SS] SPEAKER:`) + ClovaNote(`참석자 N MM:SS`) 자동 감지 |
+| 액션아이템 대시보드 | 전체 회의 통합 조회, assignee/done 필터, 페이지네이션 |
+| 공유 링크 | 토큰 기반 읽기 전용 공유, 토큰 폐기 가능 |
+| AI 추가 질의 | done 상태 회의에 대해 claude -p로 후속 질문 |
+| 크로스 회의 인사이트 | 복수 회의 요약을 context로 묶어 claude -p 질의 |
+| 발언 참여도 분석 | diarization 우선, transcript 폴백, 수평 BarChart 시각화 |
+| 회의 시리즈 | 카테고리(유형)와 별도로 반복 회의 인스턴스를 묶는 구조 |
+| 후속조치 자동 대조 | 시리즈 직전 회의 미완료 액션아이템을 claude -p로 대조, AI 추정 + 사용자 확정 이원화 |
+| 후속조치 격리 | 대조 실패가 요약 파이프라인에 영향 없음 (try-except 격리, SSE 흐름 불변) |
+| 음성 프로필 | PyAnnote 임베딩 기반 화자 자동 인식, 프로필 CRUD |
+| PDF 출력 | 라이트 모드 강제, 트랜스크립트 제외 요약만 |

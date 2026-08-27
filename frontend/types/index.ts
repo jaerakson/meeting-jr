@@ -50,6 +50,7 @@ export interface Job {
   snippet_source?: 'title' | 'summary' | 'transcript' | ''
   suggested_speakers?: Record<string, { name: string; confidence: number }>
   rating?: number
+  series_id?: string
 }
 
 export interface RecordingNote {
@@ -97,6 +98,30 @@ export interface ClaudeStatus {
   email?: string
   auth_method?: string
   subscription_type?: string
+}
+
+export interface Series {
+  id: string
+  name: string
+  description?: string
+  meeting_count?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface FollowupItem {
+  text: string
+  assignee: string
+  ai_status: 'completed' | 'mentioned' | 'not_mentioned'
+  ai_evidence: string
+  user_status: 'completed' | 'in_progress' | 'not_addressed' | null
+  confirmed: boolean
+}
+
+export interface FollowupData {
+  source_job_id: string | null
+  source_job_title: string | null
+  items: FollowupItem[]
 }
 
 export interface ParticipationSpeaker {

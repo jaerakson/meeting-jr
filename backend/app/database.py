@@ -61,6 +61,13 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
             d["diarization"] = {}
     else:
         d["diarization"] = {}
+    if d.get("followup_items"):
+        try:
+            d["followup_items"] = json.loads(d["followup_items"])
+        except (json.JSONDecodeError, TypeError):
+            d["followup_items"] = None
+    else:
+        d["followup_items"] = None
     return d
 
 
@@ -96,6 +103,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("rating", "INTEGER"),
         ("diarization", "TEXT"),
         ("share_token", "TEXT"),
+        ("series_id", "TEXT"),
+        ("followup_items", "TEXT"),
     ]:
         if col not in existing:
             conn.execute(f"ALTER TABLE meetings ADD COLUMN {col} {definition}")
@@ -163,6 +172,15 @@ def init_db() -> None:
                 timestamp  REAL NOT NULL,
                 content    TEXT,
                 created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS meeting_series (
+                id          TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+                updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
             )
         """)
         _migrate(conn)
@@ -961,3 +979,159 @@ def revoke_share_token(job_id: str) -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Meeting Series CRUD
+# ---------------------------------------------------------------------------
+
+def create_series(series_id: str, name: str, description: str = "") -> dict:
+    """시리즈를 생성하고 dict로 반환."""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            """
+            INSERT INTO meeting_series (id, name, description)
+            VALUES (?, ?, ?)
+            """,
+            (series_id, name, description),
+        )
+        conn.commit()
+        return get_series(series_id)
+    finally:
+        conn.close()
+
+
+def get_all_series() -> list[dict]:
+    """전체 시리즈 목록 + 각 시리즈의 meeting_count."""
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            """
+            SELECT s.*, COUNT(m.id) as meeting_count
+            FROM meeting_series s
+            LEFT JOIN meetings m ON m.series_id = s.id
+            GROUP BY s.id
+            ORDER BY s.created_at DESC
+            """
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_series(series_id: str) -> Optional[dict]:
+    """시리즈 단일 조회."""
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM meeting_series WHERE id = ?", (series_id,)
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_series_meetings(series_id: str) -> list[dict]:
+    """시리즈에 연결된 회의 목록 (created_at 내림차순)."""
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM meetings WHERE series_id = ? ORDER BY created_at DESC",
+            (series_id,),
+        ).fetchall()
+        return [_row_to_dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def update_series(series_id: str, **kwargs) -> Optional[dict]:
+    """시리즈 name/description 수정."""
+    allowed = {"name", "description"}
+    fields = [(k, v) for k, v in kwargs.items() if k in allowed]
+    if not fields:
+        return get_series(series_id)
+
+    set_clause = ", ".join(f"{k} = ?" for k, _ in fields)
+    values = [v for _, v in fields] + [series_id]
+    conn = _get_conn()
+    try:
+        conn.execute(
+            f"UPDATE meeting_series SET {set_clause}, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?",
+            values,
+        )
+        conn.commit()
+        return get_series(series_id)
+    finally:
+        conn.close()
+
+
+def delete_series(series_id: str) -> bool:
+    """시리즈 삭제. 연결된 meetings.series_id는 NULL로."""
+    conn = _get_conn()
+    try:
+        # 연결된 회의의 series_id를 NULL로
+        conn.execute(
+            "UPDATE meetings SET series_id = NULL WHERE series_id = ?",
+            (series_id,),
+        )
+        cursor = conn.execute(
+            "DELETE FROM meeting_series WHERE id = ?", (series_id,)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def update_job_series(job_id: str, series_id: Optional[str]) -> None:
+    """job의 series_id를 갱신. None이면 해제."""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE meetings SET series_id = ? WHERE id = ?",
+            (series_id, job_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_previous_series_meeting(job_id: str, series_id: str) -> Optional[dict]:
+    """같은 시리즈에서 현재 회의 바로 이전 회의를 반환. created_at 기준."""
+    conn = _get_conn()
+    try:
+        # 현재 회의의 created_at 조회
+        cur = conn.execute(
+            "SELECT created_at FROM meetings WHERE id = ?", (job_id,)
+        ).fetchone()
+        if not cur:
+            return None
+        cur_created = cur[0]
+        # 같은 시리즈에서 현재 회의보다 이전인 것 중 가장 최근
+        row = conn.execute(
+            """
+            SELECT * FROM meetings
+            WHERE series_id = ? AND id != ? AND created_at < ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (series_id, job_id, cur_created),
+        ).fetchone()
+        return _row_to_dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def update_job_followup(job_id: str, followup_items) -> None:
+    """followup_items를 JSON으로 저장."""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE meetings SET followup_items = ? WHERE id = ?",
+            (json.dumps(followup_items, ensure_ascii=False), job_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
