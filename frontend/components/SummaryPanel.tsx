@@ -15,7 +15,7 @@ interface SummaryPanelProps {
   shareToken?: string
 }
 
-const TABS = ['핵심 요약', '주요 논의', '결정 사항', '액션 아이템'] as const
+const TABS = ['핵심 요약', '주요 논의', '결정 사항', '액션 아이템', 'AI 질의'] as const
 
 const SECTION_HEADERS: Record<string, string> = {
   '핵심 요약': '## 핵심 요약',
@@ -192,6 +192,9 @@ export default function SummaryPanel({ summary, jobId, initialRating, onSummaryU
   const [showRegenModal, setShowRegenModal] = useState(false)
   const [regenCategoryId, setRegenCategoryId] = useState(initialCategoryId || 'meeting')
   const [categories, setCategories] = useState<{ id: string; name: string; icon: string }[]>([])
+  const [askQuestion, setAskQuestion] = useState('')
+  const [askLoading, setAskLoading] = useState(false)
+  const [askHistory, setAskHistory] = useState<{question: string; answer: string}[]>([])
   const [shareToken, setShareToken] = useState(initialShareToken || '')
   const [shareFeedback, setShareFeedback] = useState('')
   const [shareFeedbackError, setShareFeedbackError] = useState(false)
@@ -212,6 +215,8 @@ export default function SummaryPanel({ summary, jobId, initialRating, onSummaryU
     setHoverRating(0)
     setShareToken(initialShareToken || '')
     setShareFeedback('')
+    setAskHistory([])
+    setAskQuestion('')
   }, [jobId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // initialActionItems가 외부에서 바뀌면 동기화
@@ -329,6 +334,27 @@ export default function SummaryPanel({ summary, jobId, initialRating, onSummaryU
       alert('재생성 요청에 실패했습니다.')
     } finally {
       setRegenerating(false)
+    }
+  }
+
+  const handleAsk = async () => {
+    if (!askQuestion.trim() || askLoading) return
+    setAskLoading(true)
+    const q = askQuestion.trim()
+    setAskQuestion('')
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q }),
+      })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setAskHistory(prev => [...prev, { question: q, answer: data.answer }])
+    } catch {
+      setAskHistory(prev => [...prev, { question: q, answer: '질의에 실패했습니다. 다시 시도해주세요.' }])
+    } finally {
+      setAskLoading(false)
     }
   }
 
@@ -539,6 +565,56 @@ export default function SummaryPanel({ summary, jobId, initialRating, onSummaryU
                 </span>
               </label>
             ))}
+          </div>
+        ) : activeTab === 'AI 질의' ? (
+          <div className="flex flex-col h-full">
+            <div className="flex-1 overflow-y-auto space-y-3 mb-3">
+              {askHistory.length === 0 && (
+                <p className="text-sm text-gray-400 text-center py-8">회의 내용에 대해 질문해보세요</p>
+              )}
+              {askHistory.map((item, idx) => (
+                <div key={idx} className="space-y-2">
+                  <div className="flex justify-end">
+                    <div className="bg-blue-500 text-white text-sm rounded-xl rounded-tr-sm px-3 py-2 max-w-[80%]">
+                      {item.question}
+                    </div>
+                  </div>
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 dark:bg-gray-700 text-sm text-gray-800 dark:text-gray-200 rounded-xl rounded-tl-sm px-3 py-2 max-w-[80%] whitespace-pre-wrap">
+                      {item.answer}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {askLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 dark:bg-gray-700 rounded-xl rounded-tl-sm px-3 py-2">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}} />
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 flex-shrink-0">
+              <input
+                value={askQuestion}
+                onChange={e => setAskQuestion(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleAsk()}
+                placeholder="회의 내용에 대해 질문하세요..."
+                disabled={askLoading}
+                className="flex-1 text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              />
+              <button
+                onClick={handleAsk}
+                disabled={askLoading || !askQuestion.trim()}
+                className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg disabled:opacity-50 transition-colors flex-shrink-0"
+              >
+                전송
+              </button>
+            </div>
           </div>
         ) : (
           <div>{renderMarkdown(currentContent, onTimeClick)}</div>
