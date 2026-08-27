@@ -36,9 +36,15 @@
   - PR #76 최초 제출 시 테스트 185개가 통과했음에도 위 이슈 1·2가 남아 있었다. 원인: 테스트가 전부 DB 직접 조작 또는
     엔드포인트 직접 호출이라 **실제 사용자 경로**(시리즈 할당 → 대조 생성, 프론트가 보내는 payload 형태)를 지나지 않았음.
     앞으로 UI가 개입하는 기능은 사용자 경로 자체를 검증하는 테스트를 반드시 포함할 것.
-- 다음 할 일 (기획 후보, 사용자 미승인):
-  - 용어집(고유명사 사전) 기반 STT 후보정 / 액션아이템 마감일+리마인더 / 하이라이트 클립 공유 / 이메일·Slack 발송
-  - C-1 실시간 전사 (MLX-Whisper 스트리밍 리서치 선행 필요, 리서치 비용 커서 후순위)
+- 다음 할 일 (기획 후보, 사용자 미승인) — **상세: `docs/ai_analysis/20260828_잔여_기획_후보.md` 를 먼저 읽을 것**
+  1. 용어집(고유명사 사전) 기반 STT 후보정 — 난이도 중, 파급 효과 최대 (전사 품질이 모든 하위 기능을 좌우)
+  2. 액션아이템 마감일 + 지연 표시 — 난이도 중, PR #71·#76에 빠진 마지막 조각인 기한 개념
+  3. 하이라이트 클립 추출·공유 — 난이도 중, Range 요청(PR #70)·공유 토큰(PR #72) 기반 있음
+  4. 이메일/Slack 발송 — 난이도 하~중, 외부 발송이라 사용자 확인 단계 필수
+  5. C-1 실시간 전사 — 난이도 상, MLX-Whisper 스트리밍 리서치 선행 필요. 리서치만 별도 작업 단위로 끊을 것
+  - 착수 방법: `meeting-jr-dev` 스킬 호출 → director 분석 → 팀원 소환 → TDD → 코드리뷰 → 머지
+  - **TDD 조건 필수**: 프론트가 실제 보내는 payload 형태 + 사용자 경로 전체 + 기존 NULL 데이터 호환을 검증할 것
+    (PR #76이 테스트 185개를 통과하고도 기능이 동작하지 않았던 원인)
 - 관련 파일: backend/app/{main,database,summarizer}.py, backend/tests/test_{participation,series,followup}_api.py,
   frontend/components/{ParticipationChart,SeriesSelect,FollowupPanel,MainArea}.tsx, frontend/types/index.ts, DEVGUIDE.md
 - 푸시 여부: origin/main 푸시 완료 (PR #75 3774226, PR #76 3a7a178 — 둘 다 squash 머지 + 브랜치 삭제)
