@@ -20,6 +20,7 @@ interface ActionItemsResponse {
   page: number
   pages: number
   pending_count: number
+  assignees: string[]
 }
 
 function formatDate(dateStr: string): string {
@@ -124,10 +125,7 @@ export default function ActionItemsPage() {
     }
   }
 
-  // Extract unique assignees from current data
-  const assignees = data
-    ? [...new Set(data.items.map(i => i.assignee).filter(Boolean))]
-    : []
+  const assignees = data?.assignees ?? []
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] dark:bg-gray-900">

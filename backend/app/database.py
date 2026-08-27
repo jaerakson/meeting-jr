@@ -589,6 +589,9 @@ def get_all_action_items(
         # pending_count: 필터 무관 전체 미완료 건수
         pending_count = sum(1 for it in all_items if not it.get("done", False))
 
+        # 전체 아이템(필터 전)에서 고유 assignee 목록 추출
+        assignees = sorted(set(it.get("assignee", "") for it in all_items if it.get("assignee")))
+
         # 필터 적용
         filtered = all_items
         if assignee:
@@ -616,6 +619,7 @@ def get_all_action_items(
             "page": page,
             "pages": pages,
             "pending_count": pending_count,
+            "assignees": assignees,
         }
     finally:
         conn.close()

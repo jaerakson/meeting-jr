@@ -336,3 +336,25 @@ class TestActionItemsSorting:
             (idx for idx, item in enumerate(items) if not item["done"]), len(items)
         )
         assert first_pending_idx < first_done_idx
+
+
+# ---------------------------------------------------------------------------
+# assignees 목록 반환
+# ---------------------------------------------------------------------------
+
+class TestActionItemsAssigneesList:
+    def test_assignees_list_contains_all(self, client):
+        """응답에 전체 assignee 목록이 포함된다."""
+        _create_meeting_with_actions("al1", "회의1", [
+            {"text": "작업1", "assignee": "김철수", "done": False},
+            {"text": "작업2", "assignee": "박영희", "done": False},
+        ])
+        _create_meeting_with_actions("al2", "회의2", [
+            {"text": "작업3", "assignee": "이민수", "done": False},
+        ])
+
+        # limit=1이라도 assignees는 전체 목록
+        res = client.get("/api/action-items?page=1&limit=1")
+        data = res.json()
+        assert "assignees" in data
+        assert set(data["assignees"]) == {"김철수", "박영희", "이민수"}
