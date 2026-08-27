@@ -1937,8 +1937,9 @@ async def get_participation(job_id: str):
     """화자별 발언 시간·비율·턴수 분석.
 
     데이터 소스 우선순위:
-      1. diarization (PyAnnote 세그먼트)
-      2. transcript [MM:SS] SPEAKER_XX: 타임스탬프 폴백
+      1. diarization DB 조회
+      2. diarization 파일 폴백 ({job_id}_diarization.json) + lazy migration
+      3. transcript [MM:SS] 화자명: 타임스탬프 폴백
     """
     job = get_job(job_id)
     if not job:
@@ -1948,9 +1949,14 @@ async def get_participation(job_id: str):
     result_speakers: list[dict] = []
     total_duration: float = 0.0
 
-    # --- 1) diarization 기반 ---
+    # --- 1) diarization 기반 (DB → 파일 폴백 + lazy migration) ---
     from .database import get_job_diarization
     diar_data = get_job_diarization(job_id)
+    if not diar_data:
+        diar_path = INPUT_DIR / f"{job_id}_diarization.json"
+        if diar_path.exists():
+            diar_data = json.loads(diar_path.read_text(encoding="utf-8"))
+            update_job_result(job_id, diarization=diar_data)
 
     use_diar = False
     if diar_data:
@@ -1987,7 +1993,7 @@ async def get_participation(job_id: str):
     if not use_diar:
         transcript: str = job.get("transcript") or ""
         import re as _re
-        pattern = _re.compile(r"^\[(\d{1,3}):(\d{2})\]\s+(SPEAKER_\d+):", _re.MULTILINE)
+        pattern = _re.compile(r"^\[(\d{1,3}):(\d{2})\]\s*(.+?):", _re.MULTILINE)
         matches = list(pattern.finditer(transcript))
 
         if matches:

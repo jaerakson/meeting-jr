@@ -342,6 +342,79 @@ class TestParticipationTranscriptFallback:
         assert data["speakers"][0]["turn_count"] == 1
         assert data["speakers"][0]["percentage"] == pytest.approx(100.0, abs=0.1)
 
+    def test_transcript_fallback_with_real_names(self, client):
+        """실제 이름 형태 화자 라벨의 transcript 폴백 동작 검증."""
+        transcript = (
+            "[00:00] 김철수: 안녕하세요 회의 시작하겠습니다\n"
+            "[01:30] 박영희: 네 준비되었습니다\n"
+            "[02:00] 김철수: 첫 번째 안건입니다\n"
+            "[03:30] 이민준: 의견 있습니다\n"
+        )
+        _create_meeting_transcript_only("t4", transcript)
+
+        res = client.get("/api/jobs/t4/participation")
+        assert res.status_code == 200
+        data = res.json()
+
+        assert len(data["speakers"]) == 3
+
+        sp_kim = next(s for s in data["speakers"] if s["label"] == "김철수")
+        sp_park = next(s for s in data["speakers"] if s["label"] == "박영희")
+        sp_lee = next(s for s in data["speakers"] if s["label"] == "이민준")
+
+        # 김철수: 2턴, 00:00~01:30(90초) + 02:00~03:30(90초) = 180초
+        assert sp_kim["turn_count"] == 2
+        assert sp_kim["total_seconds"] == pytest.approx(180.0, abs=0.1)
+
+        # 박영희: 1턴, 01:30~02:00(30초)
+        assert sp_park["turn_count"] == 1
+        assert sp_park["total_seconds"] == pytest.approx(30.0, abs=0.1)
+
+        # 이민준: 1턴, 마지막 발언 기본 10초
+        assert sp_lee["turn_count"] == 1
+        assert sp_lee["total_seconds"] == pytest.approx(10.0, abs=0.1)
+
+        # label과 display_name이 실제 이름 그대로
+        assert sp_kim["display_name"] == "김철수"
+        assert sp_park["display_name"] == "박영희"
+        assert sp_lee["display_name"] == "이민준"
+
+        # percentage 합 ≈ 100
+        pct_sum = sum(s["percentage"] for s in data["speakers"])
+        assert pct_sum == pytest.approx(100.0, abs=1.0)
+
+    def test_transcript_fallback_mixed_format(self, client):
+        """한글 이름과 영어 이름이 섞인 transcript 폴백."""
+        transcript = (
+            "[00:00] 김대리: 시작합니다\n"
+            "[01:00] John: Let me explain\n"
+            "[02:30] 김대리: 감사합니다\n"
+        )
+        _create_meeting_transcript_only("t5", transcript)
+
+        res = client.get("/api/jobs/t5/participation")
+        assert res.status_code == 200
+        data = res.json()
+
+        assert len(data["speakers"]) == 2
+
+        sp_kim = next(s for s in data["speakers"] if s["label"] == "김대리")
+        sp_john = next(s for s in data["speakers"] if s["label"] == "John")
+
+        # 김대리: 2턴, 00:00~01:00(60초) + 02:30~끝(10초 기본) = 70초
+        assert sp_kim["turn_count"] == 2
+        assert sp_kim["total_seconds"] == pytest.approx(70.0, abs=0.1)
+
+        # John: 1턴, 01:00~02:30(90초)
+        assert sp_john["turn_count"] == 1
+        assert sp_john["total_seconds"] == pytest.approx(90.0, abs=0.1)
+
+        assert sp_kim["display_name"] == "김대리"
+        assert sp_john["display_name"] == "John"
+
+        pct_sum = sum(s["percentage"] for s in data["speakers"])
+        assert pct_sum == pytest.approx(100.0, abs=1.0)
+
 
 # ===========================================================================
 # 4. 빈 케이스 (diarization/transcript 둘 다 없음)
