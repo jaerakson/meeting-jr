@@ -44,6 +44,7 @@ from .database import (
     delete_category,
     update_job_category,
     update_job_action_items,
+    get_all_action_items,
     toggle_bookmark,
     update_job_memo,
     update_job_tags,
@@ -666,6 +667,17 @@ async def patch_summary(job_id: str, body: dict):
 # ---------------------------------------------------------------------------
 # 9-c) PATCH /api/jobs/{job_id}/action-items
 # ---------------------------------------------------------------------------
+
+@app.get("/api/action-items")
+async def get_action_items(
+    assignee: str = "",
+    done: str | None = None,
+    page: int = 1,
+    limit: int = 20,
+):
+    """전체 회의의 액션 아이템 통합 조회."""
+    return get_all_action_items(assignee=assignee, done=done, page=page, limit=limit)
+
 
 @app.patch("/api/jobs/{job_id}/action-items")
 async def patch_action_items(job_id: str, body: dict):

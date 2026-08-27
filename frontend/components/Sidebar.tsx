@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { Job } from '@/types'
 import { useTheme } from '@/hooks/useTheme'
@@ -35,6 +35,23 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
   const [editTitleValue, setEditTitleValue] = useState('')
   const titleSavingRef = useRef(false)
   const { theme, toggleTheme } = useTheme()
+  const [pendingActionCount, setPendingActionCount] = useState(0)
+
+  const fetchPendingCount = useCallback(async () => {
+    try {
+      const res = await fetch('/api/action-items?done=false&limit=1')
+      if (res.ok) {
+        const data = await res.json()
+        setPendingActionCount(data.pending_count ?? 0)
+      }
+    } catch {
+      // silent fail
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchPendingCount()
+  }, [fetchPendingCount, jobs])
 
   useEffect(() => {
     const handleClick = () => setContextMenu(null)
@@ -148,7 +165,7 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
       </div>
 
       {/* 전체 목록 보기 */}
-      <div className="px-3 pb-2">
+      <div className="px-3 pb-2 space-y-0.5">
         <Link
           href="/meetings"
           className="w-full py-1.5 px-3 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-lg text-xs transition-colors flex items-center gap-2"
@@ -157,6 +174,20 @@ export default function Sidebar({ jobs, selectedJobId, onSelectJob, onJobsChange
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
           </svg>
           전체 목록 보기
+        </Link>
+        <Link
+          href="/action-items"
+          className="w-full py-1.5 px-3 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-lg text-xs transition-colors flex items-center gap-2"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+          액션 아이템
+          {pendingActionCount > 0 && (
+            <span className="ml-auto inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-red-500 rounded-full">
+              {pendingActionCount > 99 ? '99+' : pendingActionCount}
+            </span>
+          )}
         </Link>
       </div>
 

@@ -546,6 +546,81 @@ def delete_category(cat_id: str) -> bool:
         conn.close()
 
 
+def get_all_action_items(
+    assignee: str = "",
+    done: str | None = None,
+    page: int = 1,
+    limit: int = 20,
+) -> dict:
+    """전체 회의의 액션 아이템을 통합 조회한다.
+
+    Returns:
+        {"items": list, "total": int, "page": int, "pages": int, "pending_count": int}
+    """
+    from math import ceil
+
+    if page < 1:
+        page = 1
+
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id, title, created_at, action_items FROM meetings "
+            "WHERE action_items IS NOT NULL AND action_items != '' AND action_items != '[]'"
+        ).fetchall()
+
+        # 플랫 리스트 구성
+        all_items: list[dict] = []
+        for row in rows:
+            try:
+                items = json.loads(row["action_items"])
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if not isinstance(items, list):
+                continue
+            for item in items:
+                all_items.append({
+                    **item,
+                    "job_id": row["id"],
+                    "job_title": row["title"],
+                    "job_created_at": row["created_at"],
+                })
+
+        # pending_count: 필터 무관 전체 미완료 건수
+        pending_count = sum(1 for it in all_items if not it.get("done", False))
+
+        # 필터 적용
+        filtered = all_items
+        if assignee:
+            filtered = [it for it in filtered if it.get("assignee") == assignee]
+        if done == "false":
+            filtered = [it for it in filtered if not it.get("done", False)]
+        elif done == "true":
+            filtered = [it for it in filtered if it.get("done", False)]
+
+        # 정렬: 미완료 우선, 최신 회의 우선
+        filtered.sort(key=lambda it: (
+            it.get("done", False),  # False(0) < True(1) → 미완료 우선
+            -(datetime.fromisoformat(it["job_created_at"]).timestamp()
+              if it.get("job_created_at") else 0),
+        ))
+
+        total = len(filtered)
+        pages = max(1, ceil(total / limit))
+        offset = (page - 1) * limit
+        paged = filtered[offset:offset + limit]
+
+        return {
+            "items": paged,
+            "total": total,
+            "page": page,
+            "pages": pages,
+            "pending_count": pending_count,
+        }
+    finally:
+        conn.close()
+
+
 def update_job_action_items(job_id: str, action_items: list[dict]) -> None:
     """action_items를 JSON으로 저장한다."""
     conn = _get_conn()
