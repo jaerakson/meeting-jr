@@ -12,7 +12,9 @@
     - Starlette FileResponse가 Range 미지원 → seekable={0,0} → 시킹 불가
     - StreamingResponse로 206 Partial Content + Content-Range 구현
     - Accept-Ranges: bytes 헤더 추가
-  - Playwright 검증: seekable={0, 49.473}, currentTime=37 시킹 정상 동작 확인
+  - Playwright 검증: 전체 5개 녹음 파일 시킹 정상 동작 확인
+    - 데이터 거버넌스(2053초), 마이크 테스트(37초), 주일 예배(2067초), 회의(49초), 가족 일상 대화(49초) — 모두 seekOK
+    - 기존 webm 파일은 GET /audio 최초 요청 시 자동 remux
   - 3건 코드리뷰 모두 통과
 - 현재 상태: 안정 — 녹음 파형 + 오디오 시킹 완전 해결
 - 다음 할 일: 다음 기능/버그 수정
