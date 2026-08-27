@@ -178,6 +178,7 @@ async def generate_followup_comparison(
     pending_items: list[dict],
     transcript: str,
     summary: str,
+    model: str = "claude-sonnet-4-6",
 ) -> list[dict]:
     """이전 회의 미완료 액션아이템을 현재 회의 transcript/summary와 대조한다.
 
@@ -221,7 +222,7 @@ async def generate_followup_comparison(
     import re
 
     proc = await asyncio.create_subprocess_exec(
-        "claude", "-p", prompt, "--model", "claude-sonnet-4-6",
+        "claude", "-p", prompt, "--model", model,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )

@@ -479,27 +479,6 @@ async def run_summary(job_id: str, script_path: str, speaker_map: dict, category
             update_job_action_items(job_id, action_items)
 
         update_job_result(job_id, summary=summary, status="done")
-
-        # 후속조치 자동 대조 (시리즈 할당 시에만, 실패해도 job은 done 유지)
-        try:
-            job_after = get_job(job_id)
-            _series_id = job_after.get("series_id") if job_after else None
-            if _series_id:
-                _prev = get_previous_series_meeting(job_id, _series_id)
-                if _prev and _prev.get("action_items"):
-                    _pending = [ai for ai in _prev["action_items"] if not ai.get("done")]
-                    if _pending:
-                        from .summarizer import generate_followup_comparison
-                        _result = await generate_followup_comparison(
-                            _pending,
-                            job_after.get("transcript", ""),
-                            summary,
-                        )
-                        _followup = _result
-                        update_job_followup(job_id, _followup)
-        except Exception:
-            pass  # 대조 실패해도 요약은 이미 완료
-
         update_progress(job_id, {
             "stage": "done",
             "progress": 100,
@@ -2012,12 +1991,30 @@ async def delete_series_endpoint(series_id: str):
 
 @app.patch("/api/jobs/{job_id}/series")
 async def assign_series(job_id: str, body: dict):
-    """회의에 시리즈 할당/해제."""
+    """회의에 시리즈 할당/해제. done 상태에서 할당 시 후속조치 자동 생성."""
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
-    series_id = body.get("series_id")  # None이면 해제
+    series_id = body.get("series_id")
     update_job_series(job_id, series_id)
+
+    # done 상태에서 시리즈 할당 시 후속조치 자동 생성 (실패 무시)
+    if series_id and job.get("status") == "done":
+        try:
+            prev = get_previous_series_meeting(job_id, series_id)
+            if prev and prev.get("action_items"):
+                pending = [ai for ai in prev["action_items"] if not ai.get("done")]
+                if pending:
+                    _model = get_setting("CLAUDE_MODEL") or "claude-sonnet-4-6"
+                    from .summarizer import generate_followup_comparison
+                    result = await generate_followup_comparison(
+                        pending, job.get("transcript", ""), job.get("summary", ""),
+                        model=_model,
+                    )
+                    update_job_followup(job_id, result)
+        except Exception:
+            pass  # 자동 생성 실패해도 할당은 완료
+
     return get_job(job_id)
 
 
@@ -2033,35 +2030,19 @@ async def get_followup(job_id: str):
         raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
 
     followup = job.get("followup_items")
+    if not followup or not isinstance(followup, list) or len(followup) == 0:
+        return {"source_job_id": None, "source_job_title": None, "items": []}
 
-    # followup_items가 저장되어 있을 때
-    if followup:
-        # list 형태로 저장된 경우 → 시리즈 직전 회의 정보로 감싸서 반환
-        if isinstance(followup, list):
-            items = followup
-        elif isinstance(followup, dict) and "items" in followup:
-            return followup
-        else:
-            items = []
+    source_job_id = None
+    source_job_title = None
+    series_id = job.get("series_id")
+    if series_id:
+        prev = get_previous_series_meeting(job_id, series_id)
+        if prev:
+            source_job_id = prev["id"]
+            source_job_title = prev.get("title")
 
-        # 시리즈 직전 회의 정보 조회
-        source_job_id = None
-        source_job_title = None
-        series_id = job.get("series_id")
-        if series_id:
-            prev = get_previous_series_meeting(job_id, series_id)
-            if prev:
-                source_job_id = prev["id"]
-                source_job_title = prev.get("title")
-
-        return {
-            "source_job_id": source_job_id,
-            "source_job_title": source_job_title,
-            "items": items,
-        }
-
-    # followup_items 없으면 빈 구조 반환
-    return {"source_job_id": None, "source_job_title": None, "items": []}
+    return {"source_job_id": source_job_id, "source_job_title": source_job_title, "items": followup}
 
 
 @app.patch("/api/jobs/{job_id}/followup")
@@ -2130,15 +2111,16 @@ async def generate_followup(job_id: str):
 
     # claude -p로 대조
     from .summarizer import generate_followup_comparison
+    _model = get_setting("CLAUDE_MODEL") or "claude-sonnet-4-6"
     try:
         result = await generate_followup_comparison(
-            pending_items, job.get("transcript", ""), job.get("summary", "")
+            pending_items, job.get("transcript", ""), job.get("summary", ""),
+            model=_model,
         )
-    except Exception:
-        result = []
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"대조 분석 실패: {exc}")
 
-    followup_items = result
-    update_job_followup(job_id, followup_items)
+    update_job_followup(job_id, result)
     return {
         "source_job_id": prev["id"],
         "source_job_title": prev.get("title"),

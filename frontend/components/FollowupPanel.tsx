@@ -5,6 +5,7 @@ import { FollowupData, FollowupItem } from '@/types'
 
 interface Props {
   jobId: string
+  seriesId?: string
 }
 
 const AI_STATUS_BADGE: Record<FollowupItem['ai_status'], { icon: string; color: string; darkColor: string }> = {
@@ -13,6 +14,8 @@ const AI_STATUS_BADGE: Record<FollowupItem['ai_status'], { icon: string; color: 
   not_mentioned: { icon: '❌', color: 'bg-red-100 text-red-700', darkColor: 'dark:bg-red-900/30 dark:text-red-400' },
 }
 
+const FALLBACK_BADGE = { icon: '❓', color: 'bg-gray-100 text-gray-700', darkColor: 'dark:bg-gray-700 dark:text-gray-400' }
+
 const USER_STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: '', label: '미확인' },
   { value: 'completed', label: '완료' },
@@ -20,10 +23,11 @@ const USER_STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'not_addressed', label: '미처리' },
 ]
 
-export default function FollowupPanel({ jobId }: Props) {
+export default function FollowupPanel({ jobId, seriesId }: Props) {
   const [data, setData] = useState<FollowupData | null>(null)
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchData = () => {
     setLoading(true)
@@ -48,7 +52,7 @@ export default function FollowupPanel({ jobId }: Props) {
       await fetch(`/api/jobs/${jobId}/followup`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: updated.items }),
+        body: JSON.stringify({ items: [{ index, user_status: userStatus || null }] }),
       })
     } catch {
       // silent fail
@@ -65,7 +69,7 @@ export default function FollowupPanel({ jobId }: Props) {
       await fetch(`/api/jobs/${jobId}/followup`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: updated.items }),
+        body: JSON.stringify({ items: [{ index, confirmed }] }),
       })
     } catch {
       // silent fail
@@ -74,11 +78,17 @@ export default function FollowupPanel({ jobId }: Props) {
 
   const handleGenerate = async () => {
     setGenerating(true)
+    setError(null)
     try {
       const res = await fetch(`/api/jobs/${jobId}/followup/generate`, { method: 'POST' })
-      if (res.ok) fetchData()
+      if (res.ok) {
+        fetchData()
+      } else {
+        const err = await res.json().catch(() => ({ detail: '분석 실패' }))
+        setError(err.detail || '분석에 실패했습니다')
+      }
     } catch {
-      // silent fail
+      setError('네트워크 오류가 발생했습니다')
     } finally {
       setGenerating(false)
     }
@@ -93,6 +103,30 @@ export default function FollowupPanel({ jobId }: Props) {
   }
 
   if (!data || data.items.length === 0) {
+    if (seriesId) {
+      return (
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 mt-4">
+          <h3 className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3">
+            후속조치 추적
+          </h3>
+          <div className="text-center py-4">
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
+              이전 회의의 액션아이템과 대조 분석을 시작합니다
+            </p>
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {generating ? '분석 중...' : '후속조치 분석'}
+            </button>
+            {error && (
+              <p className="text-xs text-red-500 dark:text-red-400 mt-2">{error}</p>
+            )}
+          </div>
+        </div>
+      )
+    }
     return null
   }
 
@@ -110,6 +144,9 @@ export default function FollowupPanel({ jobId }: Props) {
           {generating ? '분석 중...' : '재분석'}
         </button>
       </div>
+      {error && (
+        <p className="text-xs text-red-500 dark:text-red-400 mb-3">{error}</p>
+      )}
       {data.source_job_title && (
         <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
           이전 회의: <span className="text-gray-500 dark:text-gray-400">{data.source_job_title}</span> 의 액션아이템
@@ -117,7 +154,11 @@ export default function FollowupPanel({ jobId }: Props) {
       )}
       <div className="space-y-3">
         {data.items.map((item, idx) => {
-          const badge = AI_STATUS_BADGE[item.ai_status]
+          const badge = AI_STATUS_BADGE[item.ai_status] || FALLBACK_BADGE
+          const statusLabel = item.ai_status === 'completed' ? '완료'
+            : item.ai_status === 'mentioned' ? '언급됨'
+            : item.ai_status === 'not_mentioned' ? '미언급'
+            : item.ai_status
           return (
             <div
               key={idx}
@@ -135,7 +176,7 @@ export default function FollowupPanel({ jobId }: Props) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full ${badge.color} ${badge.darkColor}`}>
-                      {badge.icon} {item.ai_status === 'completed' ? '완료' : item.ai_status === 'mentioned' ? '언급됨' : '미언급'}
+                      {badge.icon} {statusLabel}
                     </span>
                     {item.assignee && (
                       <span className="text-xs text-gray-400 dark:text-gray-500">

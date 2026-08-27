@@ -1135,19 +1135,3 @@ def update_job_followup(job_id: str, followup_items) -> None:
     finally:
         conn.close()
 
-
-def get_job_followup(job_id: str) -> Optional[dict]:
-    """job의 followup_items만 경량 조회."""
-    conn = _get_conn()
-    try:
-        row = conn.execute(
-            "SELECT followup_items FROM meetings WHERE id = ?", (job_id,)
-        ).fetchone()
-        if not row or not row[0]:
-            return None
-        try:
-            return json.loads(row[0])
-        except (json.JSONDecodeError, TypeError):
-            return None
-    finally:
-        conn.close()
