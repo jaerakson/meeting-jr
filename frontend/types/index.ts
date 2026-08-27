@@ -98,3 +98,17 @@ export interface ClaudeStatus {
   auth_method?: string
   subscription_type?: string
 }
+
+export interface ParticipationSpeaker {
+  label: string
+  display_name: string
+  total_seconds: number
+  percentage: number
+  turn_count: number
+  avg_turn_seconds: number
+}
+
+export interface ParticipationData {
+  speakers: ParticipationSpeaker[]
+  total_duration: number
+}

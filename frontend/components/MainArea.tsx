@@ -10,6 +10,7 @@ import TranscriptEditor from './TranscriptEditor'
 import AudioPlayer, { AudioPlayerHandle } from './AudioPlayer'
 import Transcript from './Transcript'
 import SummaryPanel from './SummaryPanel'
+import ParticipationChart from './ParticipationChart'
 
 interface EditData {
   transcript: string
@@ -484,6 +485,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             </div>
             <div className="md:w-[45%] flex flex-col min-h-0 p-4 h-1/2 md:h-full">
               <SummaryPanel summary={job.summary || ''} jobId={job.id} initialRating={job.rating} onSummaryUpdate={onJobsChange} speakers={job.speakers} actionItems={job.action_items} categoryId={job.category_id} onTimeClick={handleTimeClick} shareToken={job.share_token} />
+              <ParticipationChart jobId={job.id} />
               <div className="flex-shrink-0 overflow-y-auto max-h-[35%]">
               {recordingNotes.length > 0 && (
                 <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
