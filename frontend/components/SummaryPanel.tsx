@@ -194,6 +194,7 @@ export default function SummaryPanel({ summary, jobId, initialRating, onSummaryU
   const [categories, setCategories] = useState<{ id: string; name: string; icon: string }[]>([])
   const [shareToken, setShareToken] = useState(initialShareToken || '')
   const [shareFeedback, setShareFeedback] = useState('')
+  const [shareFeedbackError, setShareFeedbackError] = useState(false)
   const [shareLoading, setShareLoading] = useState(false)
 
   useEffect(() => {
@@ -340,11 +341,13 @@ export default function SummaryPanel({ summary, jobId, initialRating, onSummaryU
       setShareToken(data.token)
       const url = `${window.location.origin}${data.url}`
       await navigator.clipboard.writeText(url)
+      setShareFeedbackError(false)
       setShareFeedback('링크 복사됨')
       setTimeout(() => setShareFeedback(''), 2000)
     } catch {
+      setShareFeedbackError(true)
       setShareFeedback('공유 실패')
-      setTimeout(() => setShareFeedback(''), 2000)
+      setTimeout(() => { setShareFeedback(''); setShareFeedbackError(false) }, 2000)
     } finally {
       setShareLoading(false)
     }
@@ -354,6 +357,7 @@ export default function SummaryPanel({ summary, jobId, initialRating, onSummaryU
     if (!shareToken) return
     const url = `${window.location.origin}/shared/${shareToken}`
     await navigator.clipboard.writeText(url)
+    setShareFeedbackError(false)
     setShareFeedback('링크 복사됨')
     setTimeout(() => setShareFeedback(''), 2000)
   }
@@ -364,11 +368,13 @@ export default function SummaryPanel({ summary, jobId, initialRating, onSummaryU
       const res = await fetch(`/api/jobs/${jobId}/share`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
       setShareToken('')
+      setShareFeedbackError(false)
       setShareFeedback('공유 중지됨')
       setTimeout(() => setShareFeedback(''), 2000)
     } catch {
+      setShareFeedbackError(true)
       setShareFeedback('중지 실패')
-      setTimeout(() => setShareFeedback(''), 2000)
+      setTimeout(() => { setShareFeedback(''); setShareFeedbackError(false) }, 2000)
     } finally {
       setShareLoading(false)
     }
@@ -451,7 +457,11 @@ export default function SummaryPanel({ summary, jobId, initialRating, onSummaryU
                 {regenerating ? '재생성 중...' : '↻ 재생성'}
               </button>
               {shareFeedback ? (
-                <span className="px-2.5 py-1.5 text-xs text-green-600 dark:text-green-400 font-medium">{shareFeedback}</span>
+                <span className={`px-2.5 py-1.5 text-xs font-medium ${
+                  shareFeedbackError
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-green-600 dark:text-green-400'
+                }`}>{shareFeedback}</span>
               ) : shareToken ? (
                 <>
                   <button
