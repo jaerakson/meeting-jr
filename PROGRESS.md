@@ -1,3 +1,26 @@
+## 2026-08-27 (작업 PC: 로컬) — 세션 50 (PR #68~#70: 녹음 파형 + 오디오 시킹 수정)
+- 브랜치: main (PR #68 9533352, #69 2a2b183, #70 3dfcbfa)
+- 완료:
+  - **PR #68 - 녹음 시 음성 파형 미표시 수정:**
+    - 원인: drawWave()를 setIsRecording(true) 직후 동기 호출 → canvas 미마운트 상태에서 canvasRef=null
+    - 수정: useEffect로 isRecording/isPaused 상태 변화 후 canvas 확인 뒤 drawWave() 호출
+  - **PR #69 - WebM remux (duration/Cues 추가):**
+    - MediaRecorder WebM 파일에 duration=N/A → ffmpeg -c copy remux로 메타데이터 추가
+    - _remux_webm_if_needed() 유틸: ffprobe 확인 → 필요 시 remux → 원본 교체
+    - POST /api/record 저장 후 + GET /api/jobs/{id}/audio 서빙 시 적용
+  - **PR #70 - HTTP Range 요청 지원:**
+    - Starlette FileResponse가 Range 미지원 → seekable={0,0} → 시킹 불가
+    - StreamingResponse로 206 Partial Content + Content-Range 구현
+    - Accept-Ranges: bytes 헤더 추가
+  - Playwright 검증: seekable={0, 49.473}, currentTime=37 시킹 정상 동작 확인
+  - 3건 코드리뷰 모두 통과
+- 현재 상태: 안정 — 녹음 파형 + 오디오 시킹 완전 해결
+- 다음 할 일: 다음 기능/버그 수정
+- 관련 파일: frontend/components/RecordingZone.tsx, backend/app/main.py
+- 푸시 여부: origin/main 푸시 완료 (3dfcbfa)
+
+---
+
 ## 2026-08-27 (작업 PC: 로컬) — 세션 49 (PR #63~#67: diarization DB + SummaryPanel + 프로필 추출 + 음성 매칭 UX)
 - 브랜치: main (PR #63 0daed85, #64 937b501, #65 2d88f25, #66 bd33196, #67 8b62f3c, hotfix fb5ef77)
 - 완료:
