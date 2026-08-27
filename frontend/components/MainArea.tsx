@@ -486,7 +486,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             <div className="md:w-[45%] flex flex-col min-h-0 p-4 h-1/2 md:h-full">
               <SummaryPanel summary={job.summary || ''} jobId={job.id} initialRating={job.rating} onSummaryUpdate={onJobsChange} speakers={job.speakers} actionItems={job.action_items} categoryId={job.category_id} onTimeClick={handleTimeClick} shareToken={job.share_token} />
               <div className="flex-shrink-0 overflow-y-auto max-h-[35%]">
-              <ParticipationChart jobId={job.id} />
+                <ParticipationChart jobId={job.id} />
               {recordingNotes.length > 0 && (
                 <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
                   <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">녹음 중 메모</h3>

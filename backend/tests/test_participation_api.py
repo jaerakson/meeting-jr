@@ -508,3 +508,18 @@ class TestParticipationEdgeCases:
         # 404가 아닌 200 + 빈 결과, 또는 구현에 따라 다를 수 있음
         # 최소한 서버 크래시는 아님
         assert res.status_code in (200, 404)
+
+    def test_transcript_no_speaker_with_time_in_text(self, client):
+        """타임스탬프만 있고 화자 라벨 없는 transcript + 본문 내 시각 → 빈 결과."""
+        import app.database as db
+        db.create_job("edge4", "edge4.webm", title="시각 오탐 테스트")
+        db.update_job_result("edge4", status="done", transcript=(
+            "[00:12] 다음 회의는 15:00입니다\n"
+            "[01:30] 오늘 목표는 3가지입니다\n"
+        ))
+
+        res = client.get("/api/jobs/edge4/participation")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["speakers"] == []
+        assert data["total_duration"] == 0

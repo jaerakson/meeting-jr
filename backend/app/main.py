@@ -1993,7 +1993,7 @@ async def get_participation(job_id: str):
     if not use_diar:
         transcript: str = job.get("transcript") or ""
         import re as _re
-        pattern = _re.compile(r"^\[(\d{1,3}):(\d{2})\]\s*(.+?):", _re.MULTILINE)
+        pattern = _re.compile(r"^\[(\d{1,3}):(\d{2})\]\s*(.+?):\s", _re.MULTILINE)
         matches = list(pattern.finditer(transcript))
 
         if matches:
