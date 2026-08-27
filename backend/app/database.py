@@ -95,6 +95,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("suggested_speakers", "TEXT"),
         ("rating", "INTEGER"),
         ("diarization", "TEXT"),
+        ("share_token", "TEXT"),
     ]:
         if col not in existing:
             conn.execute(f"ALTER TABLE meetings ADD COLUMN {col} {definition}")
@@ -918,5 +919,45 @@ def delete_recording_note(job_id: str, note_id: str) -> bool:
         )
         conn.commit()
         return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Share Token
+# ---------------------------------------------------------------------------
+
+def create_share_token(job_id: str) -> str:
+    """uuid4 토큰 생성, share_token 컬럼에 저장. 이미 있으면 기존 반환."""
+    import uuid
+    job = get_job(job_id)
+    if job and job.get("share_token"):
+        return job["share_token"]
+    token = str(uuid.uuid4())
+    conn = _get_conn()
+    try:
+        conn.execute("UPDATE meetings SET share_token = ? WHERE id = ?", (token, job_id))
+        conn.commit()
+    finally:
+        conn.close()
+    return token
+
+
+def get_job_by_share_token(token: str) -> dict | None:
+    """share_token으로 회의 조회. 없으면 None."""
+    conn = _get_conn()
+    try:
+        row = conn.execute("SELECT * FROM meetings WHERE share_token = ?", (token,)).fetchone()
+        return _row_to_dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def revoke_share_token(job_id: str) -> None:
+    """share_token을 NULL로 설정."""
+    conn = _get_conn()
+    try:
+        conn.execute("UPDATE meetings SET share_token = NULL WHERE id = ?", (job_id,))
+        conn.commit()
     finally:
         conn.close()
