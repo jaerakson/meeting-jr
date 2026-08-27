@@ -10,6 +10,8 @@ import asyncio
 import io
 import json
 import os
+import subprocess
+import tempfile
 import uuid
 import zipfile
 
@@ -112,6 +114,54 @@ app.add_middleware(
 
 
 # ---------------------------------------------------------------------------
+# WebM remux 유틸
+# ---------------------------------------------------------------------------
+
+async def _remux_webm_if_needed(file_path: Path) -> None:
+    """WebM 파일에 duration/seek cues가 없으면 ffmpeg remux로 추가한다."""
+    if file_path.suffix.lower() != ".webm":
+        return
+
+    def _do_remux():
+        # ffprobe로 duration 확인
+        try:
+            probe = subprocess.run(
+                ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
+                 "-of", "default=noprint_wrappers=1:nokey=1", str(file_path)],
+                capture_output=True, text=True, timeout=10,
+            )
+            duration_str = probe.stdout.strip()
+            # duration이 유효한 숫자면 remux 불필요
+            if duration_str and duration_str != "N/A":
+                try:
+                    float(duration_str)
+                    return  # 이미 seekable
+                except ValueError:
+                    pass
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return  # ffprobe 없으면 스킵
+
+        # ffmpeg -c copy remux
+        tmp_path = None
+        try:
+            tmp_fd, tmp_path = tempfile.mkstemp(suffix=".webm", dir=str(file_path.parent))
+            os.close(tmp_fd)
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", str(file_path), "-c", "copy", tmp_path],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode == 0 and Path(tmp_path).stat().st_size > 0:
+                Path(tmp_path).replace(file_path)
+            else:
+                Path(tmp_path).unlink(missing_ok=True)
+        except Exception:
+            if tmp_path:
+                Path(tmp_path).unlink(missing_ok=True)
+
+    await asyncio.to_thread(_do_remux)
+
+
+# ---------------------------------------------------------------------------
 # 1) POST /api/record  — webm Blob 전송
 # ---------------------------------------------------------------------------
 
@@ -151,6 +201,9 @@ async def record_audio(
     if total_size == 0:
         save_path.unlink(missing_ok=True)
         raise HTTPException(status_code=422, detail="오디오 데이터가 없습니다.")
+
+    # WebM seekable remux
+    await _remux_webm_if_needed(save_path)
 
     title = "회의록"
     # category_id 유효성 확인, 없으면 "meeting" 폴백
@@ -664,6 +717,8 @@ async def get_audio(job_id: str):
         raise HTTPException(status_code=404, detail="오디오 파일을 찾을 수 없습니다.")
 
     audio_path = audio_files[0]
+    # 기존 녹음 파일도 서빙 시 remux (이미 처리된 파일은 건너뜀)
+    await _remux_webm_if_needed(audio_path)
     media_types = {
         ".mp3": "audio/mpeg",
         ".m4a": "audio/mp4",
