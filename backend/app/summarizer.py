@@ -172,3 +172,75 @@ async def generate_summary(
         })
 
     return summary_md
+
+
+async def generate_followup_comparison(
+    pending_items: list[dict],
+    transcript: str,
+    summary: str,
+) -> list[dict]:
+    """이전 회의 미완료 액션아이템을 현재 회의 transcript/summary와 대조한다.
+
+    Returns:
+        [{"text": "...", "assignee": "...", "ai_status": "completed"|"mentioned"|"not_mentioned",
+          "ai_evidence": "...", "user_status": null, "confirmed": false}, ...]
+    """
+    items_text = "\n".join(
+        f"- {'@'+it['assignee']+' ' if it.get('assignee') else ''}{it['text']}"
+        for it in pending_items
+    )
+
+    prompt = f"""다음은 이전 회의에서 남은 미완료 액션아이템입니다:
+
+{items_text}
+
+아래는 이번 회의의 내용입니다:
+
+## 회의 요약
+{summary}
+
+## 회의 스크립트
+{transcript[:3000]}
+
+위 액션아이템 각각에 대해, 이번 회의에서 어떻게 다뤄졌는지 분석하세요.
+반드시 아래 JSON 배열 형식으로만 응답하세요 (다른 텍스트 없이):
+
+[
+  {{
+    "text": "액션아이템 원문",
+    "assignee": "담당자",
+    "ai_status": "completed 또는 mentioned 또는 not_mentioned",
+    "ai_evidence": "근거 (해당 발언 요약 또는 빈 문자열)"
+  }}
+]
+
+- completed: 이번 회의에서 완료되었거나 완료 보고된 항목
+- mentioned: 언급은 되었으나 완료 여부 불확실
+- not_mentioned: 이번 회의에서 전혀 언급되지 않음"""
+
+    import re
+
+    proc = await asyncio.create_subprocess_exec(
+        "claude", "-p", prompt, "--model", "claude-sonnet-4-6",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        raise RuntimeError(f"claude CLI 실패: {stderr.decode()}")
+
+    raw = stdout.decode().strip()
+    # JSON 파싱 (마크다운 코드블록 안에 있을 수 있음)
+    json_match = re.search(r'\[.*\]', raw, re.DOTALL)
+    if not json_match:
+        raise ValueError("JSON 배열을 찾을 수 없습니다")
+
+    items = json.loads(json_match.group())
+
+    # user_status, confirmed 필드 추가
+    for item in items:
+        item.setdefault("user_status", None)
+        item.setdefault("confirmed", False)
+
+    return items

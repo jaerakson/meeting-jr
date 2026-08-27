@@ -64,6 +64,15 @@ from .database import (
     save_recording_notes,
     get_recording_notes,
     delete_recording_note,
+    create_series,
+    get_all_series,
+    get_series,
+    get_series_meetings,
+    update_series,
+    delete_series,
+    update_job_series,
+    get_previous_series_meeting,
+    update_job_followup,
 )
 from .job_queue import job_queue, start_worker, progress_store, update_progress
 from .settings_manager import get_settings_status, get_setting, set_setting, SETTING_KEYS
@@ -470,6 +479,27 @@ async def run_summary(job_id: str, script_path: str, speaker_map: dict, category
             update_job_action_items(job_id, action_items)
 
         update_job_result(job_id, summary=summary, status="done")
+
+        # 후속조치 자동 대조 (시리즈 할당 시에만, 실패해도 job은 done 유지)
+        try:
+            job_after = get_job(job_id)
+            _series_id = job_after.get("series_id") if job_after else None
+            if _series_id:
+                _prev = get_previous_series_meeting(job_id, _series_id)
+                if _prev and _prev.get("action_items"):
+                    _pending = [ai for ai in _prev["action_items"] if not ai.get("done")]
+                    if _pending:
+                        from .summarizer import generate_followup_comparison
+                        _result = await generate_followup_comparison(
+                            _pending,
+                            job_after.get("transcript", ""),
+                            summary,
+                        )
+                        _followup = _result
+                        update_job_followup(job_id, _followup)
+        except Exception:
+            pass  # 대조 실패해도 요약은 이미 완료
+
         update_progress(job_id, {
             "stage": "done",
             "progress": 100,
@@ -1926,6 +1956,194 @@ async def rename_speakers(job_id: str, body: dict):
         _save_speakers(speaker_map)
 
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# 회의 시리즈 CRUD
+# ---------------------------------------------------------------------------
+
+@app.post("/api/series")
+async def create_series_endpoint(body: dict):
+    """시리즈 생성."""
+    name = body.get("name")
+    if not name or not isinstance(name, str) or not name.strip():
+        raise HTTPException(status_code=422, detail="name이 필요합니다.")
+    series_id = str(uuid.uuid4())[:8]
+    description = body.get("description", "")
+    return create_series(series_id, name.strip(), description)
+
+
+@app.get("/api/series")
+async def list_series():
+    """시리즈 목록."""
+    return {"items": get_all_series()}
+
+
+@app.get("/api/series/{series_id}")
+async def get_series_detail(series_id: str):
+    """시리즈 상세 + 연결 회의 목록."""
+    s = get_series(series_id)
+    if not s:
+        raise HTTPException(status_code=404, detail="시리즈를 찾을 수 없습니다.")
+    s["meetings"] = get_series_meetings(series_id)
+    return s
+
+
+@app.patch("/api/series/{series_id}")
+async def update_series_endpoint(series_id: str, body: dict):
+    """시리즈 수정."""
+    s = get_series(series_id)
+    if not s:
+        raise HTTPException(status_code=404, detail="시리즈를 찾을 수 없습니다.")
+    return update_series(series_id, **body)
+
+
+@app.delete("/api/series/{series_id}")
+async def delete_series_endpoint(series_id: str):
+    """시리즈 삭제."""
+    if not delete_series(series_id):
+        raise HTTPException(status_code=404, detail="시리즈를 찾을 수 없습니다.")
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# 회의-시리즈 연결
+# ---------------------------------------------------------------------------
+
+@app.patch("/api/jobs/{job_id}/series")
+async def assign_series(job_id: str, body: dict):
+    """회의에 시리즈 할당/해제."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+    series_id = body.get("series_id")  # None이면 해제
+    update_job_series(job_id, series_id)
+    return get_job(job_id)
+
+
+# ---------------------------------------------------------------------------
+# 후속조치 (followup)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/jobs/{job_id}/followup")
+async def get_followup(job_id: str):
+    """후속조치 조회."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+
+    followup = job.get("followup_items")
+
+    # followup_items가 저장되어 있을 때
+    if followup:
+        # list 형태로 저장된 경우 → 시리즈 직전 회의 정보로 감싸서 반환
+        if isinstance(followup, list):
+            items = followup
+        elif isinstance(followup, dict) and "items" in followup:
+            return followup
+        else:
+            items = []
+
+        # 시리즈 직전 회의 정보 조회
+        source_job_id = None
+        source_job_title = None
+        series_id = job.get("series_id")
+        if series_id:
+            prev = get_previous_series_meeting(job_id, series_id)
+            if prev:
+                source_job_id = prev["id"]
+                source_job_title = prev.get("title")
+
+        return {
+            "source_job_id": source_job_id,
+            "source_job_title": source_job_title,
+            "items": items,
+        }
+
+    # followup_items 없으면 빈 구조 반환
+    return {"source_job_id": None, "source_job_title": None, "items": []}
+
+
+@app.patch("/api/jobs/{job_id}/followup")
+async def patch_followup(job_id: str, body: dict):
+    """후속조치 사용자 확정 (user_status, confirmed)."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+
+    updates = body.get("items", [])
+    raw_followup = job.get("followup_items")
+
+    # 저장된 followup_items에서 items 리스트 추출
+    if isinstance(raw_followup, list):
+        items = raw_followup
+    elif isinstance(raw_followup, dict) and "items" in raw_followup:
+        items = raw_followup["items"]
+    else:
+        items = []
+
+    for upd in updates:
+        idx = upd.get("index")
+        if idx is not None and 0 <= idx < len(items):
+            if "user_status" in upd:
+                items[idx]["user_status"] = upd["user_status"]
+            if "confirmed" in upd:
+                items[idx]["confirmed"] = upd["confirmed"]
+
+    # list 형태로 저장 (GET에서 source 정보는 동적으로 조합)
+    update_job_followup(job_id, items)
+
+    # 응답은 source 정보 포함
+    source_job_id = None
+    source_job_title = None
+    series_id = job.get("series_id")
+    if series_id:
+        prev = get_previous_series_meeting(job_id, series_id)
+        if prev:
+            source_job_id = prev["id"]
+            source_job_title = prev.get("title")
+
+    return {
+        "source_job_id": source_job_id,
+        "source_job_title": source_job_title,
+        "items": items,
+    }
+
+
+@app.post("/api/jobs/{job_id}/followup/generate")
+async def generate_followup(job_id: str):
+    """후속조치 대조를 (재)생성한다. claude -p 사용."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+    series_id = job.get("series_id")
+    if not series_id:
+        return {"source_job_id": None, "source_job_title": None, "items": []}
+
+    prev = get_previous_series_meeting(job_id, series_id)
+    if not prev or not prev.get("action_items"):
+        return {"source_job_id": None, "source_job_title": None, "items": []}
+
+    pending_items = [ai for ai in prev["action_items"] if not ai.get("done")]
+    if not pending_items:
+        return {"source_job_id": prev["id"], "source_job_title": prev.get("title"), "items": []}
+
+    # claude -p로 대조
+    from .summarizer import generate_followup_comparison
+    try:
+        result = await generate_followup_comparison(
+            pending_items, job.get("transcript", ""), job.get("summary", "")
+        )
+    except Exception:
+        result = []
+
+    followup_items = result
+    update_job_followup(job_id, followup_items)
+    return {
+        "source_job_id": prev["id"],
+        "source_job_title": prev.get("title"),
+        "items": result,
+    }
 
 
 # ---------------------------------------------------------------------------
