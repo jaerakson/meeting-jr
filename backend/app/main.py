@@ -45,6 +45,9 @@ from .database import (
     update_job_category,
     update_job_action_items,
     get_all_action_items,
+    create_share_token,
+    get_job_by_share_token,
+    revoke_share_token,
     toggle_bookmark,
     update_job_memo,
     update_job_tags,
@@ -667,6 +670,45 @@ async def patch_summary(job_id: str, body: dict):
 # ---------------------------------------------------------------------------
 # 9-c) PATCH /api/jobs/{job_id}/action-items
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# 공유 링크 API
+# ---------------------------------------------------------------------------
+
+@app.post("/api/jobs/{job_id}/share")
+async def share_job(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+    if job["status"] != "done":
+        raise HTTPException(status_code=400, detail="완료된 회의만 공유할 수 있습니다.")
+    token = create_share_token(job_id)
+    return {"token": token, "url": f"/shared/{token}"}
+
+
+@app.get("/api/shared/{token}")
+async def get_shared(token: str):
+    job = get_job_by_share_token(token)
+    if not job:
+        raise HTTPException(status_code=404, detail="공유 링크가 유효하지 않습니다.")
+    return {
+        "title": job.get("title"),
+        "summary": job.get("summary"),
+        "transcript": job.get("transcript"),
+        "speakers": job.get("speakers", {}),
+        "created_at": job.get("created_at"),
+        "duration_sec": job.get("duration_sec"),
+    }
+
+
+@app.delete("/api/jobs/{job_id}/share")
+async def revoke_share(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+    revoke_share_token(job_id)
+    return {"status": "revoked"}
+
 
 @app.get("/api/action-items")
 async def get_action_items(

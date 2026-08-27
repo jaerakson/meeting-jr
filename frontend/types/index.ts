@@ -39,6 +39,7 @@ export interface Job {
   error_msg?: string
   notion_url?: string
   notion_page_id?: string
+  share_token?: string
   category_id?: string
   category?: string
   action_items?: ActionItem[]

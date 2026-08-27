@@ -12,6 +12,7 @@ interface SummaryPanelProps {
   actionItems?: ActionItem[]
   categoryId?: string
   onTimeClick?: (seconds: number) => void
+  shareToken?: string
 }
 
 const TABS = ['핵심 요약', '주요 논의', '결정 사항', '액션 아이템'] as const
@@ -176,7 +177,7 @@ function renderMarkdown(text: string, onTimeClick?: (seconds: number) => void): 
   return nodes
 }
 
-export default function SummaryPanel({ summary, jobId, initialRating, onSummaryUpdate, speakers, actionItems: initialActionItems, categoryId: initialCategoryId, onTimeClick }: SummaryPanelProps) {
+export default function SummaryPanel({ summary, jobId, initialRating, onSummaryUpdate, speakers, actionItems: initialActionItems, categoryId: initialCategoryId, onTimeClick, shareToken: initialShareToken }: SummaryPanelProps) {
   const [activeTab, setActiveTab] = useState<typeof TABS[number]>('핵심 요약')
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(summary)
@@ -191,6 +192,10 @@ export default function SummaryPanel({ summary, jobId, initialRating, onSummaryU
   const [showRegenModal, setShowRegenModal] = useState(false)
   const [regenCategoryId, setRegenCategoryId] = useState(initialCategoryId || 'meeting')
   const [categories, setCategories] = useState<{ id: string; name: string; icon: string }[]>([])
+  const [shareToken, setShareToken] = useState(initialShareToken || '')
+  const [shareFeedback, setShareFeedback] = useState('')
+  const [shareFeedbackError, setShareFeedbackError] = useState(false)
+  const [shareLoading, setShareLoading] = useState(false)
 
   useEffect(() => {
     fetch('/api/categories').then(r => r.json()).then(setCategories).catch(() => {})
@@ -205,6 +210,8 @@ export default function SummaryPanel({ summary, jobId, initialRating, onSummaryU
     setRegenCategoryId(initialCategoryId || 'meeting')
     setRating(initialRating || 0)
     setHoverRating(0)
+    setShareToken(initialShareToken || '')
+    setShareFeedback('')
   }, [jobId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // initialActionItems가 외부에서 바뀌면 동기화
@@ -325,6 +332,54 @@ export default function SummaryPanel({ summary, jobId, initialRating, onSummaryU
     }
   }
 
+  const handleShare = async () => {
+    setShareLoading(true)
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/share`, { method: 'POST' })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setShareToken(data.token)
+      const url = `${window.location.origin}${data.url}`
+      await navigator.clipboard.writeText(url)
+      setShareFeedbackError(false)
+      setShareFeedback('링크 복사됨')
+      setTimeout(() => setShareFeedback(''), 2000)
+    } catch {
+      setShareFeedbackError(true)
+      setShareFeedback('공유 실패')
+      setTimeout(() => { setShareFeedback(''); setShareFeedbackError(false) }, 2000)
+    } finally {
+      setShareLoading(false)
+    }
+  }
+
+  const handleCopyShareLink = async () => {
+    if (!shareToken) return
+    const url = `${window.location.origin}/shared/${shareToken}`
+    await navigator.clipboard.writeText(url)
+    setShareFeedbackError(false)
+    setShareFeedback('링크 복사됨')
+    setTimeout(() => setShareFeedback(''), 2000)
+  }
+
+  const handleStopShare = async () => {
+    setShareLoading(true)
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/share`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      setShareToken('')
+      setShareFeedbackError(false)
+      setShareFeedback('공유 중지됨')
+      setTimeout(() => setShareFeedback(''), 2000)
+    } catch {
+      setShareFeedbackError(true)
+      setShareFeedback('중지 실패')
+      setTimeout(() => { setShareFeedback(''); setShareFeedbackError(false) }, 2000)
+    } finally {
+      setShareLoading(false)
+    }
+  }
+
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
       {/* 헤더: 탭 + 버튼 */}
@@ -401,6 +456,37 @@ export default function SummaryPanel({ summary, jobId, initialRating, onSummaryU
               >
                 {regenerating ? '재생성 중...' : '↻ 재생성'}
               </button>
+              {shareFeedback ? (
+                <span className={`px-2.5 py-1.5 text-xs font-medium ${
+                  shareFeedbackError
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-green-600 dark:text-green-400'
+                }`}>{shareFeedback}</span>
+              ) : shareToken ? (
+                <>
+                  <button
+                    onClick={handleCopyShareLink}
+                    className="px-2.5 py-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                  >
+                    링크 복사
+                  </button>
+                  <button
+                    onClick={handleStopShare}
+                    disabled={shareLoading}
+                    className="px-2.5 py-1.5 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                  >
+                    공유 중지
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleShare}
+                  disabled={shareLoading}
+                  className="px-2.5 py-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-50"
+                >
+                  {shareLoading ? '처리 중...' : '공유'}
+                </button>
+              )}
             </>
           )}
         </div>
