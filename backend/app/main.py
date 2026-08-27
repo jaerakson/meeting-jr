@@ -1928,6 +1928,123 @@ async def rename_speakers(job_id: str, body: dict):
     return {"ok": True}
 
 
+# ---------------------------------------------------------------------------
+# 발언 참여도 분석
+# ---------------------------------------------------------------------------
+
+@app.get("/api/jobs/{job_id}/participation")
+async def get_participation(job_id: str):
+    """화자별 발언 시간·비율·턴수 분석.
+
+    데이터 소스 우선순위:
+      1. diarization DB 조회
+      2. diarization 파일 폴백 ({job_id}_diarization.json) + lazy migration
+      3. transcript [MM:SS] 화자명: 타임스탬프 폴백
+    """
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
+
+    speaker_map: dict = job.get("speakers") or {}
+    result_speakers: list[dict] = []
+    total_duration: float = 0.0
+
+    # --- 1) diarization 기반 (DB → 파일 폴백 + lazy migration) ---
+    from .database import get_job_diarization
+    diar_data = get_job_diarization(job_id)
+    if not diar_data:
+        diar_path = INPUT_DIR / f"{job_id}_diarization.json"
+        if diar_path.exists():
+            diar_data = json.loads(diar_path.read_text(encoding="utf-8"))
+            update_job_result(job_id, diarization=diar_data)
+
+    use_diar = False
+    if diar_data:
+        for label, segments in diar_data.items():
+            if not segments:
+                # 빈 세그먼트라도 diarization이 존재한다고 간주
+                result_speakers.append({
+                    "label": label,
+                    "display_name": speaker_map.get(label, label),
+                    "total_seconds": 0,
+                    "percentage": 0.0,
+                    "turn_count": 0,
+                    "avg_turn_seconds": 0.0,
+                })
+                use_diar = True
+                continue
+            total_sec = sum(
+                max(seg.get("end", 0) - seg.get("start", 0), 0) for seg in segments
+            )
+            turn_count = len(segments)
+            avg_turn = total_sec / turn_count if turn_count else 0.0
+            result_speakers.append({
+                "label": label,
+                "display_name": speaker_map.get(label, label),
+                "total_seconds": round(total_sec, 2),
+                "percentage": 0.0,  # 아래에서 재계산
+                "turn_count": turn_count,
+                "avg_turn_seconds": round(avg_turn, 2),
+            })
+            use_diar = True
+        total_duration = sum(s["total_seconds"] for s in result_speakers)
+
+    # --- 2) transcript 폴백 ---
+    if not use_diar:
+        transcript: str = job.get("transcript") or ""
+        import re as _re
+        pattern = _re.compile(r"^\[(\d{1,3}):(\d{2})\]\s*(.+?):\s", _re.MULTILINE)
+        matches = list(pattern.finditer(transcript))
+
+        if matches:
+            # 각 발언의 시작 시각(초)과 화자
+            entries: list[tuple[float, str]] = []
+            for m in matches:
+                mm, ss, spk = int(m.group(1)), int(m.group(2)), m.group(3)
+                entries.append((mm * 60 + ss, spk))
+
+            # 각 발언 구간 = 다음 발언 시작까지, 마지막은 10초 기본값
+            from collections import defaultdict
+            spk_stats: dict[str, dict] = defaultdict(lambda: {"total": 0.0, "turns": 0})
+
+            for i, (start, spk) in enumerate(entries):
+                if i + 1 < len(entries):
+                    dur = entries[i + 1][0] - start
+                else:
+                    dur = 10.0  # 마지막 발언 기본 10초
+                if dur < 0:
+                    dur = 0
+                spk_stats[spk]["total"] += dur
+                spk_stats[spk]["turns"] += 1
+
+            for label, stats in spk_stats.items():
+                total_sec = stats["total"]
+                turn_count = stats["turns"]
+                avg_turn = total_sec / turn_count if turn_count else 0.0
+                result_speakers.append({
+                    "label": label,
+                    "display_name": speaker_map.get(label, label),
+                    "total_seconds": round(total_sec, 2),
+                    "percentage": 0.0,
+                    "turn_count": turn_count,
+                    "avg_turn_seconds": round(avg_turn, 2),
+                })
+            total_duration = sum(s["total_seconds"] for s in result_speakers)
+
+    # --- percentage 계산 ---
+    if total_duration > 0:
+        for sp in result_speakers:
+            sp["percentage"] = round(sp["total_seconds"] / total_duration * 100, 2)
+
+    # --- total_seconds 내림차순 정렬 ---
+    result_speakers.sort(key=lambda s: s["total_seconds"], reverse=True)
+
+    return {
+        "speakers": result_speakers,
+        "total_duration": round(total_duration, 2),
+    }
+
+
 @app.post("/api/jobs/{job_id}/save-speaker-profile")
 async def save_speaker_profile(job_id: str, body: dict):
     """완료된 회의의 화자를 프로필로 저장.
