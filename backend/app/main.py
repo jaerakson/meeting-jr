@@ -706,7 +706,7 @@ async def download_summary(job_id: str):
 # ---------------------------------------------------------------------------
 
 @app.get("/api/jobs/{job_id}/audio")
-async def get_audio(job_id: str):
+async def get_audio(job_id: str, request: Request):
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
@@ -727,10 +727,48 @@ async def get_audio(job_id: str):
     }
     media_type = media_types.get(audio_path.suffix.lower(), "application/octet-stream")
 
+    file_size = audio_path.stat().st_size
+    range_header = request.headers.get("range")
+
+    if range_header:
+        # Range: bytes=start-end
+        range_spec = range_header.replace("bytes=", "")
+        parts = range_spec.split("-")
+        start = int(parts[0]) if parts[0] else 0
+        end = int(parts[1]) if parts[1] else file_size - 1
+        end = min(end, file_size - 1)
+        content_length = end - start + 1
+
+        def iter_range():
+            with open(audio_path, "rb") as f:
+                f.seek(start)
+                remaining = content_length
+                while remaining > 0:
+                    chunk_size = min(8192, remaining)
+                    data = f.read(chunk_size)
+                    if not data:
+                        break
+                    remaining -= len(data)
+                    yield data
+
+        return StreamingResponse(
+            iter_range(),
+            status_code=206,
+            media_type=media_type,
+            headers={
+                "Content-Range": f"bytes {start}-{end}/{file_size}",
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(content_length),
+                "Content-Disposition": f'inline; filename="{audio_path.name}"',
+            },
+        )
+
+    # Range 없으면 전체 반환
     return FileResponse(
         path=str(audio_path),
         media_type=media_type,
         filename=audio_path.name,
+        headers={"Accept-Ranges": "bytes"},
     )
 
 
