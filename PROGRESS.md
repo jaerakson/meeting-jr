@@ -1,3 +1,50 @@
+## 2026-08-28 (작업 PC: 로컬) — 세션 52 (PR #75~#76: 발언 참여도 + 회의 시리즈)
+- 브랜치: main (PR #75 3774226, PR #76 3a7a178)
+- 완료:
+  - **PR #75 - 발언 참여도 분석:**
+    - GET /api/jobs/{id}/participation — 화자별 발언시간·비중·턴수·평균 발언길이
+    - 데이터 소스 우선순위: diarization DB → 파일 폴백(+lazy migration) → transcript 타임스탬프 근사
+    - ParticipationChart.tsx (recharts 수평 BarChart, 다크모드), MainArea 우측 패널 max-h-[35%] 가드 안에 배치
+    - 코드리뷰 이슈 4건 수정:
+      1) transcript 폴백 정규식이 SPEAKER_XX만 인식 → 이름 라벨 txt 업로드에서 빈 결과 (신뢰도 100)
+      2) diarization 파일 폴백(lazy migration) 누락 → PR #63 이전 회의가 부정확한 근사치 사용 (80)
+      3) 차트가 PR #64 높이 가드 밖에 삽입 → 높이 붕괴 재발 경로 (75, 권고로 수정)
+      4) 재리뷰에서 발견: 정규식이 콜론 뒤 공백 미요구 → `[00:12] 다음 회의는 15:00입니다`를 화자로 오인 → `(.+?):\s` 로 수정
+    - 테스트 18개 추가 (총 166개)
+  - **PR #76 - 회의 시리즈 & 후속조치 자동 대조:**
+    - meeting_series 테이블 + meetings.series_id/followup_items 컬럼 (PR #63의 _migrate idempotent 패턴)
+    - 시리즈 API 6개 + 후속조치 API 3개
+    - 후속조치: 같은 시리즈 직전 회의의 미완료 액션아이템을 claude -p로 현재 회의와 대조
+      → ai_status(AI 추정) / user_status·confirmed(사용자 확정) 이원화. AI 추정만으로 완료 처리하지 않음
+    - SeriesSelect.tsx, FollowupPanel.tsx 신규 (다크모드, PR #64 높이 가드 준수)
+    - DEVGUIDE.md 섹션 6(API)·섹션 10(확정 결정사항) 갱신 — PR #71~#75 누락분 일괄 반영
+    - 코드리뷰 이슈 4건(확정) + 3건(권고) 수정:
+      1) [100] 후속조치에 사용자 진입점 없음 — 자동 대조는 run_summary에서 series_id를 보는데
+         SeriesSelect는 status==='done' 이후에만 렌더링 → 그 시점 series_id는 항상 NULL.
+         수동 "재분석" 버튼도 items 비면 패널째 숨겨져 최초 생성 불가.
+         → run_summary 자동 대조 제거, assign_series에서 트리거, items 빈 경우 "후속조치 분석" CTA 노출
+      2) [100] PATCH /followup 계약 불일치 — 백엔드는 {index,...} 델타 기대, 프론트는 index 없는 전체 배열 전송
+         → 사용자 확정이 화면에만 반영되고 저장 안 됨. 프론트를 델타 전송으로 수정
+      3) [95] 재생성 실패 시 result=[] 저장 → 확정해둔 user_status/confirmed 영구 소실. 실패 시 500 반환으로 수정
+      4) [100] generate_followup_comparison 모델 하드코딩 → model 파라미터 + get_setting("CLAUDE_MODEL") 주입
+      권고: ai_status 폴백 배지(LLM 스키마 밖 값 크래시 방지), SSE done 지연 해소, 미사용 get_job_followup 삭제
+    - 테스트 23개 추가 (총 189개)
+- 현재 상태: 안정 — 전체 189개 테스트 통과, tsc --noEmit 통과 (팀리드 직접 검증)
+- 막힌 점/주의:
+  - 2026-08-27 18:09 계정 세션 한도로 팀 전체 중단 → 22:45 재개. 중단 시점에 미커밋 변경이 깨진 상태로 남아 있었음
+    (summarizer 시그니처에 model 없는데 main.py가 model= 전달 → TypeError). 재개 후 정리 완료.
+  - PR #76 최초 제출 시 테스트 185개가 통과했음에도 위 이슈 1·2가 남아 있었다. 원인: 테스트가 전부 DB 직접 조작 또는
+    엔드포인트 직접 호출이라 **실제 사용자 경로**(시리즈 할당 → 대조 생성, 프론트가 보내는 payload 형태)를 지나지 않았음.
+    앞으로 UI가 개입하는 기능은 사용자 경로 자체를 검증하는 테스트를 반드시 포함할 것.
+- 다음 할 일 (기획 후보, 사용자 미승인):
+  - 용어집(고유명사 사전) 기반 STT 후보정 / 액션아이템 마감일+리마인더 / 하이라이트 클립 공유 / 이메일·Slack 발송
+  - C-1 실시간 전사 (MLX-Whisper 스트리밍 리서치 선행 필요, 리서치 비용 커서 후순위)
+- 관련 파일: backend/app/{main,database,summarizer}.py, backend/tests/test_{participation,series,followup}_api.py,
+  frontend/components/{ParticipationChart,SeriesSelect,FollowupPanel,MainArea}.tsx, frontend/types/index.ts, DEVGUIDE.md
+- 푸시 여부: origin/main 푸시 완료 (PR #75 3774226, PR #76 3a7a178 — 둘 다 squash 머지 + 브랜치 삭제)
+
+---
+
 ## 2026-08-28 (작업 PC: 로컬) — 세션 51 (PR #71~#74: 4대 신규 기능 추가)
 - 브랜치: main (PR #71 417ed8e, #72 a6a044f, #73 55d6614, #74 afe0574)
 - 완료:
