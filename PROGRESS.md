@@ -1,3 +1,33 @@
+## 2026-08-28 (작업 PC: 로컬) — 세션 51 (PR #71~#74: 4대 신규 기능 추가)
+- 브랜치: main (PR #71 417ed8e, #72 a6a044f, #73 55d6614, #74 afe0574)
+- 완료:
+  - **PR #71 - 액션 아이템 통합 대시보드:**
+    - GET /api/action-items — assignee/done 필터, 페이지네이션, pending_count, assignees 목록
+    - /action-items 전용 페이지 — 필터 바, 완료 토글(optimistic), 원본 회의 링크
+    - 사이드바 미완료 건수 배지
+    - 코드리뷰 이슈: assignee 드롭다운 현재 페이지만 표시 → API에 assignees 필드 추가로 수정
+  - **PR #72 - 회의록 공유 링크:**
+    - POST /api/jobs/{id}/share, GET /api/shared/{token}, DELETE /api/jobs/{id}/share
+    - /shared/[token] 읽기 전용 공유 페이지 (요약+트랜스크립트, 화자 컬러, 워터마크)
+    - SummaryPanel에 공유/링크복사/공유중지 버튼
+    - 코드리뷰 이슈: 에러 피드백 녹색 표시 → 에러는 빨간색으로 수정
+  - **PR #73 - AI 추가 질의:**
+    - POST /api/jobs/{id}/ask — transcript+summary context로 claude -p 질의
+    - SummaryPanel 'AI 질의' 탭 — 채팅 버블 UI, 세션 내 히스토리
+    - 코드리뷰: 이슈 없음 통과
+  - **PR #74 - 크로스 회의 인사이트:**
+    - POST /api/insights — keyword/날짜 필터 → 복수 회의 summary 기반 claude -p 질의
+    - /insights 페이지 — 키워드, 날짜 범위, 질문 UI + 분석 결과 + 참조 회의 링크
+    - 사이드바 "인사이트" 링크
+    - 코드리뷰 이슈: keyword 경로 50개 vs no-keyword 10개 비대칭 → 양쪽 [:10] 통일
+  - 전체 148개 테스트 통과, 4건 코드리뷰 모두 통과
+- 현재 상태: 안정 — 로드맵 A-1~B-2 전부 완료
+- 다음 할 일: C-1 실시간 전사 (MLX-Whisper 스트리밍 리서치 선행 필요)
+- 관련 파일: backend/app/main.py, database.py, frontend/app/action-items/, shared/, insights/, components/SummaryPanel.tsx, Sidebar.tsx
+- 푸시 여부: origin/main 푸시 완료 (afe0574)
+
+---
+
 ## 2026-08-27 (작업 PC: 로컬) — 세션 50 (PR #68~#70: 녹음 파형 + 오디오 시킹 수정)
 - 브랜치: main (PR #68 9533352, #69 2a2b183, #70 3dfcbfa)
 - 완료:
