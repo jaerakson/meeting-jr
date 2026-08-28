@@ -1808,6 +1808,7 @@ async def apply_match(job_id: str, body: dict):
             label_to_current[raw_label] = raw_label.strip()  # 기본값
 
     # 2) identity-mapped 케이스 처리: diarization 타임스탬프로 역매핑
+    diar_data = None  # 충돌 해소에도 사용하므로 hoist
     identity_labels = [l for l in matches if l not in speakers]
     if identity_labels:
         from .database import get_job_diarization
@@ -1827,25 +1828,68 @@ async def apply_match(job_id: str, body: dict):
     # 3) 치환 맵 구축 + 원자적 transcript 교체
     replace_map: dict[str, str] = {}
     new_speakers = dict(speakers)
+    skipped_labels: list[str] = []
+
+    # 3a) 충돌 감지: current_name → [(raw_label, new_name)] 그룹화
+    current_name_groups: dict[str, list[tuple[str, str]]] = {}
     for raw_label, new_name in matches.items():
         current_name = label_to_current.get(raw_label, raw_label)
 
         # identity label인데 해석 실패 → 건너뛰기 (불일치 방지)
         if raw_label not in speakers and current_name == raw_label:
+            skipped_labels.append(raw_label)
             continue
 
-        if current_name != new_name:
-            replace_map[current_name] = new_name
+        current_name_groups.setdefault(current_name, []).append((raw_label, new_name))
 
-        # speakers 업데이트
-        if raw_label in new_speakers:
-            new_speakers[raw_label] = new_name
+    # 3b) 충돌 없는 그룹 → replace_map, 충돌 그룹 → 타임스탬프 기반 치환 예약
+    collision_groups: dict[str, list[tuple[str, str]]] = {}
+    for current_name, entries in current_name_groups.items():
+        if len(entries) == 1:
+            # 충돌 없음: 기존 방식
+            raw_label, new_name = entries[0]
+            if current_name != new_name:
+                replace_map[current_name] = new_name
+            if raw_label in new_speakers:
+                new_speakers[raw_label] = new_name
+            else:
+                if current_name in new_speakers:
+                    del new_speakers[current_name]
+                new_speakers[raw_label] = new_name
         else:
-            if current_name in new_speakers:
-                del new_speakers[current_name]
-            new_speakers[raw_label] = new_name
+            # 충돌: 여러 라벨이 같은 current_name으로 해석됨
+            if diar_data:
+                collision_groups[current_name] = entries
+                for raw_label, new_name in entries:
+                    if raw_label in new_speakers:
+                        new_speakers[raw_label] = new_name
+                    else:
+                        if current_name in new_speakers:
+                            del new_speakers[current_name]
+                        new_speakers[raw_label] = new_name
+            else:
+                # diar 없이 충돌 해소 불가: 첫 항목만 적용, 나머지 skip
+                first_raw, first_new = entries[0]
+                if current_name != first_new:
+                    replace_map[current_name] = first_new
+                if first_raw in new_speakers:
+                    new_speakers[first_raw] = first_new
+                else:
+                    if current_name in new_speakers:
+                        del new_speakers[current_name]
+                    new_speakers[first_raw] = first_new
+                for raw_label, new_name in entries[1:]:
+                    skipped_labels.append(raw_label)
 
-    # 단일 정규식 콜백으로 원자적 치환 (순차 replace의 누적 오염 방지)
+    # 전체 실패: matches의 모든 키가 skipped
+    if skipped_labels and len(skipped_labels) == len(matches):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "매칭할 수 있는 화자가 없습니다", "skipped": skipped_labels},
+        )
+
+    # 3c) 단일 정규식 콜백으로 원자적 치환 (충돌 없는 이름)
     if replace_map:
         escaped = '|'.join(re.escape(k) for k in replace_map)
         pattern = re.compile(
@@ -1857,8 +1901,41 @@ async def apply_match(job_id: str, body: dict):
             transcript
         )
 
+    # 3d) 충돌 그룹: diarization 타임스탬프 기반 라인별 치환
+    if collision_groups:
+        lines = transcript.split('\n')
+        new_lines = []
+        for line in lines:
+            line_m = re.match(r'^(\[\d+:\d{2}\]\s*)(.+?)(:\s)', line)
+            if line_m:
+                prefix, spk_name, colon = line_m.group(1), line_m.group(2), line_m.group(3)
+                rest = line[line_m.end():]
+                if spk_name in collision_groups:
+                    tm = re.match(r'\[(\d+):(\d{2})\]', line)
+                    if tm:
+                        ts = int(tm.group(1)) * 60 + int(tm.group(2))
+                        best_name = spk_name  # 폴백: 원래 이름 유지
+                        best_overlap = -1
+                        for raw_label, new_name in collision_groups[spk_name]:
+                            for seg in diar_data.get(raw_label, []):
+                                seg_s = seg.get("start", 0)
+                                seg_e = seg.get("end", 0)
+                                if seg_s <= ts < seg_e:
+                                    seg_len = seg_e - seg_s
+                                    if seg_len > best_overlap:
+                                        best_overlap = seg_len
+                                        best_name = new_name
+                        line = prefix + best_name + colon + rest
+            new_lines.append(line)
+        transcript = '\n'.join(new_lines)
+
     update_job_result(job_id, transcript=transcript, speakers=new_speakers)
-    return {"ok": True}
+
+    response: dict = {"ok": True}
+    if skipped_labels:
+        response["skipped"] = skipped_labels
+        response["warning"] = "일부 화자를 매칭할 수 없습니다"
+    return response
 
 
 # ---------------------------------------------------------------------------
