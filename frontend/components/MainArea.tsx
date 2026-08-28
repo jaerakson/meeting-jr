@@ -354,9 +354,15 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
         alert(data.detail || '매칭 적용 실패')
         return
       }
+      const data = await res.json()
       setShowRematchModal(false)
       setRematchResult(null)
       onJobsChange()
+
+      // 부분 적용 안내
+      if (data.skipped && data.skipped.length > 0) {
+        alert(`일부 화자(${data.skipped.join(', ')})는 매칭할 수 없습니다`)
+      }
     } catch {
       alert('매칭 적용에 실패했습니다.')
     }
