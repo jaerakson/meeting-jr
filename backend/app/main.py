@@ -1817,28 +1817,11 @@ async def apply_match(job_id: str, body: dict):
                 diar_data = json.loads(diar_path.read_text(encoding="utf-8"))
 
         if diar_data:
-            # transcript에서 타임스탬프 → 화자이름 추출
-            ts_pattern = re.compile(r'^\[(\d+):(\d{2})\]\s*(.+?):\s', re.MULTILINE)
-            transcript_entries = []
-            for m in ts_pattern.finditer(transcript):
-                sec = int(m.group(1)) * 60 + int(m.group(2))
-                transcript_entries.append((sec, m.group(3).strip()))
-
             for raw_label in identity_labels:
                 segs = diar_data.get(raw_label, [])
-                if not segs:
-                    continue
-                earliest = min(segs, key=lambda s: s.get("start", 0))
-                target_sec = earliest.get("start", 0)
-                best_name = None
-                best_diff = float('inf')
-                for ts_sec, name in transcript_entries:
-                    diff = abs(ts_sec - target_sec)
-                    if diff < best_diff:
-                        best_diff = diff
-                        best_name = name
-                if best_name and best_diff <= 10:
-                    label_to_current[raw_label] = best_name
+                resolved = _resolve_speaker_display(raw_label, segs, transcript)
+                if resolved:
+                    label_to_current[raw_label] = resolved
 
     # 3) transcript 교체 + speakers 업데이트
     new_speakers = dict(speakers)
@@ -2190,6 +2173,16 @@ async def generate_followup(job_id: str):
 # 발언 참여도 분석
 # ---------------------------------------------------------------------------
 
+_SPEAKER_XX_RE = re.compile(r'^SPEAKER_\d+$')
+
+
+def _is_identity_mapped(speaker_map: dict) -> bool:
+    """speaker_map 키가 SPEAKER_XX 패턴이 아닌 실명(identity 매핑)인지 판별."""
+    if not speaker_map:
+        return False
+    return any(not _SPEAKER_XX_RE.match(k) for k in speaker_map)
+
+
 def _resolve_speaker_display(
     label: str, segments: list[dict], transcript: str,
 ) -> str | None:
@@ -2240,15 +2233,22 @@ async def get_participation(job_id: str):
             update_job_result(job_id, diarization=diar_data)
 
     _transcript_text: str = job.get("transcript") or ""
+    _identity = _is_identity_mapped(speaker_map)
 
     use_diar = False
     if diar_data:
         for label, segments in diar_data.items():
-            # display_name: speaker_map 우선, identity-mapped일 때만 diar→transcript 역매핑 폴백
+            # display_name 결정: speaker_map 직접 매핑 우선
             display = speaker_map.get(label)
-            if not display or display == label:
-                # speaker_map에서 찾을 수 없으면 diar→transcript 역매핑 시도
+            if display and display != label:
+                # 직접 매핑 존재 (SPEAKER_XX → 실명) → 그대로 사용
+                pass
+            elif _identity:
+                # identity-mapped 회의 (ClovaNote 등): diar→transcript 역매핑 시도
                 display = _resolve_speaker_display(label, segments, _transcript_text) or label
+            else:
+                # 일반 매핑에서 미매핑 화자 → 라벨 그대로
+                display = label
 
             if not segments:
                 # 빈 세그먼트라도 diarization이 존재한다고 간주
