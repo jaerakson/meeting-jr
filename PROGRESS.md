@@ -1,3 +1,50 @@
+## 2026-08-29 (작업 PC: 로컬) — 세션 55 (PR #79: apply-match 이름 충돌 외 4건)
+- 브랜치: main (PR #79 b132d14)
+- 배경: PR #78 머지 후 정식 코드리뷰를 한 번 더 돌려 새 버그 4건 발견 → 이번 PR로 수정
+- 완료:
+  - **버그 1 [HIGH] replace_map 키 충돌** — `replace_map[current_name]` 이 현재 transcript 토큰으로 키를 잡아,
+    서로 다른 라벨이 같은 이름으로 해석되면 뒤엣것이 앞엣것을 덮어씀. speakers 에는 두 이름이 남는데
+    transcript 에는 하나만 남아 PR #78 이 고치려던 불일치가 재발.
+    → **충돌 시 라인 단위 치환**으로 격상. 각 라인의 `[MM:SS]` 를 diar 세그먼트와 overlap 면적으로 대조해 배정.
+      충돌 없는 경우는 기존 원자적 정규식 경로 유지(외과적 범위 축소)
+  - **버그 2 [MED] participation 중복 display_name** — 매핑 안 된 모든 라벨을 해석해 과분할 시 같은 이름 중복.
+    → `seen_display_names` 로 이미 차지한 이름이면 raw 라벨 폴백
+  - **버그 3 [MED] 해석 실패를 삼키고 200 반환** — diarization 없는 txt 업로드 회의에서 아무것도 안 바뀌는데
+    프론트는 성공으로 알고 모달을 닫음. → 응답 스펙 도입(200 / 200+skipped+warning / 422) + 프론트 안내
+  - **버그 4 [LOW] 공백 불일치** — 프론트가 transcript 엔 trim 한 이름을, speaker_map 엔 trim 안 한 값을 저장
+    → 백엔드 `.strip()` + 프론트 `.trim()` 이중 방어
+  - **코드리뷰 확정 4건 추가 수정** (리뷰 5개 중 4개가 각각 발견, 전부 재현 확인):
+    1) [HIGH] `diar_data` 를 identity 라벨이 있을 때만 조회 → 이미 매핑된 라벨끼리 충돌 시 diarization 이
+       DB 에 있어도 "없음" 경로로 퇴화. rematch 재호출이라는 정상 시나리오에서 발생. → 게이팅 분리
+    2) [MED] 라인별 치환이 포인트 매칭(`seg_s <= ts < seg_e`) → **PR #78 리뷰에서 지적된 회귀의 재발**.
+       서브초 드리프트에서 오배정. → `min(seg_e, line_end) - max(seg_s, line_start)` overlap 면적으로 통일
+    3) [HIGH] 세그먼트 커버리지 없는 라벨도 speakers 에 성공으로 확정 → 이 PR 자신의 테스트 불변식을 깨는 경로.
+       → `applied_labels` 로 실제 치환된 라벨만 확정, 나머지는 skipped
+    4) [MED] **버그 4 수정이 만든 새 변종** — `(names[s] || s).trim()` 이 serialize 의 `names[..]?.trim() || ..` 과
+       순서가 달라, 공백만 입력 시 transcript 는 raw 라벨인데 speaker_map 은 빈 문자열. → 순서 일치
+  - 신규 테스트: `test_apply_match_collision.py`(16), `test_participation_collision.py`(3),
+    `TranscriptEditorTrim.test.tsx`(2). 전체 백엔드 215 / 프론트 13 통과
+  - DEVGUIDE 섹션 10: 충돌 정의·overlap 공식·speakers 확정 규칙·diar 한계·trim 이중 방어·participation 중복 방지 기록
+- 현재 상태: 안정 — 백엔드 215, 프론트 13, tsc 통과 (팀리드 직접 실행 검증)
+- 막힌 점/주의:
+  - **이 영역에서 다섯 라운드 연속 같은 부류 버그가 나왔다.** PR #78(3건) → PR #78 재리뷰(4건) → PR #79(4건).
+    근본 원인은 화자 이름을 **문자열 토큰**으로 다루는 구조다. 같은 토큰을 쓰는 서로 다른 라벨을 구분할 수 없고,
+    타임스탬프 판별 로직을 매번 새로 짜다 보니 PR #66 이 폐기한 포인트 매칭이 두 번 재도입됐다.
+    → **후속 과제로 기록: 화자 매핑을 라벨 기준으로 다루는 리팩터링.** 패치 반복으로는 안 끝난다.
+  - 코드리뷰 비용이 과다했다(라운드당 에이전트 13개). 사용자가 지적했고 타당하다.
+    → **앞으로 작은 수정·재리뷰는 팀리드가 직접 diff·테스트로 검증하고, 전체 프로토콜은 큰 기능 PR 에만 적용한다.**
+  - 리뷰 중 커밋이 움직여 리뷰를 다시 돌린 사고가 있었다(PR #78). → "PR 생성 보고 = 코드 프리즈" 규칙 정착.
+- 다음 할 일:
+  - 후속 과제 3건은 `docs/ai_analysis/20260828_잔여_기획_후보.md` 참조
+    (화자 매핑 리팩터링 / `_resolve_speaker_display` 정규식 오탐 / `new_name` 미trim·3c-3d 오염 가능성)
+  - 잔여 기획 후보 5건도 같은 문서 참조 (용어집 STT 후보정 → 액션아이템 마감일 순 권장)
+- 관련 파일: backend/app/main.py(apply_match 3a~3d, get_participation),
+  backend/tests/test_apply_match_collision.py, test_participation_collision.py,
+  frontend/components/{MainArea,TranscriptEditor}.tsx, frontend/__tests__/TranscriptEditorTrim.test.tsx, DEVGUIDE.md
+- 푸시 여부: origin/main 푸시 완료 (PR #79 b132d14, squash 머지 + 브랜치 삭제)
+
+---
+
 ## 2026-08-28 (작업 PC: 로컬) — 세션 54 (PR #78: 버그 2건 수정 — apply-match 정합성 + 테스트 stale)
 - 브랜치: main (PR #78 7267aae)
 - 완료:
