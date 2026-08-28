@@ -1802,9 +1802,10 @@ async def apply_match(job_id: str, body: dict):
     for raw_label in matches:
         if raw_label in speakers:
             # 비-identity: speakers에 SPEAKER_XX 키가 있음
-            label_to_current[raw_label] = speakers[raw_label]
+            val = speakers[raw_label]
+            label_to_current[raw_label] = val.strip() if isinstance(val, str) else val
         else:
-            label_to_current[raw_label] = raw_label  # 기본값
+            label_to_current[raw_label] = raw_label.strip()  # 기본값
 
     # 2) identity-mapped 케이스 처리: diarization 타임스탬프로 역매핑
     identity_labels = [l for l in matches if l not in speakers]
