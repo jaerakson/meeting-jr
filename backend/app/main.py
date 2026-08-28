@@ -1793,15 +1793,73 @@ async def apply_match(job_id: str, body: dict):
         return {"ok": True}
 
     transcript = job.get("transcript", "")
-    for old_name, new_name in matches.items():
-        transcript = transcript.replace(f"{old_name}:", f"{new_name}:")
-
     speakers = job.get("speakers") or {}
     if isinstance(speakers, str):
         speakers = json.loads(speakers)
-    speakers.update(matches)
 
-    update_job_result(job_id, transcript=transcript, speakers=speakers)
+    # 1) SPEAKER_XX → 현재 transcript 토큰 매핑 구축
+    label_to_current: dict[str, str] = {}
+    for raw_label in matches:
+        if raw_label in speakers:
+            # 비-identity: speakers에 SPEAKER_XX 키가 있음
+            label_to_current[raw_label] = speakers[raw_label]
+        else:
+            label_to_current[raw_label] = raw_label  # 기본값
+
+    # 2) identity-mapped 케이스 처리: diarization 타임스탬프로 역매핑
+    identity_labels = [l for l in matches if l not in speakers]
+    if identity_labels:
+        from .database import get_job_diarization
+        diar_data = get_job_diarization(job_id)
+        if not diar_data:
+            diar_path = INPUT_DIR / f"{job_id}_diarization.json"
+            if diar_path.exists():
+                diar_data = json.loads(diar_path.read_text(encoding="utf-8"))
+
+        if diar_data:
+            # transcript에서 타임스탬프 → 화자이름 추출
+            ts_pattern = re.compile(r'^\[(\d+):(\d{2})\]\s*(.+?):\s', re.MULTILINE)
+            transcript_entries = []
+            for m in ts_pattern.finditer(transcript):
+                sec = int(m.group(1)) * 60 + int(m.group(2))
+                transcript_entries.append((sec, m.group(3).strip()))
+
+            for raw_label in identity_labels:
+                segs = diar_data.get(raw_label, [])
+                if not segs:
+                    continue
+                earliest = min(segs, key=lambda s: s.get("start", 0))
+                target_sec = earliest.get("start", 0)
+                best_name = None
+                best_diff = float('inf')
+                for ts_sec, name in transcript_entries:
+                    diff = abs(ts_sec - target_sec)
+                    if diff < best_diff:
+                        best_diff = diff
+                        best_name = name
+                if best_name and best_diff <= 10:
+                    label_to_current[raw_label] = best_name
+
+    # 3) transcript 교체 + speakers 업데이트
+    new_speakers = dict(speakers)
+    for raw_label, new_name in matches.items():
+        current_name = label_to_current.get(raw_label, raw_label)
+
+        # transcript에서 현재 이름 → 새 이름으로 교체
+        if current_name != new_name:
+            transcript = transcript.replace(f"{current_name}:", f"{new_name}:")
+
+        # speakers 업데이트
+        if raw_label in new_speakers:
+            # 비-identity: SPEAKER_XX 키 유지, 값만 변경
+            new_speakers[raw_label] = new_name
+        else:
+            # identity: 이전 identity 키 제거, SPEAKER_XX 키로 정규화
+            if current_name in new_speakers:
+                del new_speakers[current_name]
+            new_speakers[raw_label] = new_name
+
+    update_job_result(job_id, transcript=transcript, speakers=new_speakers)
     return {"ok": True}
 
 
@@ -2132,6 +2190,29 @@ async def generate_followup(job_id: str):
 # 발언 참여도 분석
 # ---------------------------------------------------------------------------
 
+def _resolve_speaker_display(
+    label: str, segments: list[dict], transcript: str,
+) -> str | None:
+    """diar 세그먼트의 첫 타임스탬프를 transcript 타임스탬프와 대조해서 화자명을 찾는다."""
+    if not segments or not transcript:
+        return None
+    earliest = min(segments, key=lambda s: s.get("start", 0))
+    target_sec = earliest.get("start", 0)
+
+    ts_pattern = re.compile(r'^\[(\d+):(\d{2})\]\s*(.+?):\s', re.MULTILINE)
+    best_name = None
+    best_diff = float('inf')
+    for m in ts_pattern.finditer(transcript):
+        sec = int(m.group(1)) * 60 + int(m.group(2))
+        diff = abs(sec - target_sec)
+        if diff < best_diff:
+            best_diff = diff
+            best_name = m.group(3).strip()
+    if best_name and best_diff <= 10:
+        return best_name
+    return None
+
+
 @app.get("/api/jobs/{job_id}/participation")
 async def get_participation(job_id: str):
     """화자별 발언 시간·비율·턴수 분석.
@@ -2158,14 +2239,22 @@ async def get_participation(job_id: str):
             diar_data = json.loads(diar_path.read_text(encoding="utf-8"))
             update_job_result(job_id, diarization=diar_data)
 
+    _transcript_text: str = job.get("transcript") or ""
+
     use_diar = False
     if diar_data:
         for label, segments in diar_data.items():
+            # display_name: speaker_map 우선, identity-mapped일 때만 diar→transcript 역매핑 폴백
+            display = speaker_map.get(label)
+            if not display or display == label:
+                # speaker_map에서 찾을 수 없으면 diar→transcript 역매핑 시도
+                display = _resolve_speaker_display(label, segments, _transcript_text) or label
+
             if not segments:
                 # 빈 세그먼트라도 diarization이 존재한다고 간주
                 result_speakers.append({
                     "label": label,
-                    "display_name": speaker_map.get(label, label),
+                    "display_name": display,
                     "total_seconds": 0,
                     "percentage": 0.0,
                     "turn_count": 0,
@@ -2180,7 +2269,7 @@ async def get_participation(job_id: str):
             avg_turn = total_sec / turn_count if turn_count else 0.0
             result_speakers.append({
                 "label": label,
-                "display_name": speaker_map.get(label, label),
+                "display_name": display,
                 "total_seconds": round(total_sec, 2),
                 "percentage": 0.0,  # 아래에서 재계산
                 "turn_count": turn_count,
