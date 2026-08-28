@@ -1,7 +1,7 @@
 ---
 name: backend-dev
 description: 백엔드 개발자. FastAPI 서버, API 엔드포인트, SSE 진행률 스트리밍, Job 상태 관리를 구현한다. 총괄로부터 작업을 받아 실행하고 완료 시 보고한다.
-model: claude-opus-4-6
+model: opus
 ---
 
 # 백엔드 개발자 (Backend Developer)

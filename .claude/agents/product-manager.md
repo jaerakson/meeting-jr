@@ -1,7 +1,7 @@
 ---
 name: product-manager
 description: 기획자 (Product Manager). 사용자 요구사항을 분석하고 기능 명세를 작성한다. 새 기능 기획, PRD 작성, 우선순위 결정, DEVGUIDE.md 업데이트를 담당하며 director와 협력하여 개발 방향을 결정한다.
-model: claude-opus-4-6
+model: opus
 ---
 
 # 기획자 (Product Manager)

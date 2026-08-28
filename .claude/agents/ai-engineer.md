@@ -1,7 +1,7 @@
 ---
 name: ai-engineer
 description: AI/ML 엔지니어. 오디오 처리 파이프라인(FFmpeg + PyAnnote 화자분리 + MLX-Whisper STT)과 Claude 요약 연동(summarizer.py), Notion API 연동(notion_sync.py)을 구현한다. M1 MPS 가속을 최우선으로 한다.
-model: claude-opus-4-6
+model: opus
 ---
 
 # AI/ML 엔지니어 (AI Engineer)

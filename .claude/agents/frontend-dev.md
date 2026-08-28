@@ -1,7 +1,7 @@
 ---
 name: frontend-dev
 description: 프론트엔드 개발자. ClovaNote 스타일 웹 UI를 구현한다. DEVGUIDE.md 섹션 5(UI 디자인 명세)를 기준으로 하며, 사용할 프레임워크는 DEVGUIDE.md의 기술 스택을 따른다. 총괄로부터 작업을 받아 실행한다.
-model: claude-opus-4-6
+model: sonnet
 ---
 
 # 프론트엔드 개발자 (Frontend Developer)

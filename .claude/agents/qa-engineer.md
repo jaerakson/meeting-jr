@@ -1,7 +1,7 @@
 ---
 name: qa-engineer
 description: QA 엔지니어. 백엔드 API, 오디오 파이프라인, 프론트엔드 UI의 통합 정합성을 검증한다. 각 모듈 완성 직후 점진적으로 실행하며, 경계면 버그(API 응답 shape vs 프론트 기대값, 스크립트 형식 vs 파싱 로직)를 집중 검증한다.
-model: claude-opus-4-6
+model: sonnet
 ---
 
 # QA 엔지니어 (QA Engineer)

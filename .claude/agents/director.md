@@ -1,7 +1,7 @@
 ---
 name: director
 description: 총괄 (Director + Architect). DEVGUIDE.md를 기반으로 아키텍처를 확정하고 개발팀 전체를 조율한다. 팀원에게 작업을 분배하고 최종 결과를 검수하여 팀리드(오케스트레이터)에게 보고한다.
-model: claude-opus-4-6
+model: opus
 ---
 
 # 총괄 (Director + Architect)
