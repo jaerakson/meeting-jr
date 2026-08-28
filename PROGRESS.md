@@ -1,3 +1,42 @@
+## 2026-08-28 (작업 PC: 로컬) — 세션 53 (PR #77: 화자 이름 클릭 점프)
+- 브랜치: main (PR #77 82716ae)
+- 완료:
+  - **PR #77 - 화자 이름 클릭 → 해당 화자 발언으로 이동:**
+    - 사용자 요청: "이름부분을 클릭하면 해당 부분의 처음으로 가는 기능"
+    - 백엔드 변경 없음 — 순수 프론트 UX. 기존 handleTimeClick → audioPlayerRef.seekTo 경로 재사용
+    - Transcript.tsx: 비편집 모드 화자명 클릭 → 첫 발언 시킹+스크롤. 같은 화자 반복 클릭 시
+      currentTime 이후 다음 발언으로 순환(마지막 이후 → 첫 발언). 편집 모드는 기존 이름변경 UI 유지
+    - ParticipationChart.tsx: `onSpeakerClick?` optional prop, 범례 클릭 가능
+    - MainArea.tsx: handleSpeakerClick 2-pass 매칭 — (1) transcript 직접 일치 (2) speakers 역방향 조회(displayName→label)
+    - 테스트 9개 (SpeakerNameJump.test.tsx): SPEAKER_XX/실명/txt업로드/identity mapping/편집모드/순환/회의전환
+    - 코드리뷰 이슈 2건(확정) + 1건(권고) 수정:
+      1) [100] 두 진입점 동작 불일치 — Transcript는 순환하는데 ParticipationChart 범례는 항상 첫 발언.
+         그런데 DEVGUIDE에 두 컴포넌트 공통으로 "순환"이라 기재. 리뷰 에이전트 4명 전원 독립 확인.
+         → 차트 범례는 "첫 발언 고정"으로 확정하고 DEVGUIDE 문구를 경로별로 구분해 정정 + 반복클릭 테스트 추가
+      2) [100] lastClickedSpeaker가 회의 전환 시 미리셋 — 기존 리셋 useEffect는 `if (editable)` 가드가 있어
+         비편집 모드에서 미실행, <Transcript>에 key도 없어 재마운트 안 됨. 같은 라벨 가진 다른 회의로 전환 후
+         첫 클릭이 "반복 클릭"으로 오인되어 두 번째 발언으로 이동. → transcript 변경 시 리셋 useEffect 추가
+      3) [75, 권고] apply-match(PR #67) 이후 identity-mapped 회의에서 speakers/transcript 불일치로 매칭 실패
+         → 이번엔 console.warn 폴백만. **근본 원인은 미해결 — 아래 참고**
+- 현재 상태: 안정 — 프론트 SpeakerNameJump 9/9, tsc --noEmit, 백엔드 189/189 통과 (팀리드 직접 실행 검증)
+- 막힌 점/주의:
+  - **[미해결] apply-match 데이터 불일치**: PR #67의 apply-match(backend/app/main.py:1796-1801)는
+    `transcript.replace(f"{old_name}:", f"{new_name}:")` 후 `speakers.update(matches)` 를 하는데
+    matches는 항상 raw SPEAKER_XX 키다. identity-mapped 회의(transcript가 이미 `아빠:`)에서는 replace가
+    no-op인데 speakers에는 `SPEAKER_00 → 새이름`이 새로 들어가 job.speakers와 job.transcript가 어긋난다.
+    → participation API의 display_name(새이름)과 transcript의 화자 토큰(아빠)이 불일치 → 화자 클릭 무반응.
+    별도 이슈로 수정 필요.
+  - **[미해결] 기존 프론트 테스트 실패 1건**: `__tests__/TranscriptEditor.test.tsx` 의 suggestedSpeakers
+    fallback 테스트가 main에서도 실패한다(팀리드가 main 체크아웃 후 재현 확인). PR #77과 무관한 사전 결함.
+- 다음 할 일:
+  - 위 미해결 2건 (apply-match 데이터 불일치 / TranscriptEditor 테스트 실패)
+  - 잔여 기획 후보 5건은 `docs/ai_analysis/20260828_잔여_기획_후보.md` 참조 (용어집 STT 후보정 → 액션아이템 마감일 순 권장)
+- 관련 파일: frontend/components/{Transcript,ParticipationChart,MainArea}.tsx,
+  frontend/__tests__/SpeakerNameJump.test.tsx, DEVGUIDE.md 섹션 10
+- 푸시 여부: origin/main 푸시 완료 (PR #77 82716ae, squash 머지 + 브랜치 삭제)
+
+---
+
 ## 2026-08-28 (작업 PC: 로컬) — 세션 52 (PR #75~#76: 발언 참여도 + 회의 시리즈)
 - 브랜치: main (PR #75 3774226, PR #76 3a7a178)
 - 완료:
