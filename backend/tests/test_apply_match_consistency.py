@@ -67,11 +67,7 @@ class TestApplyMatchNonIdentity:
 
     def test_rematch_replaces_transcript_correctly(self, client):
         """apply-match로 SPEAKER_00→김과장 매칭 시,
-        transcript의 '아빠:' 가 '김과장:' 으로 교체되어야 한다.
-
-        현재 구현 버그: transcript.replace("SPEAKER_00:", "김과장:") 수행하지만
-        transcript에는 이미 "아빠:" 로 치환되어 있어 교체되지 않음.
-        """
+        transcript의 '아빠:' 가 '김과장:' 으로 교체되어야 한다."""
         _create_done_meeting(
             job_id="match-a1",
             transcript="[00:00] 아빠: 안녕하세요\n[00:05] 엄마: 반갑습니다",
@@ -132,6 +128,30 @@ class TestApplyMatchNonIdentity:
         assert transcript.count("김과장:") == 2
         # 엄마는 그대로
         assert "엄마:" in transcript
+
+
+    def test_rematch_name_swap_atomic(self, client):
+        """두 화자 이름을 맞바꿀 때 transcript가 올바르게 교체되어야 한다.
+        순차 replace는 누적 오염을 일으키므로 원자적 치환이 필요하다."""
+        _create_done_meeting(
+            job_id="match-a4",
+            transcript="[00:00] 아빠: 첫번째\n[00:05] 엄마: 두번째\n[00:10] 아빠: 세번째",
+            speakers={"SPEAKER_00": "아빠", "SPEAKER_01": "엄마"},
+        )
+
+        # 이름 맞바꾸기: 아빠↔엄마
+        res = client.post("/api/jobs/match-a4/apply-match", json={
+            "matches": {"SPEAKER_00": "엄마", "SPEAKER_01": "아빠"},
+        })
+        assert res.status_code == 200
+
+        job = client.get("/api/jobs/match-a4").json()
+        transcript = job["transcript"]
+
+        # 원래 아빠(SPEAKER_00)가 엄마로 → 2회 등장
+        assert transcript.count("엄마:") == 2, f"엄마: 가 2회여야 함. 실제: {transcript}"
+        # 원래 엄마(SPEAKER_01)가 아빠로 → 1회 등장
+        assert transcript.count("아빠:") == 1, f"아빠: 가 1회여야 함. 실제: {transcript}"
 
 
 # ===========================================================================
@@ -254,3 +274,73 @@ class TestApplyMatchParticipationConsistency:
         # 이 assertion은 participation이 speakers map을 사용하므로
         # speakers.update({"SPEAKER_00": "김과장"})으로 display_name이
         # "김과장"으로 바뀌면 통과 가능 — 단, transcript와의 정합성은 별개
+
+    def test_partial_match_unmapped_speaker_keeps_display_name(self, client):
+        """부분 apply-match 후 매칭하지 않은 화자의 participation display_name이
+        원래 이름(엄마)을 유지해야 한다. SPEAKER_01로 퇴행하면 안 된다."""
+        diarization = {
+            "SPEAKER_00": [{"start": 0, "end": 30, "speaker": "SPEAKER_00"}],
+            "SPEAKER_01": [{"start": 30, "end": 60, "speaker": "SPEAKER_01"}],
+        }
+        _create_done_meeting(
+            job_id="match-c3",
+            transcript="[00:00] 아빠: 안녕하세요\n[00:30] 엄마: 반갑습니다",
+            speakers={"SPEAKER_00": "아빠", "SPEAKER_01": "엄마"},
+            diarization=diarization,
+        )
+
+        # SPEAKER_00만 매칭
+        client.post("/api/jobs/match-c3/apply-match", json={
+            "matches": {"SPEAKER_00": "김과장"},
+        })
+
+        res = client.get("/api/jobs/match-c3/participation")
+        assert res.status_code == 200
+        data = res.json()
+
+        sp00 = next(s for s in data["speakers"] if s["label"] == "SPEAKER_00")
+        sp01 = next(s for s in data["speakers"] if s["label"] == "SPEAKER_01")
+
+        assert sp00["display_name"] == "김과장"
+        assert sp01["display_name"] == "엄마", (
+            f"미매칭 화자의 display_name이 원래 이름을 유지해야 함. 실제: {sp01['display_name']}"
+        )
+
+
+# ===========================================================================
+# 시나리오 D: _resolve_speaker_display overlap 면적 매칭
+# ===========================================================================
+
+class TestResolveMultiSegment:
+    """_resolve_speaker_display가 단일 포인트가 아닌 overlap 면적으로 매칭하는지 검증."""
+
+    def test_early_short_segment_does_not_mislead(self, client):
+        """SPEAKER_00에 초반 짧은 세그먼트 + 후반 실질 발화가 있을 때,
+        후반 발화의 실제 화자명(엄마)이 반환되어야 한다.
+        단일 포인트 매칭은 초반 세그먼트 때문에 아빠를 반환하는 오류가 있다."""
+        diarization = {
+            "SPEAKER_00": [
+                {"start": 0, "end": 3, "speaker": "SPEAKER_00"},     # 초반 짧은 세그먼트
+                {"start": 35, "end": 60, "speaker": "SPEAKER_00"},   # 후반 실질 발화
+            ],
+            "SPEAKER_01": [
+                {"start": 3, "end": 35, "speaker": "SPEAKER_01"},
+            ],
+        }
+        # identity-mapped: speaker_map 키가 실명
+        _create_done_meeting(
+            job_id="multi-seg-1",
+            transcript="[00:00] 아빠: 짧은 인사\n[00:03] 아빠: 이어서\n[00:35] 엄마: 본론입니다",
+            speakers={"아빠": "아빠", "엄마": "엄마"},
+            diarization=diarization,
+        )
+
+        res = client.get("/api/jobs/multi-seg-1/participation")
+        assert res.status_code == 200
+        data = res.json()
+
+        sp00 = next(s for s in data["speakers"] if s["label"] == "SPEAKER_00")
+        # SPEAKER_00의 실질 발화(35~60초)는 "엄마"와 overlap이 큼
+        assert sp00["display_name"] == "엄마", (
+            f"overlap 면적 기준으로 '엄마'여야 함. 실제: {sp00['display_name']}"
+        )
