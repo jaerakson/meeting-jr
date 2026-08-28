@@ -23,9 +23,10 @@ function formatDuration(sec: number): string {
 
 interface Props {
   jobId: string
+  onSpeakerClick?: (speakerName: string) => void
 }
 
-export default function ParticipationChart({ jobId }: Props) {
+export default function ParticipationChart({ jobId, onSpeakerClick }: Props) {
   const [data, setData] = useState<ParticipationData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -143,7 +144,13 @@ export default function ParticipationChart({ jobId }: Props) {
       </ResponsiveContainer>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
         {chartData.map((s) => (
-          <span key={s.label} className="text-xs text-gray-500 dark:text-gray-400">
+          <span
+            key={s.label}
+            className={`text-xs text-gray-500 dark:text-gray-400 ${
+              onSpeakerClick ? 'cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 transition-colors' : ''
+            }`}
+            onClick={() => onSpeakerClick?.(s.name)}
+          >
             <span
               className="inline-block w-2.5 h-2.5 rounded-full mr-1"
               style={{ backgroundColor: s.color }}

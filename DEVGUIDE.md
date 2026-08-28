@@ -416,3 +416,4 @@ npm run dev   # http://localhost:3000
 | 후속조치 격리 | 대조 실패가 요약 파이프라인에 영향 없음 (try-except 격리, SSE 흐름 불변) |
 | 음성 프로필 | PyAnnote 임베딩 기반 화자 자동 인식, 프로필 CRUD |
 | PDF 출력 | 라이트 모드 강제, 트랜스크립트 제외 요약만 |
+| 화자 이름 클릭 점프 | Transcript·ParticipationChart 화자 이름 클릭 → 해당 화자의 첫 발언으로 오디오 시킹+스크롤, 반복 클릭 시 현재 위치 이후 다음 발언으로 순환 |
