@@ -1,3 +1,46 @@
+## 2026-08-28 (작업 PC: 로컬) — 세션 54 (PR #78: 버그 2건 수정 — apply-match 정합성 + 테스트 stale)
+- 브랜치: main (PR #78 7267aae)
+- 완료:
+  - **버그 1 - apply-match 화자 매핑 정합성:**
+    - 원인: apply_match가 `transcript.replace(f"{old_name}:", ...)` 에서 old_name을 항상 raw SPEAKER_XX로 사용.
+      finalize 이후 transcript에는 이미 실명이 적용돼 있어 replace가 no-op → speakers만 갱신되어 불일치
+    - 수정: `label_to_current` 로 현재 display name 조회 후 치환. identity-mapped는 diarization 역매핑으로 해석
+    - participation 폴백: identity-mapped 회의로 판별될 때만 역매핑 시도 (미매핑 화자가 엉뚱한 이름 가져오던 문제)
+  - **버그 2 - TranscriptEditor 테스트 stale:**
+    - PR #67(8b62f3c)이 "suggestedSpeakers 자동 채우기 제거, 적용/되돌리기 버튼 추가"로 UX를 의도적으로 변경했는데
+      테스트(최종 수정 PR #62 d065e3e)가 따라오지 않아 main에서도 실패하던 사전 결함
+    - **구현은 그대로 두고 테스트만 현재 동작에 맞게 갱신** (제안 칩 + 수동 적용/되돌리기 검증)
+  - 코드리뷰 확정 3건 + 권고 2건 수정:
+    1) [100] **이름 맞바꾸기 시 transcript 붕괴** — 순차 `replace()` 가 문자열을 누적 오염.
+       두 화자 이름 교환 시 1회차 치환 결과가 2회차에 재차 걸려 모든 발언이 한 이름으로 합쳐짐.
+       → 단일 정규식 콜백으로 **원자적 치환** 전환
+    2) [100] **부분 매칭 후 미매칭 화자가 원시 라벨로 퇴행** — apply_match가 매칭된 화자만 SPEAKER_XX로 정규화해
+       speakers가 혼합 상태가 되는데, `_is_identity_mapped` 가 `not any(k.startswith("SPEAKER_"))` 라 이를 오판.
+       → `any(not re.match(r'^SPEAKER_\d+$', k))` 로 되돌려 혼합 상태도 identity-mapped로 처리.
+       **이 브랜치 내부 회귀였음**: 933efe8은 정상 → 446d5ae가 논리 반전 → 리뷰에서 발견
+    3) [85] **PR #66이 폐기한 알고리즘 재도입** — `_resolve_speaker_display` 가 가장 이른 세그먼트 하나만 anchor로
+       삼는 point-matching. PR #66(bd33196)은 "±2초 포인트 매칭은 발화 1건이거나 diarization 시작이 3초 이상 뒤면
+       실패"를 이유로 구간 overlap 면적 방식으로 옮겼던 이력. → overlap 면적 방식으로 재작성
+    권고: 역매핑 실패 시 해당 라벨 건너뛰기(원래 버그 재발+고아 키 방지), DEVGUIDE 문구를 코드와 일치하도록 정정
+  - 재현 케이스 3건을 테스트로 고정 (test_rematch_name_swap_atomic, test_partial_match_unmapped_speaker_keeps_display_name,
+    test_early_short_segment_does_not_mislead)
+- 현재 상태: 안정 — 백엔드 198개, 프론트 11개, tsc --noEmit 전부 통과 (팀리드 직접 실행 검증)
+- 막힌 점/주의:
+  - **코드리뷰가 잡은 3건 모두 신규 테스트 6개가 통과한 상태에서 남아 있었다.** 테스트를 늘리는 것만으로는
+    부족하고, 리뷰에서 나온 재현 시나리오를 테스트로 고정하는 절차가 실제로 효과가 있었다.
+  - **문서-구현 불일치가 PR #75·#76·#77·#78 네 번 연속 지적됐다.** DEVGUIDE 기록 시 코드와 대조 필수.
+  - 진행 중 사용자가 창을 닫아 팀 6개가 동작 불능이 된 사고가 있었다. 작업물이 미커밋 상태였고 팀리드가
+    WIP 커밋(e32979b)으로 보호 후 새 팀(director-4, backend-dev-2)을 구성해 재개했다.
+    → **작업 단위마다 즉시 커밋**, **PR 보고 시점 = 코드 프리즈** 규칙을 팀 운영에 추가
+- 다음 할 일:
+  - 잔여 기획 후보 5건은 `docs/ai_analysis/20260828_잔여_기획_후보.md` 참조
+    (용어집 STT 후보정 → 액션아이템 마감일 순 권장)
+- 관련 파일: backend/app/main.py(apply_match, _resolve_speaker_display, get_participation),
+  backend/tests/test_apply_match_consistency.py(신규 9개), frontend/__tests__/TranscriptEditor.test.tsx, DEVGUIDE.md 섹션 10
+- 푸시 여부: origin/main 푸시 완료 (PR #78 7267aae, squash 머지 + 브랜치 삭제)
+
+---
+
 ## 2026-08-28 (작업 PC: 로컬) — 세션 53 (PR #77: 화자 이름 클릭 점프)
 - 브랜치: main (PR #77 82716ae)
 - 완료:
