@@ -252,6 +252,85 @@ class TestCollisionLineOutsideSegments:
 
 
 # ===========================================================================
+# 리뷰 추가: non-identity 충돌 + 서브초 경계 배정
+# ===========================================================================
+
+class TestNonIdentityCollisionWithDiar:
+    """모든 라벨이 speakers에 있는(non-identity) 상태에서 충돌 발생.
+    diarization이 DB에 있는데도 조회하지 않아 "diar 없음" 경로로 떨어지는 버그 재현."""
+
+    def test_non_identity_collision_uses_diarization(self, client):
+        """speakers에 SPEAKER_00·SPEAKER_01 모두 있고 같은 이름.
+        diarization으로 구분 가능 → 두 이름 모두 transcript에 존재해야 함."""
+        diarization = {
+            "SPEAKER_00": [{"start": 0, "end": 30, "speaker": "SPEAKER_00"}],
+            "SPEAKER_01": [{"start": 30, "end": 60, "speaker": "SPEAKER_01"}],
+        }
+        _create_done_meeting(
+            job_id="nonid-collision-1",
+            transcript="[00:00] 김팀장: 첫번째\n[00:30] 김팀장: 두번째",
+            speakers={"SPEAKER_00": "김팀장", "SPEAKER_01": "김팀장"},
+            diarization=diarization,
+        )
+
+        res = client.post("/api/jobs/nonid-collision-1/apply-match", json={
+            "matches": {"SPEAKER_00": "박과장", "SPEAKER_01": "이대리"},
+        })
+        assert res.status_code == 200
+
+        data = res.json()
+        # skipped가 없어야 함 (diar로 해소 가능하므로)
+        assert "skipped" not in data or len(data.get("skipped", [])) == 0, (
+            f"diar가 있는데 skipped 발생: {data}"
+        )
+
+        job = client.get("/api/jobs/nonid-collision-1").json()
+        assert "박과장:" in job["transcript"], f"실제: {job['transcript']}"
+        assert "이대리:" in job["transcript"], f"실제: {job['transcript']}"
+
+        speakers = job.get("speakers", {})
+        if isinstance(speakers, str):
+            speakers = json.loads(speakers)
+        assert speakers.get("SPEAKER_00") == "박과장"
+        assert speakers.get("SPEAKER_01") == "이대리"
+
+
+class TestSubSecondBoundaryOverlap:
+    """라인 [MM:SS]는 초 단위 절삭, diarization은 float.
+    서브초 드리프트 시 포인트 매칭은 오배정하지만 overlap은 정확."""
+
+    def test_subsecond_drift_correct_assignment(self, client):
+        """SPEAKER_00=[0, 27.4), SPEAKER_01=[27.4, 60).
+        라인 [00:27]의 ts=27 < 27.4이므로 포인트 매칭은 SPEAKER_00에 배정.
+        하지만 발화 구간(27~다음라인)의 대부분이 SPEAKER_01과 겹침 → SPEAKER_01이 맞음."""
+        diarization = {
+            "SPEAKER_00": [{"start": 0, "end": 27.4, "speaker": "SPEAKER_00"}],
+            "SPEAKER_01": [{"start": 27.4, "end": 60, "speaker": "SPEAKER_01"}],
+        }
+        _create_done_meeting(
+            job_id="subsec-1",
+            transcript="[00:00] 김팀장: 첫번째\n[00:27] 김팀장: 두번째\n[00:45] 김팀장: 세번째",
+            speakers={"SPEAKER_00": "김팀장"},
+            diarization=diarization,
+        )
+
+        res = client.post("/api/jobs/subsec-1/apply-match", json={
+            "matches": {"SPEAKER_00": "박과장", "SPEAKER_01": "이대리"},
+        })
+        assert res.status_code == 200
+
+        job = client.get("/api/jobs/subsec-1").json()
+        lines = job["transcript"].split('\n')
+
+        # [00:00] → SPEAKER_00 구간 → "박과장"
+        assert "박과장:" in lines[0], f"0초 라인: {lines[0]}"
+        # [00:27] → 발화구간 27~45초, SPEAKER_01(27.4~60) overlap이 훨씬 큼 → "이대리"
+        assert "이대리:" in lines[1], f"27초 라인 (서브초 경계): {lines[1]}"
+        # [00:45] → SPEAKER_01 구간 → "이대리"
+        assert "이대리:" in lines[2], f"45초 라인: {lines[2]}"
+
+
+# ===========================================================================
 # Bug 3: 해석 실패를 삼키고 성공 반환
 # ===========================================================================
 
