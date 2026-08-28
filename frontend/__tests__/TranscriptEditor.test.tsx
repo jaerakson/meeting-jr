@@ -1,8 +1,8 @@
 /**
- * TDD 테스트: TranscriptEditor의 names 초기화 버그.
+ * TranscriptEditor names 초기화 테스트.
  *
- * 버그: suggestedNames가 names 초기값에 반영되지 않음.
- * suggestedSpeakers만 체크하고 suggestedNames는 무시됨 (line 53-63).
+ * PR #62: suggestedNames가 names 초기값에 반영.
+ * PR #67: suggestedSpeakers 자동 채우기 제거 → 수동 적용/되돌리기 버튼 방식으로 변경.
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
@@ -50,7 +50,7 @@ describe('TranscriptEditor names 초기화', () => {
     expect(values).toContain('이대리')
   })
 
-  it('suggestedSpeakers가 suggestedNames보다 우선해야 한다', () => {
+  it('suggestedSpeakers가 있어도 초기값은 suggestedNames이고, 자동 적용되지 않아야 한다', () => {
     render(
       <TranscriptEditor
         jobId="test-job"
@@ -71,11 +71,15 @@ describe('TranscriptEditor names 초기화', () => {
 
     const values = nameInputs.map(i => i.value)
 
-    // SPEAKER_00: suggestedSpeakers 우선 → "박과장"
-    expect(values).toContain('박과장')
-    // SPEAKER_01: suggestedSpeakers 없음 → suggestedNames fallback → "이대리"
+    // input value는 suggestedNames에서 온다 (suggestedSpeakers 자동 적용 안 됨)
+    expect(values).toContain('김팀장')
     expect(values).toContain('이대리')
-    // "김팀장"은 suggestedSpeakers에 의해 덮어씌워져야 함
-    expect(values).not.toContain('김팀장')
+
+    // suggestedSpeakers 이름은 value가 아니라 placeholder에 나타난다
+    const speaker00Input = nameInputs.find(i => i.placeholder === '박과장')
+    expect(speaker00Input).toBeDefined()
+
+    // '박과장'은 value에 없다 (수동 적용 전)
+    expect(values).not.toContain('박과장')
   })
 })
