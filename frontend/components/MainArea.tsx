@@ -190,6 +190,9 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
         }
       }
     }
+
+    // 매칭 실패 — identity mapping 후 apply-match 등으로 데이터 불일치 가능
+    console.warn(`[SpeakerClick] "${speakerName}" 매칭 실패: transcript에서 해당 화자를 찾을 수 없습니다.`)
   }, [job?.transcript, job?.speakers, handleTimeClick])
 
   const downloadTranscript = () => {

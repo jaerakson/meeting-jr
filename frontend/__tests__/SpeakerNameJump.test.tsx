@@ -148,6 +148,47 @@ describe('Transcript — 화자 이름 클릭 점프', () => {
     fireEvent.click(names[0])
     expect(onTimeClick).toHaveBeenCalledWith(0)
   })
+
+  it('회의 전환(transcript 변경) 후 첫 클릭은 첫 발언으로 이동해야 한다', () => {
+    const onTimeClick = vi.fn()
+    const transcript1 =
+      '[00:00] SPEAKER_00: 회의A 첫발언\n[00:15] SPEAKER_01: 응답\n[00:30] SPEAKER_00: 회의A 두번째'
+
+    const { rerender } = render(
+      <Transcript
+        transcript={transcript1}
+        currentTime={0}
+        onTimeClick={onTimeClick}
+        editable={false}
+      />
+    )
+
+    // 회의 A에서 SPEAKER_00 클릭
+    const names1 = screen.getAllByText('SPEAKER_00')
+    fireEvent.click(names1[0])
+    expect(onTimeClick).toHaveBeenCalledWith(0)
+
+    onTimeClick.mockClear()
+
+    // 회의 B로 전환 (다른 transcript)
+    const transcript2 =
+      '[00:00] SPEAKER_00: 회의B 첫발언\n[00:20] SPEAKER_00: 회의B 두번째'
+
+    rerender(
+      <Transcript
+        transcript={transcript2}
+        currentTime={0}
+        onTimeClick={onTimeClick}
+        editable={false}
+      />
+    )
+
+    // 회의 B에서 SPEAKER_00 첫 클릭 → 반드시 첫 발언(0초)으로 가야 함
+    // (회의 A의 lastClickedSpeaker 상태가 남아있으면 두번째(20초)로 잘못 이동)
+    const names2 = screen.getAllByText('SPEAKER_00')
+    fireEvent.click(names2[0])
+    expect(onTimeClick).toHaveBeenCalledWith(0)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -209,6 +250,29 @@ describe('ParticipationChart — 범례 화자 이름 클릭', () => {
     fireEvent.click(legendItem)
 
     expect(onSpeakerClick).toHaveBeenCalledWith('김팀장')
+  })
+
+  it('차트 범례 같은 화자 반복 클릭 시 매번 동일한 이름으로 onSpeakerClick 호출 (첫 발언 고정)', async () => {
+    const onSpeakerClick = vi.fn()
+
+    await act(async () => {
+      render(<ParticipationChart jobId="test-job" onSpeakerClick={onSpeakerClick} />)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/김팀장/)).toBeInTheDocument()
+    })
+
+    const legendItem = screen.getByText(/김팀장/)
+
+    // 첫 클릭
+    fireEvent.click(legendItem)
+    expect(onSpeakerClick).toHaveBeenCalledWith('김팀장')
+
+    // 두번째 클릭 — 동일하게 '김팀장'으로 호출 (순환 아님, 첫 발언 고정)
+    fireEvent.click(legendItem)
+    expect(onSpeakerClick).toHaveBeenCalledTimes(2)
+    expect(onSpeakerClick).toHaveBeenLastCalledWith('김팀장')
   })
 })
 

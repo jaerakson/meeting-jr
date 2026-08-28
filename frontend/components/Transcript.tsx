@@ -71,6 +71,12 @@ function highlightSearchText(text: string, query: string | undefined): ReactNode
 export default function Transcript({ transcript, currentTime, onTimeClick, editable, onTranscriptChange, searchQuery }: TranscriptProps) {
   const parsedLines = useMemo(() => parseTranscript(transcript), [transcript])
   const [lastClickedSpeaker, setLastClickedSpeaker] = useState<string | null>(null)
+
+  // 회의 전환 시 (transcript 변경) 순환 클릭 상태 리셋
+  useEffect(() => {
+    setLastClickedSpeaker(null)
+  }, [transcript])
+
   const [editLines, setEditLines] = useState<TranscriptLine[]>([])
   const [editIdx, setEditIdx] = useState<number | null>(null)
   const [editText, setEditText] = useState('')
