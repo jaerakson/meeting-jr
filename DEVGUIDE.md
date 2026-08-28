@@ -315,6 +315,36 @@ meeting-jr/
 | PATCH | `/api/categories/{id}` | 카테고리 수정 |
 | DELETE | `/api/categories/{id}` | 카테고리 삭제 |
 | PATCH | `/api/jobs/{job_id}/category` | 회의 카테고리 변경 |
+| POST | `/api/jobs/{job_id}/regenerate` | 요약 재생성 |
+| PATCH | `/api/jobs/{job_id}/bookmark` | 북마크 토글 |
+| PATCH | `/api/jobs/{job_id}/memo` | 회의 메모 저장 |
+| PATCH | `/api/jobs/{job_id}/tags` | 태그 저장 |
+| PATCH | `/api/jobs/{job_id}/rating` | 회의 평점 저장 |
+| GET | `/api/tags` | 전체 사용 태그 목록 |
+| POST | `/api/categories/{id}/reset` | 카테고리 프롬프트 초기화 |
+| POST | `/api/jobs/{job_id}/notes` | 녹음 중 메모 추가 |
+| GET | `/api/jobs/{job_id}/notes` | 녹음 중 메모 목록 |
+| DELETE | `/api/jobs/{job_id}/notes/{note_id}` | 녹음 중 메모 삭제 |
+| GET | `/api/stats` | 전체 통계 |
+| GET | `/api/stats/monthly` | 월별 통계 |
+| GET | `/api/stats/ratings` | 평점 통계 |
+| POST | `/api/jobs/{job_id}/rematch` | done 상태 회의 음성 프로필 재매칭 |
+| POST | `/api/jobs/{job_id}/apply-match` | 재매칭 결과를 transcript·speakers 에 반영 |
+| POST | `/api/jobs/{job_id}/rename-speakers` | 화자 이름 일괄 변경 |
+| POST | `/api/jobs/{job_id}/save-speaker-profile` | 화자 음성 프로필 저장 |
+| GET | `/api/voice-profiles` | 음성 프로필 목록 |
+| POST | `/api/voice-profiles` | 음성 프로필 등록 |
+| DELETE | `/api/voice-profiles/{profile_id}` | 음성 프로필 삭제 |
+| POST | `/api/voice-profiles/{profile_id}/add-sample` | 프로필에 샘플 추가 |
+| GET | `/api/voice-profiles/threshold` | 매칭 임계값 조회 |
+| PUT | `/api/voice-profiles/threshold` | 매칭 임계값 설정 |
+| DELETE | `/api/speakers/{name}` | 저장된 화자 이름 삭제 |
+| GET | `/api/settings/claude-model` | 사용 중인 Claude 모델 조회 |
+| GET | `/api/settings/claude-prompt` | 요약 프롬프트 조회 |
+| GET | `/api/settings/denoise` | 노이즈 제거 설정 조회 |
+| PUT | `/api/settings/denoise` | 노이즈 제거 설정 변경 |
+| GET | `/api/settings/backup` | 설정·데이터 백업 다운로드 |
+| POST | `/api/settings/restore` | 백업 복원 |
 
 ### SSE 이벤트 형식
 ```json
