@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Job, Category, RelatedMeeting, RecordingNote } from '@/types'
 import { useRouter } from 'next/navigation'
 import RecordingZone from './RecordingZone'
@@ -156,6 +156,44 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   const handleTimeClick = useCallback((sec: number) => {
     audioPlayerRef.current?.seekTo(sec)
   }, [])
+
+  const handleSpeakerClick = useCallback((speakerName: string) => {
+    if (!job?.transcript) return
+    const lines = job.transcript.split('\n')
+    const regex = /^\[(\d{2}):(\d{2})\]\s*(.+?):\s*(.*)$/
+
+    for (const line of lines) {
+      const match = line.trim().match(regex)
+      if (match) {
+        const speaker = match[3]
+        if (speaker === speakerName) {
+          const minutes = parseInt(match[1], 10)
+          const seconds = parseInt(match[2], 10)
+          handleTimeClick(minutes * 60 + seconds)
+          return
+        }
+      }
+    }
+
+    if (job.speakers) {
+      for (const [label, displayName] of Object.entries(job.speakers)) {
+        if (displayName === speakerName) {
+          for (const line of lines) {
+            const match = line.trim().match(regex)
+            if (match && match[3] === label) {
+              const minutes = parseInt(match[1], 10)
+              const seconds = parseInt(match[2], 10)
+              handleTimeClick(minutes * 60 + seconds)
+              return
+            }
+          }
+        }
+      }
+    }
+
+    // 매칭 실패 — identity mapping 후 apply-match 등으로 데이터 불일치 가능
+    console.warn(`[SpeakerClick] "${speakerName}" 매칭 실패: transcript에서 해당 화자를 찾을 수 없습니다.`)
+  }, [job?.transcript, job?.speakers, handleTimeClick])
 
   const downloadTranscript = () => {
     if (!job?.transcript) return
@@ -488,7 +526,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
             <div className="md:w-[45%] flex flex-col min-h-0 p-4 h-1/2 md:h-full">
               <SummaryPanel summary={job.summary || ''} jobId={job.id} initialRating={job.rating} onSummaryUpdate={onJobsChange} speakers={job.speakers} actionItems={job.action_items} categoryId={job.category_id} onTimeClick={handleTimeClick} shareToken={job.share_token} />
               <div className="flex-shrink-0 overflow-y-auto max-h-[35%]">
-                <ParticipationChart jobId={job.id} />
+                <ParticipationChart jobId={job.id} onSpeakerClick={handleSpeakerClick} />
                 <FollowupPanel jobId={job.id} seriesId={job.series_id} />
               {recordingNotes.length > 0 && (
                 <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">

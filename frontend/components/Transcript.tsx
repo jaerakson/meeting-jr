@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useEffect, useRef, useState, ReactNode } from 'react'
+import { useMemo, useEffect, useRef, useState, useCallback, ReactNode } from 'react'
 
 interface TranscriptProps {
   transcript: string
@@ -70,6 +70,13 @@ function highlightSearchText(text: string, query: string | undefined): ReactNode
 
 export default function Transcript({ transcript, currentTime, onTimeClick, editable, onTranscriptChange, searchQuery }: TranscriptProps) {
   const parsedLines = useMemo(() => parseTranscript(transcript), [transcript])
+  const [lastClickedSpeaker, setLastClickedSpeaker] = useState<string | null>(null)
+
+  // 회의 전환 시 (transcript 변경) 순환 클릭 상태 리셋
+  useEffect(() => {
+    setLastClickedSpeaker(null)
+  }, [transcript])
+
   const [editLines, setEditLines] = useState<TranscriptLine[]>([])
   const [editIdx, setEditIdx] = useState<number | null>(null)
   const [editText, setEditText] = useState('')
@@ -112,6 +119,26 @@ export default function Transcript({ transcript, currentTime, onTimeClick, edita
     }
     return idx
   }, [lines, currentTime, editable])
+
+  const handleSpeakerClick = useCallback((speaker: string) => {
+    const speakerLines = lines
+      .map((line, idx) => ({ time: line.time, idx }))
+      .filter((_, idx) => lines[idx].speaker === speaker)
+
+    if (speakerLines.length === 0) return
+
+    if (lastClickedSpeaker === speaker) {
+      const nextLine = speakerLines.find(l => l.time > currentTime)
+      if (nextLine) {
+        onTimeClick(nextLine.time)
+      } else {
+        onTimeClick(speakerLines[0].time)
+      }
+    } else {
+      onTimeClick(speakerLines[0].time)
+    }
+    setLastClickedSpeaker(speaker)
+  }, [lines, currentTime, lastClickedSpeaker, onTimeClick])
 
   // 검색어가 포함된 첫 번째 라인 인덱스
   const firstSearchMatchIdx = useMemo(() => {
@@ -241,11 +268,19 @@ export default function Transcript({ transcript, currentTime, onTimeClick, edita
               ) : (
                 <div className="flex items-center gap-2">
                   <span
-                    className={`text-sm font-semibold ${color.text} ${editable ? 'cursor-pointer hover:underline decoration-dashed' : ''}`}
+                    className={`text-sm font-semibold ${color.text} ${
+                      editable
+                        ? 'cursor-pointer hover:underline decoration-dashed'
+                        : 'cursor-pointer hover:underline decoration-dotted underline-offset-2'
+                    }`}
                     onClick={() => {
-                      if (editable) { setEditingSpeakerIdx(idx); setRenameText(line.speaker) }
+                      if (editable) {
+                        setEditingSpeakerIdx(idx); setRenameText(line.speaker)
+                      } else {
+                        handleSpeakerClick(line.speaker)
+                      }
                     }}
-                    title={editable ? '클릭하여 이름 변경' : undefined}
+                    title={editable ? '클릭하여 이름 변경' : '클릭하여 해당 화자의 발언으로 이동'}
                   >
                     {line.speaker}
                   </span>
