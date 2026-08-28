@@ -2173,16 +2173,6 @@ async def generate_followup(job_id: str):
 # 발언 참여도 분석
 # ---------------------------------------------------------------------------
 
-_SPEAKER_XX_RE = re.compile(r'^SPEAKER_\d+$')
-
-
-def _is_identity_mapped(speaker_map: dict) -> bool:
-    """speaker_map 키가 SPEAKER_XX 패턴이 아닌 실명(identity 매핑)인지 판별."""
-    if not speaker_map:
-        return False
-    return any(not _SPEAKER_XX_RE.match(k) for k in speaker_map)
-
-
 def _resolve_speaker_display(
     label: str, segments: list[dict], transcript: str,
 ) -> str | None:
@@ -2233,22 +2223,23 @@ async def get_participation(job_id: str):
             update_job_result(job_id, diarization=diar_data)
 
     _transcript_text: str = job.get("transcript") or ""
-    _identity = _is_identity_mapped(speaker_map)
+
+    # identity-mapped 회의 판별 (speaker_map 키가 SPEAKER_XX 패턴이 아닌 실명인 경우)
+    _is_identity_mapped = bool(speaker_map) and not any(
+        k.startswith("SPEAKER_") for k in speaker_map
+    )
 
     use_diar = False
     if diar_data:
         for label, segments in diar_data.items():
-            # display_name 결정: speaker_map 직접 매핑 우선
             display = speaker_map.get(label)
-            if display and display != label:
-                # 직접 매핑 존재 (SPEAKER_XX → 실명) → 그대로 사용
-                pass
-            elif _identity:
-                # identity-mapped 회의 (ClovaNote 등): diar→transcript 역매핑 시도
+            if not display:
+                if _is_identity_mapped:
+                    display = _resolve_speaker_display(label, segments, _transcript_text) or label
+                else:
+                    display = label
+            elif display == label:
                 display = _resolve_speaker_display(label, segments, _transcript_text) or label
-            else:
-                # 일반 매핑에서 미매핑 화자 → 라벨 그대로
-                display = label
 
             if not segments:
                 # 빈 세그먼트라도 diarization이 존재한다고 간주
