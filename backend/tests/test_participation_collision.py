@@ -1,8 +1,8 @@
 """participation 중복 display_name 재현 테스트.
 
-PR #78 코드리뷰 발견 Bug 2:
+PR #78 코드리뷰에서 발견된 Bug 2:
 diar 라벨이 transcript 화자보다 많을 때, 여분 라벨이 overlap으로
-기존 이름에 매핑되어 같은 display_name 행이 두 개 나온다.
+기존 이름에 매핑되어 같은 display_name 행이 두 개 나왔다.
 
 재현 시나리오:
 - identity-mapped 회의: speakers = {"아빠": "아빠", "엄마": "엄마"}
@@ -11,9 +11,9 @@ diar 라벨이 transcript 화자보다 많을 때, 여분 라벨이 overlap으�
 - SPEAKER_02(55~60)가 "엄마"(55초 발화)와 overlap → "엄마"로 해석 → 중복
 
 검증:
-- participation speakers의 display_name이 모두 고유해야 함
+- participation speakers의 display_name이 모두 고유해야 했음
 - 이미 다른 라벨에 할당된 이름으로 해석된 여분 라벨은
-  raw 라벨(SPEAKER_02) 그대로 폴백
+  raw 라벨(SPEAKER_02) 그대로 폴백해야 했음
 """
 
 import json

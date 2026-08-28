@@ -1,13 +1,13 @@
 """apply-match 키 충돌·해석 실패·공백 불일치 재현 테스트.
 
-PR #78 코드리뷰에서 발견된 버그 1, 3, 4를 TDD로 재현한다.
+PR #78 코드리뷰에서 발견된 버그 1, 3, 4를 TDD로 재현했다.
 
 Bug 1: replace_map 키 충돌 — 서로 다른 diar 라벨이 같은 이름으로 해석되면
-        뒤엣것이 앞엣것을 덮어써 transcript↔speakers 정합성이 깨진다.
+        뒤엣것이 앞엣것을 덮어써 transcript↔speakers 정합성이 깨졌다.
 Bug 3: 해석 실패를 삼키고 성공 반환 — identity label 해석 실패 시
-        전체 실패 → 422, 부분 실패 → 200 + skipped.
+        전체 실패 → 422, 부분 실패 → 200 + skipped 으로 처리되지 않았다.
 Bug 4: 공백 때문에 불일치 재발 — speakers 값에 앞뒤 공백이 있으면
-        apply-match의 정규식 매칭이 실패한다.
+        apply-match의 정규식 매칭이 실패했다.
 """
 
 import json
@@ -72,7 +72,7 @@ def _extract_transcript_speakers(transcript: str) -> set[str]:
 class TestReplaceMapKeyCollision:
     """서로 다른 diar 라벨이 _resolve_speaker_display로 같은 이름으로
     해석될 때, replace_map[current_name] = new_name 에서 뒤엣것이
-    앞엣것을 덮어쓰는 버그를 재현한다.
+    앞엣것을 덮어쓰는 버그를 재현했다.
 
     시나리오:
     - speakers = {"SPEAKER_00": "김팀장"} (SPEAKER_00만 존재)
@@ -328,6 +328,65 @@ class TestSubSecondBoundaryOverlap:
         assert "이대리:" in lines[1], f"27초 라인 (서브초 경계): {lines[1]}"
         # [00:45] → SPEAKER_01 구간 → "이대리"
         assert "이대리:" in lines[2], f"45초 라인: {lines[2]}"
+
+
+# ===========================================================================
+# 리뷰 추가: 세그먼트 없는 충돌 라벨 정합성
+# ===========================================================================
+
+class TestCollisionEmptySegmentConsistency:
+    """충돌 그룹에서 한 라벨의 diar 세그먼트가 비어 있을 때
+    speakers↔transcript 정합성이 유지되는지 검증한다.
+
+    시나리오:
+    - speakers = {"SPEAKER_00": "김팀장"} (SPEAKER_00만 존재)
+    - diarization: SPEAKER_00=[0,30), SPEAKER_01=[] (세그먼트 없음)
+    - transcript: 김팀장 두 라인
+    - matches = {"SPEAKER_00": "박과장", "SPEAKER_01": "최부장"}
+
+    SPEAKER_01에 세그먼트가 없어 라인별 치환 불가 →
+    "최부장"이 transcript에 없는데 speakers에 들어가면 정합성 위반.
+    """
+
+    def test_collision_label_with_no_segments(self, client):
+        """충돌 그룹의 한 라벨(SPEAKER_01)에 세그먼트가 없으면
+        해당 이름(최부장)이 transcript에 나타나지 않아야 하고,
+        speakers↔transcript 정합성이 유지되어야 한다."""
+        diarization = {
+            "SPEAKER_00": [{"start": 0, "end": 30, "speaker": "SPEAKER_00"}],
+            "SPEAKER_01": [],  # 세그먼트 없음
+        }
+        _create_done_meeting(
+            job_id="empty-seg-1",
+            transcript="[00:00] 김팀장: 첫번째\n[00:30] 김팀장: 두번째",
+            speakers={"SPEAKER_00": "김팀장"},
+            diarization=diarization,
+        )
+
+        res = client.post("/api/jobs/empty-seg-1/apply-match", json={
+            "matches": {"SPEAKER_00": "박과장", "SPEAKER_01": "최부장"},
+        })
+        assert res.status_code == 200
+
+        job = client.get("/api/jobs/empty-seg-1").json()
+        transcript = job["transcript"]
+        speakers = job.get("speakers", {})
+        if isinstance(speakers, str):
+            speakers = json.loads(speakers)
+
+        transcript_names = _extract_transcript_speakers(transcript)
+
+        # 핵심: speakers의 모든 값이 transcript에 존재해야 한다
+        for label, name in speakers.items():
+            assert name in transcript_names, (
+                f"speakers['{label}'] = '{name}'인데 transcript에 없음 → 정합성 위반. "
+                f"transcript 화자: {transcript_names}, 전문: {transcript}"
+            )
+
+        # "최부장"은 세그먼트가 없어 transcript에 나타나면 안 됨
+        assert "최부장" not in transcript, (
+            f"세그먼트 없는 라벨의 이름이 transcript에 들어감: {transcript}"
+        )
 
 
 # ===========================================================================

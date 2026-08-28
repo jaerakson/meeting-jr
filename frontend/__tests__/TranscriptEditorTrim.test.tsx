@@ -136,4 +136,42 @@ describe('TranscriptEditor speaker_map trim', () => {
       expect(body.speaker_map['SPEAKER_00']).toBe('박과장')
     })
   })
+
+  it('공백만 입력 시 speaker_map이 raw 라벨로 폴백해야 한다', async () => {
+    const onComplete = vi.fn()
+
+    render(
+      <TranscriptEditor
+        jobId="trim-test-ws"
+        initialTranscript={TRANSCRIPT}
+        initialSpeakers={['SPEAKER_00', 'SPEAKER_01']}
+        suggestedNames={{ SPEAKER_00: '', SPEAKER_01: '이대리' }}
+        onComplete={onComplete}
+      />
+    )
+
+    const inputs = screen.getAllByRole('textbox') as HTMLInputElement[]
+    const nameInputs = inputs.filter(i => i.type === 'text')
+
+    // SPEAKER_00 이름을 공백만으로 입력
+    fireEvent.change(nameInputs[0], { target: { value: '   ' } })
+
+    const submitButton = screen.getByRole('button', { name: /문서 생성/i })
+    fireEvent.click(submitButton)
+
+    await waitFor(() => {
+      const finalizeCalls = fetchMock.mock.calls.filter(
+        (call: any[]) => typeof call[0] === 'string' && call[0].includes('/finalize')
+      )
+      expect(finalizeCalls.length).toBeGreaterThan(0)
+
+      const [, opts] = finalizeCalls[0]
+      const body = JSON.parse(opts.body)
+
+      // 핵심: 공백만 입력 → trim → '' → raw 라벨(SPEAKER_00)로 폴백
+      expect(body.speaker_map['SPEAKER_00']).toBe('SPEAKER_00')
+      // 정상 입력은 trim된 값
+      expect(body.speaker_map['SPEAKER_01']).toBe('이대리')
+    })
+  })
 })
