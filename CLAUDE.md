@@ -86,6 +86,16 @@ gh pr create --base main --title "<제목>" --body "<설명>"
 
 ---
 
+## 문서 규칙
+
+- **DEVGUIDE.md 섹션 6(API 목록)은 자동 생성이다.** 손으로 고치지 말 것.
+  엔드포인트를 추가·변경했으면 `python3 scripts/gen_api_table.py --write` 를 실행한다.
+  설명은 핸들러 docstring 첫 줄에서 가져오므로, 새 엔드포인트에는 docstring을 붙인다.
+  (손으로 관리하던 시절 실제 코드와 30개가 어긋난 이력이 있다)
+- 확정 결정사항과 **알려진 한계**는 DEVGUIDE.md 섹션 10에 기록한다. "되는 것"만 적지 말 것.
+
+---
+
 ## 개발 명령어
 
 ```bash

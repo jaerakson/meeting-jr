@@ -268,83 +268,85 @@ meeting-jr/
 
 ## 6. API 엔드포인트
 
+<!-- API_TABLE:BEGIN -->
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
-| POST | `/api/record` | webm 녹음 파일 업로드, job_id 반환 |
+| POST | `/api/record` | 브라우저에서 녹음된 webm Blob을 받아 처리 큐에 등록한다. |
+| POST | `/api/upload` | 오디오 또는 텍스트 파일을 업로드하여 처리 큐에 등록한다. |
 | GET | `/api/progress/{job_id}` | SSE 진행률 스트림 |
 | GET | `/api/jobs` | 전체 Job 목록 |
 | GET | `/api/jobs/{job_id}` | Job 상세 (transcript, summary 포함) |
-| POST | `/api/jobs/{job_id}/finalize` | 편집된 transcript + speaker_map → Claude 요약 |
+| POST | `/api/jobs/{job_id}/finalize` | 편집된 transcript와 speaker_map을 받아 Claude 요약을 시작한다. |
+| POST | `/api/jobs/{job_id}/regenerate` | done 상태 회의의 요약을 다른 카테고리로 재생성한다. |
 | POST | `/api/jobs/{job_id}/retry` | 실패 재시도 |
 | DELETE | `/api/jobs/{job_id}` | 회의 삭제 |
 | PATCH | `/api/jobs/{job_id}/title` | 제목 편집 |
-| PATCH | `/api/jobs/{job_id}/summary` | 요약 내용 저장 |
-| PATCH | `/api/jobs/{job_id}/transcript` | 트랜스크립트 수정 저장 |
-| GET | `/api/jobs/{job_id}/download` | 마크다운 다운로드 |
-| GET | `/api/jobs/{job_id}/audio` | 녹음 오디오 서빙 |
-| GET | `/api/speakers` | 저장된 화자 이름 목록 |
-| POST | `/api/jobs/{job_id}/export-notion` | Notion 등록 (mode: new\|update) |
-| GET | `/api/meetings` | 회의 목록 검색+페이지네이션 (?q=&page=&limit=) |
-| GET | `/api/settings` | 설정 키 등록 여부 조회 |
-| PATCH | `/api/settings` | 설정값 저장 (암호화) |
-| GET | `/api/settings/default-title` | 기본 회의 제목 조회 |
-| GET | `/api/settings/claude-status` | Claude CLI 인증 상태 확인 |
-| POST | `/api/settings/claude-logout` | Claude CLI 로그아웃 |
-| POST | `/api/upload` | 파일 업로드 (오디오/txt), job_id 반환 |
-| PATCH | `/api/jobs/{job_id}/action-items` | 액션 아이템 수정 |
-| GET | `/api/action-items` | 통합 액션아이템 조회 (assignee/done 필터, 페이지네이션) |
-| POST | `/api/jobs/{job_id}/share` | 공유 토큰 생성 |
-| GET | `/api/shared/{token}` | 읽기 전용 공유 페이지 데이터 |
-| DELETE | `/api/jobs/{job_id}/share` | 공유 토큰 폐기 |
-| POST | `/api/jobs/{job_id}/ask` | AI 추가 질의 (claude -p) |
-| POST | `/api/insights` | 크로스 회의 인사이트 (keyword/날짜 필터 → claude -p) |
-| GET | `/api/jobs/{job_id}/participation` | 화자 발언 참여도 집계 |
-| GET | `/api/jobs/{job_id}/related` | 관련 회의 조회 (키워드 매칭) |
-| GET | `/api/jobs/{job_id}/followup` | 후속조치 대조 결과 조회 |
-| PATCH | `/api/jobs/{job_id}/followup` | 후속조치 사용자 확정/수정 |
-| POST | `/api/jobs/{job_id}/followup/generate` | 후속조치 대조 (재)생성 |
-| POST | `/api/series` | 회의 시리즈 생성 |
-| GET | `/api/series` | 시리즈 목록 |
-| GET | `/api/series/{id}` | 시리즈 상세 + 연결 회의 |
-| PATCH | `/api/series/{id}` | 시리즈 수정 |
-| DELETE | `/api/series/{id}` | 시리즈 삭제 |
-| PATCH | `/api/jobs/{job_id}/series` | 회의에 시리즈 할당/해제 |
-| GET | `/api/export` | 전체 회의 ZIP 내보내기 |
-| GET | `/api/categories` | 카테고리 목록 |
-| POST | `/api/categories` | 카테고리 생성 |
-| PATCH | `/api/categories/{id}` | 카테고리 수정 |
-| DELETE | `/api/categories/{id}` | 카테고리 삭제 |
-| PATCH | `/api/jobs/{job_id}/category` | 회의 카테고리 변경 |
-| POST | `/api/jobs/{job_id}/regenerate` | 요약 재생성 |
 | PATCH | `/api/jobs/{job_id}/bookmark` | 북마크 토글 |
 | PATCH | `/api/jobs/{job_id}/memo` | 회의 메모 저장 |
 | PATCH | `/api/jobs/{job_id}/tags` | 태그 저장 |
-| PATCH | `/api/jobs/{job_id}/rating` | 회의 평점 저장 |
-| GET | `/api/tags` | 전체 사용 태그 목록 |
-| POST | `/api/categories/{id}/reset` | 카테고리 프롬프트 초기화 |
-| POST | `/api/jobs/{job_id}/notes` | 녹음 중 메모 추가 |
-| GET | `/api/jobs/{job_id}/notes` | 녹음 중 메모 목록 |
-| DELETE | `/api/jobs/{job_id}/notes/{note_id}` | 녹음 중 메모 삭제 |
-| GET | `/api/stats` | 전체 통계 |
-| GET | `/api/stats/monthly` | 월별 통계 |
-| GET | `/api/stats/ratings` | 평점 통계 |
-| POST | `/api/jobs/{job_id}/rematch` | done 상태 회의 음성 프로필 재매칭 |
-| POST | `/api/jobs/{job_id}/apply-match` | 재매칭 결과를 transcript·speakers 에 반영 |
-| POST | `/api/jobs/{job_id}/rename-speakers` | 화자 이름 일괄 변경 |
-| POST | `/api/jobs/{job_id}/save-speaker-profile` | 화자 음성 프로필 저장 |
-| GET | `/api/voice-profiles` | 음성 프로필 목록 |
-| POST | `/api/voice-profiles` | 음성 프로필 등록 |
-| DELETE | `/api/voice-profiles/{profile_id}` | 음성 프로필 삭제 |
-| POST | `/api/voice-profiles/{profile_id}/add-sample` | 프로필에 샘플 추가 |
-| GET | `/api/voice-profiles/threshold` | 매칭 임계값 조회 |
-| PUT | `/api/voice-profiles/threshold` | 매칭 임계값 설정 |
+| PATCH | `/api/jobs/{job_id}/transcript` | 트랜스크립트 수정 저장 |
+| PATCH | `/api/jobs/{job_id}/summary` | 요약 내용 저장 |
+| POST | `/api/insights` | 크로스 회의 인사이트 (keyword/날짜 필터 → claude -p) |
+| POST | `/api/jobs/{job_id}/ask` | AI 추가 질의 (claude -p) |
+| POST | `/api/jobs/{job_id}/share` | 공유 토큰 생성 |
+| GET | `/api/shared/{token}` | 읽기 전용 공유 페이지 데이터 |
+| DELETE | `/api/jobs/{job_id}/share` | 공유 토큰 폐기 |
+| GET | `/api/action-items` | 전체 회의의 액션 아이템 통합 조회. |
+| PATCH | `/api/jobs/{job_id}/action-items` | 액션 아이템 수정 |
+| GET | `/api/jobs/{job_id}/download` | 마크다운 다운로드 |
+| GET | `/api/jobs/{job_id}/audio` | 녹음 오디오 서빙 |
+| GET | `/api/stats` | done 상태 회의의 통계를 반환한다. |
+| GET | `/api/stats/monthly` | 최근 6개월 월별 회의 횟수 + 총 시간(분)을 반환한다. |
+| GET | `/api/speakers` | 저장된 화자 이름 목록 |
+| POST | `/api/speakers` | 화자 이름을 speakers.json에 등록한다. |
 | DELETE | `/api/speakers/{name}` | 저장된 화자 이름 삭제 |
-| GET | `/api/settings/claude-model` | 사용 중인 Claude 모델 조회 |
-| GET | `/api/settings/claude-prompt` | 요약 프롬프트 조회 |
+| POST | `/api/jobs/{job_id}/export-notion` | Notion 등록 (mode: new\|update) |
+| GET | `/api/settings/claude-status` | Claude CLI 인증 상태를 반환한다. |
+| POST | `/api/settings/claude-logout` | Claude CLI 로그아웃을 실행한다. |
+| GET | `/api/settings/default-title` | 기본 회의 제목을 반환한다. 미설정 시 빈 문자열. |
+| GET | `/api/settings/claude-model` | 현재 설정된 Claude 모델 반환. 미설정 시 기본값. |
+| GET | `/api/settings/claude-prompt` | 현재 설정된 프롬프트 반환. 미설정 시 빈 문자열. default도 함께 반환. |
+| GET | `/api/settings` | 각 설정 키의 설정 여부만 반환 (값 자체는 노출 안 함). |
+| PATCH | `/api/settings` | 설정값을 암호화하여 DB에 저장. 빈 문자열이면 해당 키 삭제. |
+| GET | `/api/settings/backup` | speakers.json + settings + categories를 JSON으로 내보낸다. |
+| POST | `/api/settings/restore` | 백업 JSON 파일에서 설정을 복원한다. |
+| GET | `/api/meetings` | 제목+요약+스크립트 검색 + 카테고리/날짜/태그 필터 + 페이지네이션. |
+| GET | `/api/tags` | 전체 사용된 태그 목록 반환. |
+| GET | `/api/categories` | 카테고리 목록 반환 (sort_order 오름차순). |
+| POST | `/api/categories` | 사용자 카테고리 생성. |
+| PATCH | `/api/categories/{cat_id}` | 카테고리 이름/아이콘/설명/프롬프트 수정. |
+| DELETE | `/api/categories/{cat_id}` | 카테고리 삭제. is_builtin=1이면 거부. |
+| POST | `/api/categories/{cat_id}/reset` | 내장 카테고리 프롬프트를 DEFAULT로 복원. |
+| POST | `/api/jobs/{job_id}/notes` | 녹음 중 메모/북마크 일괄 저장. |
+| GET | `/api/jobs/{job_id}/notes` | 해당 job의 노트 목록. |
+| DELETE | `/api/jobs/{job_id}/notes/{note_id}` | 개별 노트 삭제. |
+| GET | `/api/jobs/{job_id}/related` | 현재 회의와 키워드가 겹치는 다른 회의를 최대 5개 반환한다. |
+| GET | `/api/export` | 모든 회의를 ZIP으로 내보낸다. |
+| POST | `/api/jobs/{job_id}/rematch` | 완료된 회의의 화자를 voice profile과 재매칭. |
+| POST | `/api/jobs/{job_id}/apply-match` | 매칭된 화자명을 transcript와 speakers에 적용. |
+| GET | `/api/voice-profiles` | 목소리 프로필 목록 (embedding 제외). |
+| POST | `/api/voice-profiles` | 새 목소리 프로필 생성 (오디오 → embedding 추출). |
+| GET | `/api/voice-profiles/threshold` | 매칭 임계값 조회. |
+| PUT | `/api/voice-profiles/threshold` | 매칭 임계값 설정. |
+| DELETE | `/api/voice-profiles/{profile_id}` | 프로필 삭제. |
+| POST | `/api/voice-profiles/{profile_id}/add-sample` | 기존 프로필에 샘플 추가 (누적 평균). |
+| POST | `/api/jobs/{job_id}/rename-speakers` | 화자 이름 매핑을 적용한다 (요약 없이 speaker_map만 저장). |
+| POST | `/api/series` | 시리즈 생성. |
+| GET | `/api/series` | 시리즈 목록. |
+| GET | `/api/series/{series_id}` | 시리즈 상세 + 연결 회의 목록. |
+| PATCH | `/api/series/{series_id}` | 시리즈 수정. |
+| DELETE | `/api/series/{series_id}` | 시리즈 삭제. |
+| PATCH | `/api/jobs/{job_id}/series` | 회의에 시리즈 할당/해제. done 상태에서 할당 시 후속조치 자동 생성. |
+| GET | `/api/jobs/{job_id}/followup` | 후속조치 조회. |
+| PATCH | `/api/jobs/{job_id}/followup` | 후속조치 사용자 확정 (user_status, confirmed). |
+| POST | `/api/jobs/{job_id}/followup/generate` | 후속조치 대조를 (재)생성한다. claude -p 사용. |
+| GET | `/api/jobs/{job_id}/participation` | 화자별 발언 시간·비율·턴수 분석. |
+| POST | `/api/jobs/{job_id}/save-speaker-profile` | 완료된 회의의 화자를 프로필로 저장. |
 | GET | `/api/settings/denoise` | 노이즈 제거 설정 조회 |
 | PUT | `/api/settings/denoise` | 노이즈 제거 설정 변경 |
-| GET | `/api/settings/backup` | 설정·데이터 백업 다운로드 |
-| POST | `/api/settings/restore` | 백업 복원 |
+| PATCH | `/api/jobs/{job_id}/rating` | 별점(1~5) 저장. |
+| GET | `/api/stats/ratings` | 카테고리별 평균 평점. |
+<!-- API_TABLE:END -->
 
 ### SSE 이벤트 형식
 ```json

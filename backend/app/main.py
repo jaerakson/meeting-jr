@@ -1015,6 +1015,7 @@ async def get_speakers():
 
 @app.post("/api/speakers")
 async def add_speaker(body: dict):
+    """화자 이름을 speakers.json에 등록한다."""
     name = (body.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=422, detail="name은 필수입니다.")
