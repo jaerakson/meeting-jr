@@ -417,3 +417,5 @@ npm run dev   # http://localhost:3000
 | 음성 프로필 | PyAnnote 임베딩 기반 화자 자동 인식, 프로필 CRUD |
 | PDF 출력 | 라이트 모드 강제, 트랜스크립트 제외 요약만 |
 | 화자 이름 클릭 점프 | Transcript 화자 이름 클릭 → 첫 발언으로 시킹+스크롤, 반복 클릭 시 다음 발언 순환. ParticipationChart 범례 클릭 → 항상 첫 발언 고정 |
+| identity-mapped 판별 | speaker_map 키 중 `SPEAKER_\d+` 패턴이 아닌 실명 키가 하나라도 있으면 identity-mapped 회의로 판별 (`_is_identity_mapped`). 이 경우에만 diarization→transcript 타임스탬프 역매핑 시도 |
+| 기존 불일치 데이터 처리 | apply-match 정합성 버그로 저장된 기존 불일치 데이터는 DB 마이그레이션 없이 조회 시점 reconciliation(participation API의 `_resolve_speaker_display` 폴백)으로 처리 |
