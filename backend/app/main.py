@@ -2349,16 +2349,21 @@ async def get_participation(job_id: str):
     )
 
     use_diar = False
+    seen_display_names: set[str] = set()
     if diar_data:
         for label, segments in diar_data.items():
             display = speaker_map.get(label)
             if not display:
                 if _is_identity_mapped:
-                    display = _resolve_speaker_display(label, segments, _transcript_text) or label
+                    resolved = _resolve_speaker_display(label, segments, _transcript_text)
+                    display = resolved if resolved and resolved not in seen_display_names else label
                 else:
                     display = label
             elif display == label:
-                display = _resolve_speaker_display(label, segments, _transcript_text) or label
+                resolved = _resolve_speaker_display(label, segments, _transcript_text)
+                display = resolved if resolved and resolved not in seen_display_names else label
+
+            seen_display_names.add(display)
 
             if not segments:
                 # 빈 세그먼트라도 diarization이 존재한다고 간주
