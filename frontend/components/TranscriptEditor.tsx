@@ -119,7 +119,7 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
   const handleSubmit = async () => {
     setSubmitting(true)
     const speaker_map: Record<string, string> = {}
-    speakers.forEach(s => { speaker_map[s] = names[s] || s })
+    speakers.forEach(s => { speaker_map[s] = (names[s] || s).trim() })
     const transcript = serialize(lines, names)
     try {
       await fetch(`/api/jobs/${jobId}/finalize`, {
