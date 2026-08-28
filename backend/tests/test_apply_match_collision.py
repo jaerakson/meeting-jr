@@ -181,6 +181,77 @@ class TestReplaceMapKeyCollision:
 
 
 # ===========================================================================
+# Bug 1 보충: diar 없는 충돌 + 세그먼트 밖 라인
+# ===========================================================================
+
+class TestCollisionWithoutDiarization:
+    """diarization이 없는 상태에서 충돌 발생 시 첫 번째만 적용."""
+
+    def test_no_diar_collision_first_wins_rest_skipped(self, client):
+        """diarization 없이 두 라벨이 같은 current_name으로 수렴 →
+        첫 번째만 적용, 나머지는 skipped로 보고."""
+        _create_done_meeting(
+            job_id="no-diar-collision-1",
+            transcript="[00:00] 김팀장: 첫번째\n[00:30] 김팀장: 두번째",
+            speakers={"SPEAKER_00": "김팀장", "SPEAKER_01": "김팀장"},
+            diarization=None,
+        )
+
+        res = client.post("/api/jobs/no-diar-collision-1/apply-match", json={
+            "matches": {"SPEAKER_00": "박과장", "SPEAKER_01": "이대리"},
+        })
+        assert res.status_code == 200
+
+        data = res.json()
+        assert data.get("ok") is True
+        # 두 번째 라벨은 skipped
+        assert "skipped" in data, f"충돌 시 skipped 필드 필요: {data}"
+        assert "SPEAKER_01" in data["skipped"]
+
+        # 첫 번째(박과장)만 transcript에 적용
+        job = client.get("/api/jobs/no-diar-collision-1").json()
+        assert "박과장:" in job["transcript"]
+
+
+class TestCollisionLineOutsideSegments:
+    """충돌 상황에서 세그먼트 밖 라인 처리."""
+
+    def test_collision_line_outside_all_segments_unchanged(self, client):
+        """충돌 상황에서 라인 타임스탬프가 어떤 diar 세그먼트에도 속하지 않으면
+        해당 라인은 치환하지 않고 그대로 둔다."""
+        diarization = {
+            "SPEAKER_00": [{"start": 0, "end": 20, "speaker": "SPEAKER_00"}],
+            "SPEAKER_01": [{"start": 20, "end": 40, "speaker": "SPEAKER_01"}],
+        }
+
+        _create_done_meeting(
+            job_id="collision-outside-1",
+            transcript="[00:00] 김팀장: 첫번째\n[00:20] 김팀장: 두번째\n[00:50] 김팀장: 세번째",
+            speakers={"SPEAKER_00": "김팀장"},
+            diarization=diarization,
+        )
+
+        res = client.post("/api/jobs/collision-outside-1/apply-match", json={
+            "matches": {"SPEAKER_00": "박과장", "SPEAKER_01": "이대리"},
+        })
+        assert res.status_code == 200
+
+        job = client.get("/api/jobs/collision-outside-1").json()
+        transcript = job["transcript"]
+
+        # 0:00 → SPEAKER_00 세그먼트 → "박과장"
+        assert "박과장:" in transcript
+        # 0:20 → SPEAKER_01 세그먼트 → "이대리"
+        assert "이대리:" in transcript
+        # 0:50 → 어떤 세그먼트에도 안 속함 → "김팀장" 유지
+        lines = transcript.split('\n')
+        last_line = lines[-1]
+        assert "김팀장:" in last_line, (
+            f"세그먼트 밖 라인은 원래 이름 유지해야 함. 실제: {last_line}"
+        )
+
+
+# ===========================================================================
 # Bug 3: 해석 실패를 삼키고 성공 반환
 # ===========================================================================
 
