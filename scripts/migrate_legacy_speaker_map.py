@@ -15,20 +15,33 @@ PR C 이전의 `TranscriptEditor` 는 화자 이름을 **본문에 구워서** �
 
 ## 무엇을 바꾸는가 (그리고 무엇을 바꾸지 않는가)
 
-바꾸는 것: `transcript_segments` 의 `label` 뿐이다. 실명 → 그 이름을 가리키는 diar 라벨.
-바꾸지 않는 것: `transcript` 문자열, `speaker_map`, `diarization`, 그 외 모든 컬럼.
+바꾸는 것: `transcript_segments` 의 `label` — 실명 → 그 이름을 가리키는 diar 라벨.
+그리고 **중복 이름 병합 경로에서만** `speakers`(speaker_map)에서 비대표 동명 키를 제거한다.
+바꾸지 않는 것: `transcript` 문자열, `diarization`, 그 외 모든 컬럼. `raw` 키는 있던 그대로 둔다.
 
 표시 이름은 speaker_map 이 나르므로 **사용자 화면은 한 글자도 바뀌지 않아야 정상이다.**
 이것을 희망이 아니라 **검사**로 강제한다 — 재키잉한 segments 를 `render(new_segments,
 speaker_map)` 한 결과가 현재 transcript 와 **바이트 동일**하지 않으면 그 행은 쓰지 않는다.
 안 맞으면 우리가 이 행에 대해 뭔가 잘못 알고 있는 것이다.
 
+## 판정 순서 — 레거시 서명이 사전조건보다 **먼저**다
+
+먼저 "손댈 필요가 있는가"를 판정하고, 없으면 **조치불필요**로 분류하고 사전조건은 검사하지 않는다.
+
+    레거시 서명: 세그먼트 라벨 L 중, **자기 자신이 아닌 다른 키의 표시 이름**인 것이
+    하나라도 있으면 복구 대상이다. (∃ label ∈ L, ∃ k ∈ speaker_map: map[k]==label and k!=label)
+
+`SPEAKER_\d+` 같은 **형태 판별을 쓰지 않는다.** 키는 전부 `SPEAKER_XX` 인데 본문 라벨만
+실명인 행이 실재하고(`92c731af`·`2e3a65c4`), 형태로 판별하면 이 복구 대상들을 "정상"으로
+놓친다. 순서도 중요하다 — 사전조건 ②를 먼저 걸면, 매핑되지 않은 diar 라벨이 본문에 남아
+있을 뿐인 **정상 행**(`5ab8e338`)이 "건너뜀"으로 잘못 보고된다.
+
 ## 행별 사전조건 (하나라도 불성립이면 그 행 **전체**를 건너뛴다 — 부분 복구 금지)
 
-    1. speaker_map 값이 유일할 것            (중복은 아래 '중복 이름 병합' 경로로)
-    2. speaker_map 값 집합 == segment 라벨 집합
-    3. speaker_map 키 ⊆ diarization 키
-    4. 매핑 실패 라벨 0건                    (모든 실명 라벨이 라벨로 되돌려질 것)
+    ① speaker_map 값이 유일할 것            (중복이면 스킵이 아니라 아래 병합 경로로 분기)
+    ② speaker_map 값 집합 == segment 라벨 집합
+    ③ speaker_map 키 ⊆ diarization 키
+    ④ 매핑 실패 라벨 0건                    (모든 실명 라벨이 라벨로 되돌려질 것)
 
 ## 중복 이름 병합 — 지운 overlap 휴리스틱과 무엇이 다른가  ★ 반드시 읽을 것
 
@@ -58,7 +71,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sqlite3
 import sys
 from collections import Counter
@@ -72,9 +84,9 @@ from app.transcript import parse, render  # noqa: E402  (sys.path 조정 후여�
 DEFAULT_DB = BACKEND / "meetings.db"
 
 # 판정 코드
-OK_DIRECT = "복구(단순 재키잉)"
-OK_MERGED = "복구(중복 이름 병합)"
-NO_OP = "조치 불필요"
+OK_DIRECT = "자동복구"
+OK_MERGED = "병합복구"
+NO_OP = "조치불필요"
 SKIP = "건너뜀"
 
 
@@ -136,110 +148,130 @@ def _representative(keys: list[str], diar_seconds: dict) -> str:
     return max(sorted(keys), key=lambda k: (diar_seconds.get(k, 0.0), ))
 
 
+def _merge_duplicate_names(speaker_map: dict, diar: dict) -> tuple[dict, list[str], str]:
+    """speaker_map 값이 중복이면 이름마다 대표 라벨 하나만 남긴다.
+
+    이 대표 라벨 선택은 PR B에서 삭제한 overlap 휴리스틱과 다르다.
+    삭제한 것은 "어느 줄이 누구 발화인지"를 추측하는 방식이었다.
+    이것은 사용자가 이미 선언한 이름 하나에 대해, 그 이름이 실려 있던
+    여러 diarization 클러스터 중 대표를 고르는 결정적 규칙일 뿐이다.
+    줄 배정은 추측하지 않는다 — 줄의 라벨은 역맵으로 유일하게 결정되며,
+    결정되지 않는 줄이 하나라도 있으면(조건 ④) 그 행 전체를 건너뛴다.
+
+    대표 = diarization 총 발화 길이(sum(end-start)) 최대. 동률이면 키 문자열 정렬로
+    tie-break 하여 같은 입력이면 항상 같은 출력이 나온다.
+
+    반환: (대표만 남긴 speaker_map, 중복이던 이름들, 사람이 읽을 메모)
+    """
+    counts = Counter(speaker_map.values())
+    duplicated = sorted(n for n, c in counts.items() if c > 1)
+    if not duplicated:
+        return dict(speaker_map), [], ""
+
+    seconds = _diar_seconds(diar)
+    by_name: dict[str, list[str]] = {}
+    for key, name in speaker_map.items():
+        by_name.setdefault(name, []).append(key)
+
+    reduced: dict[str, str] = {}
+    notes: list[str] = []
+    for name, keys in by_name.items():
+        rep = max(sorted(keys), key=lambda k: (seconds.get(k, 0.0),))
+        reduced[rep] = name
+        if len(keys) > 1:
+            dropped = [k for k in sorted(keys) if k != rep]
+            notes.append(
+                f"{name}: {sorted(keys)} → 대표 {rep}"
+                f"(총 {seconds.get(rep, 0.0):.1f}초), 제거 {dropped}"
+            )
+    return reduced, duplicated, "중복 이름 병합 — " + " / ".join(notes)
+
+
 def judge(row: dict) -> dict:
     """행 하나를 판정한다. DB 를 건드리지 않는다.
 
-    반환: {verdict, reason, new_segments|None, detail}
+    판정 순서(사양): 레거시 서명 → (중복이면) 병합 → 조건 ②③④ → 재키잉 → 안전장치.
+    **조건 검사보다 레거시 서명이 먼저다.** 순서를 바꾸면, 매핑되지 않은 diar 라벨이 본문에
+    남아 있을 뿐인 정상 행(실측 `5ab8e338`)이 조건 ②에 걸려 "건너뜀"으로 잘못 보고된다.
+
+    반환: {verdict, reason, new_segments, new_speaker_map}
     """
-    job_id = row["id"]
     transcript = row.get("transcript") or ""
     speaker_map = _json_obj(row.get("speakers"), {}) or {}
     diar = _json_obj(row.get("diarization"), {}) or {}
     segments = _segments_of(row)
     labels = {s.get("label") for s in segments if s.get("label")}
 
-    if not labels:
-        return dict(verdict=NO_OP, reason="구조화된 화자 라벨이 없다(빈 transcript 또는 passthrough 전용).",
-                    new_segments=None)
+    none = dict(new_segments=None, new_speaker_map=None)
 
-    # 이미 라벨 모델과 정합한 행 — 모든 segment 라벨이 **diar 라벨 공간**에 있다.
-    #
-    # 판정 기준을 "라벨이 speaker_map 키에 있는가"로 두면 안 된다. 레거시 행 중에는
-    # 실명 키를 identity로 함께 들고 있는 것이 있어({"아빠":"아빠", "SPEAKER_00":"아빠"})
-    # 그 기준으로는 정상으로 보이지만, `matches` 의 키는 항상 diar 라벨이므로
-    # apply-match 는 여전히 422 다. 즉 **깨진 행을 정상으로 숨긴다.**
-    # diar 가 없는 행(txt 업로드 등)은 대조할 실물이 없으므로 `SPEAKER_\d+` 형태를 공간으로 본다.
-    if diar:
-        label_space_ok = labels <= set(diar)
-        space_desc = f"diarization 키 {sorted(diar)}"
-    else:
-        label_space_ok = all(re.fullmatch(r"SPEAKER_\d+", l) for l in labels)
-        space_desc = "SPEAKER_XX 형태(diarization 없음)"
-    if label_space_ok:
+    # --- 레거시 서명: 손댈 필요가 있는가 -------------------------------------
+    # 세그먼트 라벨 중 "자기 자신이 아닌 다른 키의 표시 이름"인 것이 하나라도 있으면 복구 대상.
+    # 순수하게 데이터 관계로만 판정한다 — `SPEAKER_\d+` 같은 형태 판별을 쓰지 않는다.
+    # (키가 전부 SPEAKER_XX 인데 본문 라벨만 실명인 행이 실재한다: 92c731af, 2e3a65c4)
+    baked = sorted(
+        label for label in labels
+        if any(v == label and k != label for k, v in speaker_map.items())
+    )
+    if not baked:
         return dict(verdict=NO_OP,
-                    reason=f"모든 segment 라벨이 이미 라벨 공간 안에 있다 — {space_desc}.",
-                    new_segments=None)
+                    reason="본문 라벨 중 다른 키의 표시 이름인 것이 없다 — 라벨 공간이 이미 정합하다.",
+                    **none)
 
-    if diar:
-        outside = sorted(l for l in labels if l not in diar)
-    else:
-        outside = sorted(l for l in labels if not re.fullmatch(r"SPEAKER_\d+", l))
-    detail = f"라벨 공간({space_desc}) 밖 라벨 {outside}"
+    detail = f"본문에 구워진 표시 이름 {baked}"
 
-    # --- 사전조건 3: 키 ⊆ diarization 키 -----------------------------------
-    stray_keys = sorted(k for k in speaker_map if k not in diar)
-    if stray_keys:
-        return dict(verdict=SKIP,
-                    reason=f"[사전조건3 불성립] speaker_map 키가 diarization 키의 부분집합이 아니다: "
-                           f"{stray_keys} (diar 키: {sorted(diar) or '없음'}). "
-                           f"이 키들은 되돌릴 diar 라벨이 없다. {detail}",
-                    new_segments=None)
+    # --- 조건 ①: 값 유일. 중복이면 병합 경로로 분기(스킵이 아니다) -----------
+    working_map, duplicated, merge_note = _merge_duplicate_names(speaker_map, diar)
 
-    # --- 사전조건 1: 값 유일성 → 단순 재키잉 / 병합 경로 분기 ---------------
-    counts = Counter(speaker_map.values())
-    duplicated = sorted(n for n, c in counts.items() if c > 1)
-    merged_note = ""
-    if duplicated:
-        merged_note = (f"중복 이름 {duplicated} → 대표 라벨을 diar 총 발화 길이로 선정")
-
-    # --- 사전조건 2: 값 집합 == 라벨 집합 ------------------------------------
-    values = set(speaker_map.values())
+    # --- 조건 ②: 값 집합 == 라벨 집합 ---------------------------------------
+    values = set(working_map.values())
     if values != labels:
         return dict(verdict=SKIP,
-                    reason=f"[사전조건2 불성립] speaker_map 값 집합 != segment 라벨 집합. "
+                    reason=f"[조건② 불성립] speaker_map 값 집합 != segment 라벨 집합. "
                            f"값에만 있음 {sorted(values - labels)}, 라벨에만 있음 {sorted(labels - values)}. {detail}",
-                    new_segments=None)
+                    **none)
 
-    # --- 역맵 구성 (중복 이름은 대표 라벨로) --------------------------------
-    diar_seconds = _diar_seconds(diar)
-    by_name: dict[str, list[str]] = {}
-    for key, name in speaker_map.items():
-        by_name.setdefault(name, []).append(key)
-    inverse = {name: _representative(keys, diar_seconds) for name, keys in by_name.items()}
+    # --- 조건 ③: 키 ⊆ diarization 키 ----------------------------------------
+    stray = sorted(k for k in working_map if k not in diar)
+    if stray:
+        return dict(verdict=SKIP,
+                    reason=f"[조건③ 불성립] speaker_map 키가 diarization 키의 부분집합이 아니다: {stray} "
+                           f"(diar 키: {sorted(diar) or '없음'}). 이 키들은 되돌릴 diar 라벨이 없다. {detail}",
+                    **none)
 
-    # --- 사전조건 4: 매핑 실패 라벨 0건 -------------------------------------
+    # --- 역맵 + 조건 ④: 매핑 실패 라벨 0건 -----------------------------------
+    inverse = {name: key for key, name in working_map.items()}
     unmapped = sorted(l for l in labels if l not in inverse)
     if unmapped:
         return dict(verdict=SKIP,
-                    reason=f"[사전조건4 불성립] 되돌릴 라벨을 찾지 못한 segment 라벨 {unmapped}. {detail}",
-                    new_segments=None)
+                    reason=f"[조건④ 불성립] 되돌릴 라벨을 찾지 못한 segment 라벨 {unmapped}. {detail}",
+                    **none)
 
-    # --- 재키잉 -------------------------------------------------------------
+    # --- 재키잉 (raw 키는 있던 그대로 둔다) ----------------------------------
     new_segments = []
     for seg in segments:
-        label = seg.get("label")
-        if label is None or label not in inverse:
-            new_segments.append(dict(seg))
-            continue
         new_seg = dict(seg)
-        new_seg["label"] = inverse[label]
+        label = seg.get("label")
+        if label is not None and label in inverse:
+            new_seg["label"] = inverse[label]
         new_segments.append(new_seg)
 
-    # --- 핵심 안전장치: 사용자 화면이 한 글자도 바뀌지 않아야 한다 ----------
-    rendered = render(new_segments, speaker_map)
+    # --- 핵심 안전장치: 사용자 화면이 한 글자도 바뀌지 않아야 한다 -----------
+    rendered = render(new_segments, working_map)
     if rendered != transcript:
         return dict(verdict=SKIP,
-                    reason="[안전장치 불성립] 재키잉 후 render() 결과가 현재 transcript 와 "
-                           "바이트 동일하지 않다. 이 행에 대해 우리가 뭔가 잘못 알고 있는 것이므로 "
-                           "쓰지 않는다. " + _first_diff(transcript, rendered),
-                    new_segments=None)
+                    reason="[안전장치 불성립] 재키잉 후 render() 결과가 현재 transcript 와 바이트 동일하지 "
+                           "않다. 이 행에 대해 우리가 뭔가 잘못 알고 있는 것이므로 쓰지 않는다. "
+                           + _first_diff(transcript, rendered),
+                    **none)
 
-    verdict = OK_MERGED if duplicated else OK_DIRECT
-    reason = f"사전조건 4개 전부 성립 + render 바이트 동일. 재키잉 " + \
+    reason = "조건 ②③④ 성립 + render 바이트 동일. 재키잉 " + \
              ", ".join(f"{n}→{inverse[n]}" for n in sorted(labels))
-    if merged_note:
-        reason += f" ({merged_note})"
-    return dict(verdict=verdict, reason=reason, new_segments=new_segments)
+    if merge_note:
+        reason += f". {merge_note}"
+    return dict(verdict=OK_MERGED if duplicated else OK_DIRECT,
+                reason=reason,
+                new_segments=new_segments,
+                new_speaker_map=working_map if working_map != speaker_map else None)
 
 
 def _first_diff(a: str, b: str) -> str:
@@ -249,13 +281,23 @@ def _first_diff(a: str, b: str) -> str:
     return f"길이 불일치: 기존 {len(a)}자 vs 렌더 {len(b)}자"
 
 
-def _write(db_path: Path, job_id: str, segments: list[dict]) -> None:
+def _write(db_path: Path, job_id: str, segments: list[dict],
+           speaker_map: "dict | None") -> None:
+    """재키잉된 segments 를(병합 경로면 축소된 speaker_map 도 함께) 기록한다.
+
+    `transcript` 문자열은 쓰지 않는다 — 안전장치가 바이트 동일을 이미 보장했으므로
+    다시 쓸 이유가 없고, 쓰지 않는 편이 사고 반경이 좁다.
+    """
+    fields = ["transcript_segments = ?"]
+    values: list = [json.dumps(segments, ensure_ascii=False)]
+    if speaker_map is not None:
+        fields.append("speakers = ?")
+        values.append(json.dumps(speaker_map, ensure_ascii=False))
+    values.append(job_id)
+
     conn = sqlite3.connect(str(db_path))
     try:
-        conn.execute(
-            "UPDATE meetings SET transcript_segments = ? WHERE id = ?",
-            (json.dumps(segments, ensure_ascii=False), job_id),
-        )
+        conn.execute(f"UPDATE meetings SET {', '.join(fields)} WHERE id = ?", values)
         conn.commit()
     finally:
         conn.close()
@@ -287,8 +329,11 @@ def main(argv=None) -> int:
         print(f"[{verdict}] {row['id'][:8]}  status={row.get('status')}  {title[:40]}")
         print(f"    사유: {result['reason']}")
         if args.write and result["new_segments"] is not None:
-            _write(db_path, row["id"], result["new_segments"])
-            print(f"    → transcript_segments {len(result['new_segments'])}건 기록 완료")
+            _write(db_path, row["id"], result["new_segments"], result["new_speaker_map"])
+            wrote = f"transcript_segments {len(result['new_segments'])}건"
+            if result["new_speaker_map"] is not None:
+                wrote += f" + speakers {len(result['new_speaker_map'])}키(중복 제거)"
+            print(f"    → {wrote} 기록 완료")
         print()
 
     print("== 요약 ==")
