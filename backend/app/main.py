@@ -1968,21 +1968,23 @@ async def rename_speakers(job_id: str, body: dict):
     speaker_map: dict = body.get("speaker_map", {})
 
     # 이름 매핑을 transcript에도 반영한다(재렌더). speakers만 갱신하면 transcript와
-    # 구조적으로 어긋난다. 빈/공백 값은 render()가 라벨 유지로 흡수하고,
-    # 쓰기 정규화(strip·빈 값 제외)는 update_job_result 관문이 담당한다.
+    # 구조적으로 어긋난다. segments는 transcript 갱신 **전에** 확보한다.
     segments = get_segments(job_id)
+
+    # 쓰기 정규화(strip·빈 값 제외)는 update_job_result 관문이 한다. 정규화된 결과를
+    # 되읽어 렌더·프로필 저장에 쓴다 — 빈 이름이 transcript나 프로필로 새지 않게.
+    update_job_result(job_id, speakers=speaker_map)
+    normalized: dict = get_job(job_id).get("speakers") or {}
+
     if segments:
         update_job_result(
             job_id,
-            transcript=render_transcript(segments, speaker_map),
-            speakers=speaker_map,
+            transcript=render_transcript(segments, normalized),
             transcript_segments=segments,
         )
-    else:
-        update_job_result(job_id, speakers=speaker_map)
 
-    if speaker_map:
-        _save_speakers(speaker_map)
+    if normalized:
+        _save_speakers(normalized)
 
     return {"ok": True}
 
