@@ -666,13 +666,97 @@ async def patch_transcript(job_id: str, body: dict):
     if not transcript:
         raise HTTPException(status_code=422, detail="transcript가 비어 있습니다.")
 
-    # 편집된 transcript를 파싱해 segments도 같은 호출에 실어 갱신한다. 갱신하지 않으면
-    # 편집 이전의 낡은 segments가 남아, 이후 재렌더 경로(apply-match·rename-speakers)가
-    # 사용자의 편집을 통째로 덮어쓴다(finalize_job에서 닫은 것과 같은 결함).
+    # ------------------------------------------------------------------
+    # 파싱한 라벨을 **원래 라벨로 되돌린 뒤** 저장한다.
+    #
+    # 이 엔드포인트가 받는 문자열은 프론트가 화면에 보여주던 `job.transcript` 그대로이고,
+    # 그 본문에는 이미 **표시 이름이 렌더돼 있다**(rename-speakers·apply-match의 승인된 동작).
+    # 그대로 parse하면 "김팀장" 같은 실명이 새 라벨이 되어 speaker_map 키(SPEAKER_XX)와
+    # 어긋나는 **레거시 행이 새로 생긴다** — PR C가 TranscriptEditor에서 막은 바로 그 손상이
+    # 이 경로(MainArea "회의록 수정")로 다시 들어왔다.
+    # ------------------------------------------------------------------
+    speaker_map = job.get("speakers") or {}
+
+    # 편집 **이전**의 세그먼트. get_segments()는 백필 쓰기가 섞이므로 쓰지 않는다.
+    old_segments = job.get("transcript_segments") or parse_transcript(job.get("transcript") or "")
+
+    # diar 라벨 공간(있으면). DB 우선, 없으면 파일을 **읽기만** 한다(백필하지 않는다).
+    from .database import get_job_diarization
+    diar_labels = set(get_job_diarization(job_id) or {})
+    if not diar_labels:
+        diar_path = INPUT_DIR / f"{job_id}_diarization.json"
+        if diar_path.exists():
+            try:
+                diar_labels = set(json.loads(diar_path.read_text(encoding="utf-8")) or {})
+            except (json.JSONDecodeError, OSError):
+                diar_labels = set()
+
+    # start -> 그 줄에 원래 붙어 있던 라벨. 표시 이름이 중복인 회의(실측 5938f69c: "대표님" 3벌)
+    # 에서도 원래 라벨을 정확히 되찾는 유일한 경로다.
+    #
+    # 이것은 폐기된 overlap 휴리스틱이 아니다. 지운 것은 *누가 말했는지*를 시간 겹침으로
+    # 추측하는 방식이었다. 여기서는 **그 줄에 이미 붙어 있던 라벨을 같은 start로 되찾을 뿐**
+    # 이고, 되찾지 못하면 추측하지 않고 아래에서 422로 거부한다.
+    old_by_start: dict = {}
+    for seg in old_segments:
+        label = seg.get("label")
+        start = seg.get("start")
+        if label is not None and start is not None and start not in old_by_start:
+            old_by_start[start] = label
+
+    # 표시 이름 -> 라벨 역맵. **값이 유일한 것만** 넣는다 — 중복이면 어느 라벨인지
+    # 데이터로 결정할 수 없고, 추측하지 않는다(save_speaker_profile과 같은 판단).
+    _name_counts = Counter(speaker_map.values())
+    inverse_unique = {v: k for k, v in speaker_map.items() if _name_counts[v] == 1}
+
+    new_segments = []
+    unresolved: list[str] = []
+    for seg in parse_transcript(transcript):
+        label = seg.get("label")
+        if label is None:
+            new_segments.append(seg)
+            continue
+
+        # (a) 이미 라벨 공간 안이면 그대로 둔다.
+        if label in speaker_map or label in diar_labels:
+            new_segments.append(seg)
+            continue
+
+        # (b) 같은 start의 옛 세그먼트의 표시 이름과 같으면, 그 세그먼트의 라벨을 되돌린다.
+        old_label = old_by_start.get(seg.get("start"))
+        if old_label is not None:
+            old_display = (speaker_map.get(old_label) or "").strip() or old_label
+            if old_display == label:
+                seg = {**seg, "label": old_label}
+                new_segments.append(seg)
+                continue
+
+        # (c) 표시 이름이 유일하면 역맵으로 라벨을 되찾는다.
+        resolved = inverse_unique.get(label)
+        if resolved is not None:
+            new_segments.append({**seg, "label": resolved})
+            continue
+
+        # (d) 미해소.
+        unresolved.append(label)
+
+    if unresolved:
+        # 부분 저장하지 않는다 — 조용히 깨진 행을 만드는 것보다 명시적 거부가 낫다
+        # (apply_match·save_speaker_profile과 같은 확립된 판단).
+        raise HTTPException(
+            status_code=422,
+            detail="화자 라벨을 되돌릴 수 없어 저장하지 않았습니다: "
+                   f"{sorted(set(unresolved))}. 화자 이름을 본문에서 직접 바꾸지 말고 "
+                   "화자 이름 편집 기능을 사용해주세요.",
+        )
+
+    # transcript는 받은 문자열 **그대로**, segments는 **재키잉된 것**을 같은 호출로 저장한다.
+    # 갱신하지 않으면 편집 이전의 낡은 segments가 남아, 이후 재렌더 경로(apply-match·
+    # rename-speakers)가 사용자의 편집을 통째로 덮어쓴다(finalize_job에서 닫은 것과 같은 결함).
     update_job_result(
         job_id,
         transcript=transcript,
-        transcript_segments=parse_transcript(transcript),
+        transcript_segments=new_segments,
     )
 
     script_path = OUTPUT_DIR / f"{job_id}_스크립트.txt"
