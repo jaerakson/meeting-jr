@@ -216,21 +216,39 @@ def test_save_profile_lazy_migration_from_file(mock_emb, tmp_path, client, setup
 
 
 # ─────────────────────────────────────────────────────────────────────
-# 테스트 3-1: identity mapping ({아빠: 아빠})에서 타임스탬프 교차 비교
+# 테스트 3-1: identity mapping ({아빠: 아빠}) — 레거시 행은 명시적으로 거부되어야 한다
 # ─────────────────────────────────────────────────────────────────────
+#
+# [계약 뒤집힘, PR C] 이 테스트는 원래 "overlap 휴리스틱으로 SPEAKER_XX를 추론해
+# 200을 반환해야 한다"를 단언했다. PR C에서 그 휴리스틱(diar↔transcript 구간
+# overlap 면적 추론)을 의도적으로 삭제했으므로 지금은 **422가 맞는 동작**이다.
+# 구현이 퇴행한 게 아니다 — 잘못 뒤집으면 폐기된 매칭 방식이 되살아난다.
+#
+# 왜 삭제했나 (DEVGUIDE.md §10 "[한계] 레거시 행에서 음성 프로필 추출 불가 (PR C)" 참조):
+#   - speaker_map 키가 실명(레거시 행)이면 diar 라벨(SPEAKER_XX)과 다리가 없다.
+#   - overlap 휴리스틱은 조용히 틀린 화자의 목소리를 프로필로 저장할 위험이 있고,
+#     apply_match·participation에서 동일 부류 휴리스틱이 이미 제거되어(PR B)
+#     이 엔드포인트만 다르게 동작하는 것 자체가 불일치였다(§10 "일관성 문제").
+#   - 조용히 틀리는 대신 422로 명시 거부하는 쪽을 선택했다.
+#
+# ⚠️ 이 테스트를 다시 200/success로 뒤집지 말 것. 그건 overlap 휴리스틱의 재유입이며,
+#    이 프로젝트에서 폐기된 매칭 방식이 두 번 재유입된 사고와 정확히 같은 형태다.
+#    대신 422 응답의 오류 문구가 "왜 안 되는지"(레거시 행이라 라벨 다리가 없다는 사실)를
+#    실제로 설명하는지까지 단언해서, 이 테스트 자체가 회귀 감시자가 되도록 한다.
 @patch("app.audio_processor.extract_speaker_embedding", side_effect=_mock_embedding)
 def test_save_profile_with_name_key_identity_mapping(mock_emb, client, setup_job_with_diarization):
-    """speakers가 {아빠: 아빠}이고 diarization이 {SPEAKER_00: ...}일 때,
-    transcript 타임스탬프로 SPEAKER_XX를 추론하여 프로필 추출이 성공해야 한다."""
+    """speakers가 {아빠: 아빠}(레거시: 키가 실명)이고 diarization이 {SPEAKER_00: ...}일 때,
+    라벨 공간이 어긋나 프로필 추출이 422로 명시 거부되어야 한다(overlap 휴리스틱 재유입 금지)."""
     import app.database as dbmod
 
-    # identity mapping: 이름이 키
+    # identity mapping: 이름이 키 (레거시 행 — speaker_map 키가 diar 라벨과 다리가 없음)
     speakers = {"아빠": "아빠", "손주환": "손주환"}
     diarization = {
         "SPEAKER_00": [{"start": 0.0, "end": 5.0}, {"start": 10.0, "end": 15.0}],
         "SPEAKER_01": [{"start": 5.0, "end": 10.0}, {"start": 20.0, "end": 25.0}],
     }
-    # transcript에서 아빠는 [00:00], [00:10]에 발화 → SPEAKER_00과 일치
+    # transcript에서 아빠는 [00:00], [00:10]에 발화 → SPEAKER_00과 겹치지만,
+    # PR C 이후 이 겹침은 더 이상 라벨 추론 근거로 쓰이지 않는다.
     transcript = "[00:00] 아빠: 안녕\n[00:05] 손주환: 네\n[00:10] 아빠: 뭐해\n[00:20] 손주환: 놀아요"
 
     job_id = setup_job_with_diarization(speakers, diarization)
@@ -243,7 +261,14 @@ def test_save_profile_with_name_key_identity_mapping(mock_emb, client, setup_job
         json={"speaker_label": "아빠", "profile_name": "아빠"},
     )
 
-    assert res.status_code == 200, f"identity mapping 타임스탬프 추론 실패: {res.json()}"
-    data = res.json()
-    assert "id" in data
-    assert data["name"] == "아빠"
+    assert res.status_code == 422, (
+        f"레거시 행(speaker_map 키가 실명)은 라벨 다리가 없어 422로 명시 거부되어야 한다. "
+        f"200이 나온다면 폐기된 overlap 휴리스틱이 되살아난 것이다: {res.status_code} {res.text}"
+    )
+    detail = res.json().get("detail", "")
+    # 원인(레거시 행이라 라벨 공간이 어긋난다)을 실제로 설명하는지까지 확인 —
+    # 문구 없이 422만 통과시키면 "왜 안 되지" 하며 휴리스틱을 되살릴 여지가 남는다.
+    assert "아빠" in detail, f"오류 문구에 어떤 화자인지 나와야 한다: {detail}"
+    assert ("예전 방식" in detail or "레거시" in detail), (
+        f"오류 문구가 '레거시 행이라 안 된다'는 원인을 설명하지 않는다: {detail}"
+    )

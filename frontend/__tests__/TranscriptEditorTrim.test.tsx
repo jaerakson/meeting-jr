@@ -85,7 +85,24 @@ describe('TranscriptEditor speaker_map trim', () => {
     })
   })
 
-  it('serialize된 transcript의 화자 이름과 speaker_map 값이 일치해야 한다', async () => {
+  // [계약 뒤집힘, PR C] 이 테스트는 원래 "speaker_map의 값(이름)이 transcript 본문의
+  // 화자 토큰과 일치해야 한다"를 단언했다 — 즉 이름이 본문에 구워진다는 옛 계약이다.
+  // 커밋 2437583("TranscriptEditor finalize 계약 변경 — 이름을 본문에 굽지 않는다")로
+  // handleSubmit이 `render(segments, {})`(빈 맵)를 보내도록 바뀌었으므로, 지금은 이름이
+  // 무엇이든 본문에는 항상 원본 라벨(SPEAKER_00 등)만 남는다. 이름은 오직 speaker_map이
+  // 나른다. 그래서 "값이 본문에 있는가"는 더 이상 성립하지 않는 계약이고, 구현이 틀린 게
+  // 아니라 테스트가 폐기된 계약을 붙들고 있는 것이다.
+  //
+  // 새 계약에서 실제로 지켜야 하는 불변식은 축이 다르다: "speaker_map의 키 집합이
+  // 본문에 남은 라벨 집합과 정확히 일치하는가"다. 이게 깨지면 finalize가 저장하는
+  // transcript_segments.label과 speaker_map 키가 어긋나는 레거시 행(PR C가 근본 원인을
+  // 제거한 바로 그 문제)이 새로 생긴다. 즉 이 테스트를 이 축으로 옮기면 합격 기준
+  // ④(레거시 행이 더 생기지 않음)를 프론트 쪽에서 직접 지키는 감시자가 된다.
+  //
+  // ⚠️ 이름을 다시 본문에 굽는 방향으로 이 테스트를 되돌리지 말 것 — TranscriptEditor.tsx의
+  // `render(segments, {})` 계약과 정면으로 모순되며, finalize identity 재키잉(abf0227에서
+  // 삭제됨)을 요구하는 입력을 다시 만들어낸다.
+  it('speaker_map의 키 집합이 본문(transcript)에 남은 라벨 집합과 일치해야 한다', async () => {
     const onComplete = vi.fn()
 
     render(
@@ -117,22 +134,21 @@ describe('TranscriptEditor speaker_map trim', () => {
       const [, opts] = finalizeCalls[0]
       const body = JSON.parse(opts.body)
 
-      // transcript 내 화자 이름 추출
-      const transcriptNames = new Set(
+      // 핵심 검증: 이름을 입력해도 본문에는 이름이 구워지지 않고 원본 라벨만 남는다.
+      expect(body.transcript).not.toMatch(/박과장/)
+      expect(body.transcript).toBe(TRANSCRIPT)
+
+      // 본문(transcript)에 남은 라벨 집합
+      const transcriptLabels = new Set(
         (body.transcript.match(/\[\d{2}:\d{2}\]\s+(.+?):/g) || []).map(
           (m: string) => m.replace(/\[\d{2}:\d{2}\]\s+/, '').replace(/:$/, '')
         )
       )
 
-      // speaker_map의 모든 값이 transcript 화자 토큰과 일치해야 한다
-      for (const [key, value] of Object.entries(body.speaker_map)) {
-        const strVal = String(value)
-        if (strVal) {
-          expect(transcriptNames.has(strVal)).toBe(true)
-        }
-      }
+      // 새 계약: speaker_map의 키 집합 == 본문 라벨 집합 (값이 아니라 키가 축이다)
+      expect(new Set(Object.keys(body.speaker_map))).toEqual(transcriptLabels)
 
-      // speaker_map 값도 trim 되어야 함
+      // speaker_map 값(이름)은 여전히 trim되어야 함 — 이건 옛 계약과 무관하게 유지되는 불변식
       expect(body.speaker_map['SPEAKER_00']).toBe('박과장')
     })
   })
