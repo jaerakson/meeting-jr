@@ -1,59 +1,51 @@
-## 2026-08-31 (작업 PC: 로컬) — 세션 56b (PR B 진행 중 — TDD RED 완료, 구현 착수 전 중단)
-- 브랜치: `refactor/speaker-label-mapping-b` (**origin 푸시 완료**, `8552e9c`)
-- 중단 사유: **팀원 2명이 세션 사용 한도로 동시 중단**(리셋 12:40 KST). 팀리드가 WIP 커밋 + 푸시로 보호했다.
-- 현재 상태: **테스트 RED 완성, 구현 미착수.** `19 failed / 271 passed`
-  → 이 실패 19건이 곧 남은 작업이다. 통과시키면 PR B가 끝난다.
-- 완료된 것:
-  - 시나리오 대응표 작성 — 기존 1,094줄 → **26개 시나리오 전수 대응** (`docs/ai_analysis/20260831_PR_B_시나리오_대응표.md`)
-    (착수 전 실측: collision 14 + consistency 9 + participation 3 = 26. 숫자를 앵커로 박아 축소를 막았다)
-  - RED 테스트 3파일: `test_apply_match_label_model.py`(10) / `test_participation_label_model.py`(5) /
-    `test_rename_speakers_api.py`(6, **신규 — 이 엔드포인트는 백엔드 테스트가 0건이었다**)
-  - `render`에서 빈 speaker_map 값은 라벨 유지 (`83c541f`) — 이름 삭제 사고 방지
-  - `update_job_result` 관문에 speaker_map 쓰기 정규화(trim + 빈 값 제외). 호출부 5곳이 모두 통과하므로
-    새 쓰기 경로가 생겨도 구멍이 나지 않는다. **후속과제 3(`new_name` 미trim)도 여기서 닫힌다**
-  - 설계문서 정정(`75ec678`) — `_is_identity_mapped`는 **경로 선택용으로 존치**(아래 참조)
-- **다음 할 일 (이것만 하면 된다): 삭제 + 재렌더 전환으로 19건을 GREEN 으로**
-  삭제 대상 잔존 현황(`app/` 기준, 구현 착수 전이라 그대로 남아 있음):
-  ```
-  _resolve_speaker_display  app 4  ← 삭제
-  _is_identity_mapped       app 2  ← 경로 선택용으로만 존치(삭제 아님)
-  replace_map               app 7  ← 삭제
-  collision_groups          app 6  ← 삭제
-  applied_labels            app 3  ← 삭제
-  seen_display_names        app 4  ← 삭제
-  ```
-  apply_match = **라벨 검증 → speaker_map 갱신 → 재렌더**. participation = `speaker_map.get(label, label)`.
-  `rename-speakers` 에 재렌더 추가.
-- **합격 기준 4가지**
-  ① 시나리오 26개 보존(대응표 제출 완료) ② 삭제 대상 0회 참조(grep 증명) ③ 왕복과 치환을 짝으로 단언
-  ④ **PR A 의 282개 무수정 통과** ← PR B 의 "무수정" 축. PR A 테스트를 고쳐야 통과하면 구현이 틀린 신호다
-- **역할 분리(중요)**: 1,094줄 단언 재작성은 qa 담당. backend 는 읽기만 하고 "단언이 틀렸다"고 보면
-  고치지 말고 director 에게 보고. **구현자가 자기 테스트를 고치는 형태를 금지한다**(5라운드 반복 영역)
-- 착수 전에 확정된 판정 3건 (**설계문서를 문자 그대로 적용하면 회귀한다**):
-  1. **participation** — `speaker_map.get(label, label)` 로만 축소하면 **레거시 행(speaker_map 키가 실명)에서
-     사용자가 설정한 이름이 전부 사라진다.** `_is_identity_mapped` 가 하는 일이 둘(경로 선택 + 휴리스틱 해석)인데
-     설계문서가 구분하지 못했다. → **경로 선택만 남기고 해석 휴리스틱 삭제.**
-     transcript 폴백은 label 이 실명이라 identity 가 자연히 성립한다(main.py:2431~2460 확인).
-     **부작용(의도됨)**: 레거시 행이 diar 정밀 시간 대신 transcript 추정 시간을 쓰게 되어
-     `total_seconds`·`percentage` 숫자가 달라진다. 대응표에 전/후 실측값 기록.
-  2. **apply_match — 사용자 승인받은 기능 손실.** `matches` 키는 항상 `SPEAKER_XX`(diarization 라벨)인데
-     레거시 행의 segments label 은 실명이라 라벨 기반 치환이 무동작이 된다. 3a·3d 의 존재 이유가 이 라벨 공간 변환이었다.
-     → **판정 A(삭제 강행) 채택. 사용자 승인 완료.** 레거시 회의(10건 중 1건)에서 음성프로필 재매칭이 동작하지 않는다.
-     조용히 틀리는 대신 **명시적 skipped/422**. 휴리스틱을 1벌이라도 남기면 폐기된 매칭 방식의 **세 번째 재유입** 씨앗.
-     **PR C 가 근본 원인(finalize identity 재키잉)을 제거하므로 레거시 행은 더 이상 생기지 않고 모집단이 고정된다.**
-     → 오류 문구는 원인을 말하게 할 것("예전 방식으로 저장된 회의"). §10 에 ①한계 ②원인 ③PR C 가 원인 제거 ④영향 1/10건 기록
-  3. **`SpeakerMapper.tsx:42` 초기값이 `''`** — 빈 이름이 그대로 전송된다. 재렌더를 붙이면 화자 이름을 지운다.
-     → 렌더 측 `(speaker_map.get(label) or "").strip() or label` 로 기존 `display == label` 규칙에 흡수(별도 분기 금지, `83c541f` 반영 완료).
-     쓰기 측은 `update_job_result` 관문 정규화(반영 완료)
+## 2026-08-31 (작업 PC: 로컬) — 세션 57 (PR #81: 화자 매핑 리팩터링 PR B — 라벨 기반 전환)
+- 브랜치: main (PR #81 squash 머지, `b1a1ee6`)
+- 완료 (PR B = 3단계 중 2단계, **삭제가 본체**):
+  - apply_match = **라벨 검증 → speaker_map 갱신 → `render()` 재렌더**. participation = `speaker_map.get(label, label)`.
+    rename-speakers 에 재렌더 추가(speakers 만 갱신하던 구조적 desync 해소)
+  - 삭제: apply_match 3a~3e, `replace_map`, `collision_groups`, `applied_labels`,
+    `_resolve_speaker_display`, `seen_display_names`, overlap 휴리스틱 → **`backend/app` 전수 0건**
+  - `_is_identity_mapped` 는 **경로 선택용으로 존치**(삭제하면 레거시 행에서 이름이 사라진다 — 아래 참조)
+  - 기존 회귀 테스트 1,094줄 → 라벨 모델로 재작성. **시나리오 26개 전수 보존**(대응표: `docs/ai_analysis/20260831_PR_B_시나리오_대응표.md`)
+- 테스트: **297 passed** (착수 시 19 failed → 0). `main.py` 약 316줄 축소
+- 코드리뷰: 전체 프로토콜(리뷰어 5 + 채점 4). **지적 4건 확정 + 리뷰가 놓친 결함 1건 추가 발견**
+  1. [재현] `rename-speakers` 부분 map → 본문에서 화자 이름 소실. `apply_match` 와 같은 merge-safe 패턴으로 통일
+  2. [재현] 이름 맞바꾸기 후 요약 재생성 시 **두 화자가 한 명으로 붕괴**(순차 `.replace()`)
+  3. `save_speaker_profile` 이 폐기 휴리스틱의 마지막 사본인데 **어느 PR 범위에도 없었음** → PR C 배정
+  4. 문서-구현 모순 3곳(DEVGUIDE `raw` 공식, `rename_speakers` docstring, 테스트 module docstring)
+  5. **[qa 발견] `summarizer._replace_speakers`** — main.py 수정을 그대로 상쇄하던 중복 치환.
+     `render()` 로 올바르게 만든 스크립트 위에 한 번 더 순차 치환이 걸렸다. **줄 앵커조차 없어 본문까지 오염**
+- **폐기 방식 사본 회계 (기준을 혼동하지 말 것)**
+  - 순차 `.replace()` 알고리즘: `finalize_job` / `regenerate_summary` / `summarizer._replace_speakers` = **3벌, 전부 제거**
+  - overlap 휴리스틱(설계문서가 근본 원인으로 지목): 4벌 중 3벌 제거, **`save_speaker_profile` 1벌이 PR C 배정**
+- **확정된 판단 기준**: **PR B 가 도달성을 만든 경로면 PR B 범위, 아니면 후속 배정.**
+  (summarizer 는 이 PR 이 이름 맞바꾸기를 정식 지원하며 도달 가능하게 만들었으므로 이번에 처리)
 - 막힌 점/주의:
-  - 삭제 대상 코드는 **"왜 존재했는지"를 먼저 물어야 한다.** 그 질문으로 회귀 2건(위 판정 1·2)을 착수 전에 잡았다.
-    설계문서가 "그냥 지우면 된다"고 적은 자리들이다
-  - 세션 한도로 팀이 죽은 게 **오늘만 두 번**(02:42 팀원 2명, 그 전 01:4x 3명). 작업 단위 즉시 커밋을 계속 지킬 것
-- 관련 파일: backend/app/main.py(apply_match·participation·save_speaker_profile·rename_speakers),
-  backend/app/database.py(update_job_result 정규화), backend/app/transcript.py(render 빈 값 방어),
+  - **[머지 후 남은 불일치, 사용자 승인함]** 같은 레거시 행(speaker_map 키가 실명)에 대해
+    `apply_match` 는 `422 + skipped` 로 거부하는데 `save_speaker_profile` 은 조용히 옛 휴리스틱을 돌려 **성공한다.**
+    사용자 눈에는 한 화면에서 거부된 데이터가 다른 화면에서 처리되는 것처럼 보인다. **PR C 에서 닫는다.**
+  - **[승인된 기능 손실]** 레거시 회의(10건 중 1건)에서 음성프로필 재매칭 무동작 → 명시적 422.
+    PR C 가 근본 원인(finalize identity 재키잉)을 제거하므로 **모집단이 고정된다**
+  - **[의도된 부작용]** 레거시 행 participation 이 transcript 경로를 타 `total_seconds`·`percentage` 변경.
+    전/후 실측값은 대응표에 표로 고정(구현 후엔 측정 불가라 워크트리로 미리 쟀다)
+  - **검증 기법 — PR C 에 반드시 적용**: qa 가 **Claude CLI 만 mock 으로 막고 최종 prompt 를 캡처**해
+    summarizer 결함을 잡았다. **중간 산출물(스크립트 파일)은 올바른데 최종 입력이 깨지는 형태**라
+    중간만 검증했으면 그대로 머지됐다. 요약·프론트로 나가는 **최종 산출물**을 캡처해 검증할 것
+  - **grep 은 `backend/app` 전수로 걸 것.** 팀리드가 `main.py` 만 보고 "코드베이스 0건"이라 보고했고
+    director 가 그걸 PR body 에 옮겨 적었다. 이 오류 때문에 다섯 번째 사본을 놓칠 뻔했다(§10 에 기록됨)
+  - **역할 분리가 작동했다**: 구현자(backend)가 테스트 단언을 한 줄도 고치지 않았고,
+    "미결"로 올린 건(빈 `new_name`)이 실제로는 이름 삭제 결함이었다
+- 다음 할 일 — **PR C (마지막 단계)**
+  - `finalize_job` 의 **identity 재키잉 삭제** — 라벨 정체성을 파괴하는 근본 원인. 이걸 제거해야 레거시 행이 더 생기지 않는다
+  - 프론트 파서 4개 + 시리얼라이저 2개를 **공유 모듈 1개로 통합** → `TranscriptEditor.tsx:25` 의 `\S+` 공백 이름 버그 동시 해소
+  - `save_speaker_profile` 을 라벨 모델로 전환(위 불일치 해소)
+  - TranscriptEditor 가 segments 로 왕복. body 에 segments 없으면 문자열 경로 폴백(구버전 번들 방어)
+  - **frontend-dev 소환 필요** (PR A·B 는 백엔드만이라 부르지 않았다)
+- 관련 파일: backend/app/{main,transcript,database,summarizer}.py,
   backend/tests/test_{apply_match,participation}_label_model.py, test_rename_speakers_api.py,
+  test_regenerate_speaker_swap.py, DEVGUIDE.md §10,
   docs/ai_analysis/20260831_PR_B_시나리오_대응표.md, 20260831_화자매핑_라벨_리팩터링_설계.md
-- 푸시 여부: `origin/refactor/speaker-label-mapping-b` 푸시 완료 (`8552e9c`). PR 미생성 (구현 미완)
+- 푸시 여부: origin/main 푸시 완료 (PR #81 squash 머지 + 브랜치 삭제)
 
 ---
 
