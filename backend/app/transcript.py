@@ -71,7 +71,16 @@ def parse(transcript: str) -> list[dict]:
             segments.append({"start": None, "end": None, "label": None, "text": line})
             continue
 
-        minutes, seconds, label = int(m.group(1)), int(m.group(2)), m.group(3)
+        # 라벨 앞뒤 공백은 제거한다(내부 공백은 보존 — "김 팀장"은 그대로).
+        # 공백 한 칸 때문에 ' SPEAKER_00' 이 되면 speaker_map 치환이 조용히 실패하고,
+        # 그 줄만 화자 이름 변경 대상에서 빠진다 — 이 리팩터링이 없애려는 버그 계열이다.
+        label = m.group(3).strip()
+        if not label:
+            # 라벨이 공백뿐이면 라벨로 인정하지 않는다.
+            segments.append({"start": None, "end": None, "label": None, "text": line})
+            continue
+
+        minutes, seconds = int(m.group(1)), int(m.group(2))
         text = "" if text_is_empty_form else m.group(4)
         start = minutes * 60 + seconds
 
@@ -114,6 +123,9 @@ def get_segments(job_or_id: Union[str, dict]) -> list[dict]:
 
     diarization의 DB→파일 폴백 + update_job_result 백필과 동일한 패턴(main.py:2364-2367).
     일괄 마이그레이션하지 않는다.
+
+    저장된 segments가 빈 리스트면 재파싱한다 — 빈 transcript로 만들어진 행이 []로 굳어
+    이후 transcript가 채워져도 계속 []를 반환하는 것을 막기 위함이다(재파싱 결과도 []라 부작용 없음).
 
     백필 전 `render(parsed) == transcript` 를 검증하고, 불일치하면 **DB에 쓰지 않고**
     파싱 결과만 반환한다(조용한 오염 방지).
