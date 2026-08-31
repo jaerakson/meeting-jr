@@ -461,3 +461,62 @@ class TestIdentityMappedRowUsesOwnLabel:
         assert "김과장:" in job["transcript"]
         assert _get_speakers(job).get("아빠") == "김과장"
         _assert_rerender_matches("identity-1", job)
+
+
+# ===========================================================================
+# 신규 (26개와 무관, director 확정 사양) — apply-match의 new_name이
+# 빈 문자열/공백뿐인 경우. 관문 정규화(update_job_result)에 그대로 맡기면
+# 기존 이름이 사라진다(판정 3 위반) — apply_match 자신이 빈 new_name을
+# speaker_map에 쓰기 전에 걸러 skipped로 돌려야 한다.
+#
+#   - new_name.strip()이 비면: speaker_map을 건드리지 않고 skipped에 담는다.
+#     그 라벨의 기존 이름은 보존된다.
+#   - 전부 빈 값이면: known이 비어 422 (조용한 이름 삭제보다 명시적 거부).
+# ===========================================================================
+
+class TestBlankNewNameIsSkipped:
+    def test_blank_new_name_skipped_existing_name_preserved(self, client):
+        """공백뿐인 new_name은 skipped 처리되고 그 라벨의 기존 이름이 보존된다.
+        같은 요청의 다른 정상 라벨은 정상 적용된다."""
+        _create_done_meeting(
+            "blank-name-1",
+            "[00:00] SPEAKER_00: 첫번째\n[00:05] SPEAKER_01: 두번째",
+            speakers={"SPEAKER_00": "김팀장", "SPEAKER_01": "이대리"},
+        )
+        res = client.post("/api/jobs/blank-name-1/apply-match", json={
+            "matches": {"SPEAKER_00": "   ", "SPEAKER_01": "박과장"},
+        })
+        assert res.status_code == 200, f"실제: {res.status_code}, body: {res.json()}"
+        data = res.json()
+        assert data.get("skipped") == ["SPEAKER_00"], f"실제: {data}"
+
+        job = client.get("/api/jobs/blank-name-1").json()
+        assert "김팀장:" in job["transcript"], (
+            f"공백 new_name은 기존 이름을 지우면 안 됨. 실제: {job['transcript']}"
+        )
+        assert "박과장:" in job["transcript"]
+        speakers = _get_speakers(job)
+        assert speakers.get("SPEAKER_00") == "김팀장", f"실제: {speakers}"
+        assert speakers.get("SPEAKER_01") == "박과장", f"실제: {speakers}"
+        _assert_rerender_matches("blank-name-1", job)
+
+    def test_all_new_names_blank_returns_422(self, client):
+        """모든 new_name이 빈/공백뿐이면 known이 비어 422로 명시 거부한다 —
+        조용한 이름 삭제 대신 명시적 실패. transcript·speakers는 바이트 단위로 불변."""
+        original_transcript = "[00:00] SPEAKER_00: 첫번째\n[00:05] SPEAKER_01: 두번째"
+        _create_done_meeting(
+            "blank-name-2", original_transcript,
+            speakers={"SPEAKER_00": "김팀장", "SPEAKER_01": "이대리"},
+        )
+        res = client.post("/api/jobs/blank-name-2/apply-match", json={
+            "matches": {"SPEAKER_00": "", "SPEAKER_01": "   "},
+        })
+        assert res.status_code == 422, f"실제: {res.status_code}, body: {res.json()}"
+        data = res.json()
+        assert set(data["skipped"]) == {"SPEAKER_00", "SPEAKER_01"}, f"실제: {data}"
+
+        job = client.get("/api/jobs/blank-name-2").json()
+        assert job["transcript"] == original_transcript, (
+            f"전체 skipped 시 transcript가 바이트 단위로 불변이어야 함. 실제: {job['transcript']!r}"
+        )
+        assert _get_speakers(job) == {"SPEAKER_00": "김팀장", "SPEAKER_01": "이대리"}

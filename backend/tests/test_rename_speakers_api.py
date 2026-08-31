@@ -65,6 +65,15 @@ def _get_speakers(job: dict) -> dict:
     return speakers
 
 
+def _assert_rerender_matches(job_id: str, job: dict):
+    """왕복+치환 짝 단언의 '왕복' 축 (apply_match 테스트와 동일한 헬퍼).
+    저장된 transcript가 render(segments, speaker_map)의 결과와 바이트 동일한지 확인한다."""
+    from app.transcript import get_segments, render
+
+    segments = get_segments(job_id)
+    assert render(segments, _get_speakers(job)) == job["transcript"]
+
+
 # ===========================================================================
 # 기본: transcript가 재렌더된다 (desync 해소 — 부수 결함 1)
 # ===========================================================================
@@ -83,6 +92,7 @@ def test_rename_speakers_updates_transcript(client):
     job = client.get("/api/jobs/rename-1").json()
     assert "박부장:" in job["transcript"], f"실제: {job['transcript']}"
     assert "김팀장" not in job["transcript"]
+    _assert_rerender_matches("rename-1", job)
 
 
 def test_rename_speakers_rerender_matches_stored_transcript(client):
@@ -126,6 +136,7 @@ def test_empty_value_keeps_label_not_erased(client):
     # 쓰기 방어: DB speakers에 빈 값이 저장되지 않는다
     speakers = _get_speakers(job)
     assert speakers.get("SPEAKER_01") != "", f"실제: {speakers}"
+    _assert_rerender_matches("rename-3", job)
 
 
 def test_whitespace_only_value_keeps_label_not_erased(client):
@@ -145,6 +156,7 @@ def test_whitespace_only_value_keeps_label_not_erased(client):
     assert (speakers.get("SPEAKER_01") or "").strip() == "", f"실제: {speakers}"
     # 저장이 되더라도(구현에 따라 완전 제외될 수도 있음) transcript에 공백 이름이
     # 노출되면 안 된다는 것이 핵심 — 위 transcript 단언이 이미 이를 보장한다.
+    _assert_rerender_matches("rename-4", job)
 
 
 def test_value_with_surrounding_whitespace_is_stripped(client):
@@ -163,6 +175,7 @@ def test_value_with_surrounding_whitespace_is_stripped(client):
     assert " 김철수 :" not in job["transcript"]
     speakers = _get_speakers(job)
     assert speakers.get("SPEAKER_00") == "김철수", f"실제: {speakers}"
+    _assert_rerender_matches("rename-5", job)
 
 
 def test_empty_value_does_not_crash_when_all_values_empty(client):
@@ -180,3 +193,4 @@ def test_empty_value_does_not_crash_when_all_values_empty(client):
     job = client.get("/api/jobs/rename-6").json()
     assert "SPEAKER_00:" in job["transcript"]
     assert "SPEAKER_01:" in job["transcript"]
+    _assert_rerender_matches("rename-6", job)
