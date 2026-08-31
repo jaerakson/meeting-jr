@@ -44,6 +44,12 @@
   `backend/tests/test_patch_after_rename_legacy_row.py`, `DEVGUIDE.md` §10(1행 정정 + 4행 추가)
 - 푸시 여부: **PR #82 생성 완료**(https://github.com/jaerakson/meeting-jr/pull/82). 코드리뷰 완료 → **지적 6건 수정 중**(머지 전)
 - **[코드리뷰 지적, 수정 중]** ①**[머지 차단]** `handleResummarize`→`finalize_job` 이 레거시 행을 계속 생성 (`patch_transcript` 와 **같은 결함의 다른 호출부**. summarizer 사본 → patch_transcript → 이번 건으로 **세 번째 반복**) ②(b)의 같은 `start` 충돌 시 first-wins = 추측 ③(b)가 `old_label` 을 라벨 공간에 재검증 안 함 ④공유 페이지가 raw 라벨 표시 ⑤마이그레이션 stale-read ⑥문서 4곳
+- **[후속 과제, 프론트]** `Transcript.tsx` 의 `onTranscriptChange` 가 **전송용 페이로드와 화면용 렌더를 분리하지 않는다**
+  (항상 `render(segments, speakerMap)` = 이름 적용판을 내보냄). 편집 중 이름을 한 번이라도 바꾸면
+  이후 텍스트만 고쳐도 이름이 구워진다. `handleSaveTranscript`·`handleResummarize` **두 결함의 공통 근원**.
+  현재는 서버가 `restore_segment_labels` 로 사후 방어. **서버 방어는 프론트를 고쳐도 계속 필요**하다
+  (구버전 번들·직접 API 호출 무방비). 프론트 수정은 대체가 아니라 **추가 방어**다.
+  PR #82 범위에서 제외한 이유: 재리뷰 단계 + qa 가 서버측 계약으로 테스트 작성 중이라 지금 바꾸면 무효화된다
 - **[교훈] 지목된 한 곳만 고치지 말 것.** `patch_transcript` 를 닫을 때 *"이름이 렌더된 transcript 를 서버로 보내는 호출부"* 를 **전수로 세지 않아** 머지 차단 결함이 남았다. grep 은 증상이 아니라 **패턴**으로 걸어야 한다
 
 ---
