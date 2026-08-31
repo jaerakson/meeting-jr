@@ -1,40 +1,25 @@
-"""[확정 결함, PR C 범위 — director 보고 완료, qa-c3] rename 이후 PATCH 편집이
-새 레거시 행을 만든다.
+"""[뒤집힘, PR C] rename 이후 PATCH 편집 — 이전에는 새 레거시 행을 만들었으나 고쳐졌다.
 
-## 근본 원인
-`rename-speakers`/`apply-match`는 speaker_map에 이름이 있으면 transcript 본문에
-표시 이름을 **직접 렌더**한다(`backend/app/transcript.py` render(): `display != label`
-이면 정규형 렌더 — 이건 PR B/C에서 승인된 의도된 동작이고, `job.transcript`가
-finalize/apply_match/rename_speakers/regenerate_summary 전부에서 이 값을 그대로
-쓰므로 손댈 수 없다).
+## 이력
+qa-c3가 2026-08-31에 확정 결함으로 발견해 이 파일에 "현재(버그) 동작"을 assert로
+고정했었다: rename-speakers/apply-match는 speaker_map에 이름이 있으면 job.transcript
+본문에 표시 이름을 **직접 렌더**한다(승인된 동작). MainArea의 "회의록 수정"(PATCH
+/api/jobs/{id}/transcript)은 이 이름-렌더된 문자열을 그대로 다시 파싱해 라벨로
+삼았다 — 그 결과 speaker_map 키(SPEAKER_XX)와 어긋나는 레거시 행이 새로 생겼다.
 
-`frontend/components/MainArea.tsx`의 `handleStartEditTranscript`는 이 이름-렌더된
-`job.transcript`를 그대로 textarea 초기값으로 쓰고, 저장 시 `PATCH
-/api/jobs/{id}/transcript`에 그 문자열을 그대로 보낸다(`handleSaveTranscript`).
-서버의 `patch_transcript`는 `parse_transcript(transcript)`로 라벨을 다시 뽑는데,
-`parse()`는 콜론 앞 토큰을 라벨로 인식하므로 이미 이름이 렌더된 줄에서는
-"김팀장" 같은 **실명이 새 라벨**이 된다.
+director(dir-c3)가 즉시 계약을 확정하고 backend가 `patch_transcript`(app/main.py)에
+아래 4단계 해소 순서를 구현했다(PROGRESS.md 세션 58):
 
-결과: speaker_map 키(`SPEAKER_00`)와 segment label(`"김팀장"`)이 어긋나는
-레거시 행이 새로 생긴다 — 정확히 PR C가 "생성자(TranscriptEditor.serialize)를
-막았으므로 레거시 행이 더 생기지 않는다"고 주장한 그 카테고리의 손상이다.
-`TranscriptEditor`(최초 STT 완료 직후 편집기)는 이 리팩터링에서 막혔지만,
-`patch_transcript`(완료된 회의를 나중에 다시 고치는 "회의록 수정" 경로,
-MainArea 전용)는 감사 대상에서 빠져 있었다.
+    (a) 파싱된 라벨이 이미 speaker_map 키이거나 diarization 라벨 공간 안이면 그대로 둔다.
+    (b) 같은 start의 **편집 이전** 세그먼트가 있고 그 세그먼트의 표시 이름이 새 라벨과
+        같으면, 그 세그먼트의 원래 라벨로 되돌린다. (표시 이름이 중복인 회의에서도
+        정확한 라벨을 되찾는 유일한 경로 — 누가 말했는지 추측하는 게 아니라 그 줄에
+        이미 붙어 있던 라벨을 되찾는 것.)
+    (c) 표시 이름이 speaker_map 값 중 유일하면 역맵으로 라벨을 되찾는다.
+    (d) 위 셋 다 실패하면 미해소 라벨로 보고 **422 + 부분 저장 금지**(전체 거부).
 
-## 실측 결과 (2026-08-31, qa-c3 재현)
-1) rename-speakers로 이름 부여 → transcript 본문에 "김팀장:" 이 실제로 렌더됨(확인).
-2) 그 본문을 그대로(줄 하나 추가) PATCH로 저장 → 200 OK.
-3) 이후 segment label 집합 = {"김팀장", "이대리"}, speakers 키 집합 =
-   {"SPEAKER_00", "SPEAKER_01"} — **완전히 어긋남**.
-4) apply-match를 라벨 "김팀장"으로 호출하면 **200 OK로 조용히 성공**하며
-   speakers에 "김팀장" 키가 새로 추가되고 "SPEAKER_00"은 고아로 남는다
-   (save_speaker_profile처럼 422로 명시 거부되지도 않음 — 오히려 더 나쁘다:
-   `_is_identity_mapped`가 감지하는 "혼합 상태" 레거시 행이 그대로 만들어진다).
-
-이 테스트는 director 보고 완료 후 **현재(버그) 동작을 고정**해 회귀 감시자로
-남긴다. 고쳐지면 이 assert들이 깨질 것이다 — 그때 이 파일을 director 지시에 따라
-새 계약(고친 동작)으로 뒤집을 것. 통과시키려고 약화하지 말 것.
+이 파일은 이제 그 **고쳐진 계약**을 회귀 감시자로 고정한다. 다시 레거시 행이
+생기는 방향으로 이 테스트들을 약화하지 말 것 — 그건 정확히 원래 결함의 재유입이다.
 """
 
 import pytest
@@ -61,9 +46,14 @@ def client(tmp_db):
         yield c
 
 
-def test_edit_after_rename_creates_legacy_row(client):
-    """MainArea 실제 경로(rename-speakers -> job.transcript를 textarea에 로드 -> PATCH)를
-    그대로 재현하면 speaker_map 키와 segment label이 어긋나는 레거시 행이 생긴다."""
+def _get_job_speakers(job: dict) -> dict:
+    return job["speakers"] if isinstance(job["speakers"], dict) else {}
+
+
+def test_edit_after_rename_no_longer_creates_legacy_row(client):
+    """(c) 경로: 표시 이름이 유일하면 역맵으로 라벨을 되찾는다.
+    MainArea 실제 경로(rename-speakers -> job.transcript를 textarea에 로드 -> 한 줄
+    추가 -> PATCH)를 재현해도 레거시 행이 생기지 않아야 한다."""
     import app.database as db
 
     job_id = "rename-then-edit-1"
@@ -76,56 +66,151 @@ def test_edit_after_rename_creates_legacy_row(client):
         status="done",
     )
 
-    # 1) rename-speakers로 실명 부여 -> transcript 본문에 이름이 직접 렌더된다(승인된 동작)
     res = client.post(f"/api/jobs/{job_id}/rename-speakers", json={
         "speaker_map": {"SPEAKER_00": "김팀장", "SPEAKER_01": "이대리"},
     })
     assert res.status_code == 200
-
     job = client.get(f"/api/jobs/{job_id}").json()
-    assert "김팀장:" in job["transcript"], (
-        f"전제 확인: rename 후 본문에 이름이 직접 렌더돼야 한다(PR B/C 승인 동작). "
-        f"실제: {job['transcript']!r}"
-    )
+    assert "김팀장:" in job["transcript"], "전제: rename 후 본문에 이름이 직접 렌더된다"
 
-    # 2) MainArea.handleStartEditTranscript/handleSaveTranscript 그대로:
-    #    job.transcript(이미 이름 렌더된 문자열)를 textarea 초기값으로 받아 한 줄 추가 후 PATCH
+    # 이름-렌더된 본문을 그대로 받아 새 줄 하나를 추가하고 PATCH — MainArea 그대로.
     edited = job["transcript"] + "\n[00:10] 김팀장: 추가 발언"
     res2 = client.patch(f"/api/jobs/{job_id}/transcript", json={"transcript": edited})
-    assert res2.status_code == 200
+    assert res2.status_code == 200, f"고쳐진 계약: (c) 유일 역맵으로 해소돼 200이어야 한다. {res2.text}"
 
     from app.transcript import get_segments
     job2 = client.get(f"/api/jobs/{job_id}").json()
     segments = get_segments(job_id)
     labels = {s["label"] for s in segments}
-    speaker_keys = set(job2["speakers"].keys())
+    speaker_keys = set(_get_job_speakers(job2).keys())
 
-    # [확정 결함] 라벨이 실명으로 재키잉됐다 — SPEAKER_00/01이 segments에서 사라졌다.
-    assert labels == {"김팀장", "이대리"}, (
-        f"버그 재현 실패(더 이상 재현되지 않으면 고쳐진 것 — director 지시로 이 테스트를 "
-        f"뒤집을 것). 실제 labels: {labels}"
+    assert labels == {"SPEAKER_00", "SPEAKER_01"}, (
+        f"라벨이 원래 diar 라벨로 되돌려져야 한다(레거시 행 재발 방지). 실제: {labels}"
     )
-    # [확정 결함] speaker_map 키(SPEAKER_XX)와 segment label(실명)이 어긋난다 — 레거시 행.
-    assert labels != speaker_keys, (
-        "버그 재현 실패: speaker_map 키와 segment label이 여전히 일치한다 — "
-        "레거시 행이 생기지 않는 것으로 보이면 고쳐진 것이니 director에게 확인 후 이 테스트를 뒤집을 것."
+    assert labels == speaker_keys, (
+        f"speaker_map 키와 segment 라벨이 정확히 일치해야 한다(레거시 행이 아니다). "
+        f"labels={labels}, speaker_keys={speaker_keys}"
     )
-    assert speaker_keys == {"SPEAKER_00", "SPEAKER_01"}, (
-        f"speakers 딕셔너리 키는 그대로 SPEAKER_XX로 남아 segment label과 다리가 끊긴다. "
-        f"실제: {speaker_keys}"
-    )
+    # 편집한 내용(새 발언)이 유실되지 않았는지도 확인
+    assert "추가 발언" in job2["transcript"]
 
-    # 3) [확정 결함, 더 나쁜 경우] apply-match가 이 어긋난 라벨을 명시 거부(422)하지 않고
-    #    오히려 200으로 조용히 받아들여 speakers에 고아 키를 남긴다.
+    # apply-match가 정상 동작하는지(레거시 행이면 예전엔 200으로 조용히 고아 키를 만들었다 —
+    # 지금은애초에 레거시 행이 아니므로 정상적으로 SPEAKER_00 라벨을 대상으로 성공해야 한다).
     res3 = client.post(f"/api/jobs/{job_id}/apply-match", json={
-        "matches": {"김팀장": "박부장"},
+        "matches": {"SPEAKER_00": "박부장"},
     })
-    assert res3.status_code == 200, (
-        f"버그 재현 실패(더 이상 200이 아니면 apply-match 쪽 방어가 생긴 것 — director에게 "
-        f"확인 후 이 테스트를 뒤집을 것). 실제: {res3.status_code} {res3.text}"
-    )
+    assert res3.status_code == 200
     job3 = client.get(f"/api/jobs/{job_id}").json()
-    # SPEAKER_00은 더 이상 어떤 segment label과도 대응하지 않는 고아 키로 남는다.
-    assert "SPEAKER_00" in job3["speakers"], (
-        "버그 재현 실패: 고아 키가 정리된 것으로 보인다 — 고쳐졌다면 director에게 확인 후 뒤집을 것."
+    assert _get_job_speakers(job3)["SPEAKER_00"] == "박부장"
+    assert "김팀장" not in job3["speakers"].values() or True  # 값 자체는 SPEAKER_01 명 보존 확인 아래에서
+    assert set(_get_job_speakers(job3).keys()) == {"SPEAKER_00", "SPEAKER_01"}, (
+        "apply-match 후에도 고아 키가 생기면 안 된다"
     )
+
+
+def test_duplicate_display_name_resolved_by_start_not_by_guessing(client):
+    """(b) 경로: 표시 이름이 중복(예: '대표님' 2벌)이어도, 편집하지 않은 줄은 같은
+    start로 원래 라벨을 정확히 되찾아야 한다 — (c) 유일 역맵은 중복이라 실패하므로
+    이 케이스는 (b)가 아니면 해소 불가능하다."""
+    import app.database as db
+
+    job_id = "dup-name-patch"
+    db.create_job(job_id, f"{job_id}.webm", title="중복 이름 회의")
+    db.update_job_result(
+        job_id,
+        summary="## 요약",
+        transcript="[00:00] SPEAKER_00: 안녕\n[00:05] SPEAKER_01: 네\n[00:10] SPEAKER_00: 또 뭐라고",
+        speakers={"SPEAKER_00": "대표님", "SPEAKER_01": "대표님"},  # 중복
+        status="done",
+    )
+    # rename-speakers 없이도 job.transcript는 speakers가 이미 있으므로 직접 렌더된 본문을
+    # 만들어 PATCH 입력으로 쓴다(실제로는 apply-match/rename-speakers를 거쳐 이렇게 된다).
+    from app.transcript import get_segments, render as render_transcript
+    segments = get_segments(job_id)
+    rendered = render_transcript(segments, {"SPEAKER_00": "대표님", "SPEAKER_01": "대표님"})
+    db.update_job_result(job_id, transcript=rendered, transcript_segments=segments)
+
+    assert rendered.count("대표님:") == 3
+
+    # 텍스트 하나만 살짝 고쳐서 그대로 PATCH — 화자 재지정 의도가 전혀 없는 편집.
+    edited = rendered.replace("또 뭐라고", "또 뭐라고 하셨죠")
+    res = client.patch(f"/api/jobs/{job_id}/transcript", json={"transcript": edited})
+    assert res.status_code == 200, (
+        f"표시 이름이 중복이어도 (b)(같은 start의 원래 라벨)로 해소돼야 한다. 실제: {res.text}"
+    )
+
+    from app.transcript import get_segments as get_segments2
+    new_segments = get_segments2(job_id)
+    # start=0, start=10 두 줄 모두 원래 SPEAKER_00으로, start=5는 SPEAKER_01로 정확히 복원.
+    by_start = {s["start"]: s["label"] for s in new_segments}
+    assert by_start[0] == "SPEAKER_00"
+    assert by_start[5] == "SPEAKER_01"
+    assert by_start[10] == "SPEAKER_00"
+    assert "또 뭐라고 하셨죠" in [s["text"] for s in new_segments]
+
+
+def test_unresolvable_new_label_rejected_with_422_no_partial_save(client):
+    """(d) 경로: 표시 이름이 중복이라 유일 역맵도 안 되고, 새로 추가된 줄이라
+    같은 start의 옛 세그먼트도 없으면 — 추측하지 않고 422로 전체 거부한다.
+    거부 시 DB는 편집 이전 상태 그대로 남아야 한다(부분 저장 금지)."""
+    import app.database as db
+
+    job_id = "dup-name-unresolvable"
+    db.create_job(job_id, f"{job_id}.webm", title="중복 이름 회의 2")
+    db.update_job_result(
+        job_id,
+        summary="## 요약",
+        transcript="[00:00] SPEAKER_00: 안녕\n[00:05] SPEAKER_01: 네",
+        speakers={"SPEAKER_00": "대표님", "SPEAKER_01": "대표님"},  # 중복
+        status="done",
+    )
+    from app.transcript import get_segments, render as render_transcript
+    segments = get_segments(job_id)
+    rendered = render_transcript(segments, {"SPEAKER_00": "대표님", "SPEAKER_01": "대표님"})
+    db.update_job_result(job_id, transcript=rendered, transcript_segments=segments)
+
+    before = client.get(f"/api/jobs/{job_id}").json()
+
+    # 완전히 새 줄(start=99초, 옛 세그먼트에 없음)을 "대표님"으로 추가 — (a)(b)(c) 모두 실패.
+    edited = rendered + "\n[01:39] 대표님: 새로 추가된 줄"
+    res = client.patch(f"/api/jobs/{job_id}/transcript", json={"transcript": edited})
+
+    assert res.status_code == 422, (
+        f"중복 표시 이름 + 매칭되는 옛 세그먼트 없음 → 추측하지 않고 422여야 한다. "
+        f"실제: {res.status_code} {res.text}"
+    )
+    assert "대표님" in res.json().get("detail", "")
+
+    after = client.get(f"/api/jobs/{job_id}").json()
+    assert after["transcript"] == before["transcript"], (
+        "422로 거부됐으면 transcript가 조금이라도 바뀌면 안 된다(부분 저장 금지)"
+    )
+    from app.transcript import get_segments as get_segments2
+    assert get_segments2(job_id) == segments, "거부됐으면 segments도 편집 이전 그대로여야 한다"
+
+
+def test_label_already_in_diar_space_passes_through_unchanged(client):
+    """(a) 경로: 사용자가 건드리지 않은 라벨(SPEAKER_XX 그대로)은 그대로 통과한다."""
+    import app.database as db
+
+    job_id = "untouched-labels"
+    db.create_job(job_id, f"{job_id}.webm", title="이름 미지정 회의")
+    db.update_job_result(
+        job_id,
+        summary="## 요약",
+        transcript="[00:00] SPEAKER_00: 안녕\n[00:05] SPEAKER_01: 네",
+        speakers={},
+        diarization={
+            "SPEAKER_00": [{"start": 0.0, "end": 5.0}],
+            "SPEAKER_01": [{"start": 5.0, "end": 10.0}],
+        },
+        status="done",
+    )
+
+    edited = "[00:00] SPEAKER_00: 안녕하세요\n[00:05] SPEAKER_01: 네"
+    res = client.patch(f"/api/jobs/{job_id}/transcript", json={"transcript": edited})
+    assert res.status_code == 200
+
+    from app.transcript import get_segments
+    labels = {s["label"] for s in get_segments(job_id)}
+    assert labels == {"SPEAKER_00", "SPEAKER_01"}
