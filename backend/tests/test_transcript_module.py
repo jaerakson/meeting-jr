@@ -270,6 +270,18 @@ def test_canonical_render_wins_over_raw_when_substitution_happens():
     assert out != raw_line
 
 
+def test_label_with_leading_whitespace_still_substitutes():
+    """회귀 가드 (commit 1ea13c6): `[00:00]  SPEAKER_00:  두칸`처럼 대괄호 뒤 공백이
+    2칸이면 라벨이 ' SPEAKER_00'(앞공백 포함)으로 잡혀 speaker_map 조회가 조용히
+    실패하던 결함. 라벨은 strip되어야 하고(내부 공백은 보존), strip 후에도 치환은
+    정상 동작해야 한다. 왕복만으로는 이 결함이 잡히지 않는다 — 반드시 치환 결과를 확인."""
+    raw_line = "[00:00]  SPEAKER_00:  두칸"
+    segs = parse(raw_line)
+    assert segs[0]["label"] == "SPEAKER_00"  # 앞뒤 공백 없이 순수 라벨
+    assert render(segs) == raw_line  # 치환 없으면 raw로 바이트 동일 왕복
+    assert render(segs, speaker_map={"SPEAKER_00": "김철수"}) == "[00:00] 김철수:  두칸"
+
+
 # ---------------------------------------------------------------------------
 # 보강 1 — 정규형 코퍼스에서는 raw가 생기지 않는다 (raw가 파싱 실패를 은폐하지 못하게)
 # ---------------------------------------------------------------------------
