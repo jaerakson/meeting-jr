@@ -75,6 +75,7 @@ from .database import (
     update_job_followup,
 )
 from .job_queue import job_queue, start_worker, progress_store, update_progress
+from .transcript import parse as parse_transcript
 from .settings_manager import get_settings_status, get_setting, set_setting, SETTING_KEYS
 
 load_dotenv()
@@ -285,7 +286,12 @@ async def upload_file(
         # ClovaNote 형식 감지 및 변환
         transcript_content, found_speakers, suggested_names = _parse_txt_transcript(transcript_content)
         create_job(job_id, filename, title=title, category_id=effective_category_id, language=lang)
-        update_job_result(job_id, transcript=transcript_content, speakers=suggested_names)
+        update_job_result(
+            job_id,
+            transcript=transcript_content,
+            transcript_segments=parse_transcript(transcript_content),
+            speakers=suggested_names,
+        )
         update_job_status(job_id, "awaiting_edit")
         update_progress(job_id, {
             "stage": "awaiting_edit",

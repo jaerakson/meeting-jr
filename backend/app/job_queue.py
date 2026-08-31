@@ -67,9 +67,11 @@ async def start_worker() -> None:
             transcript_text = ""
             if script_path:
                 transcript_text = Path(script_path).read_text(encoding="utf-8")
+                # segments는 transcript와 반드시 같은 호출에 실어 두 값이 어긋나지 않게 한다
                 update_job_result(
                     job_id,
                     transcript=transcript_text,
+                    transcript_segments=result.get("segments"),
                     duration_sec=result.get("duration_sec"),
                 )
 

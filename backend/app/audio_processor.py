@@ -469,15 +469,22 @@ def merge_and_save(diarization, transcription: dict, job_id: str):
     형식: [MM:SS] SPEAKER_00: 텍스트
 
     Returns:
-        (script_path, speakers_list)
+        (script_path, speakers_list, transcript_segments)
+
+    transcript_segments 는 app.transcript 의 세그먼트 표현이며,
+    render(transcript_segments) == 저장된 파일 내용 이 성립한다.
+    라벨과 시각을 여기서 직접 보유하므로 문자열 재파싱보다 정확하다(end 포함).
     """
     segments = transcription.get("segments", [])
     lines: list[str] = []
+    out_segments: list[dict] = []
     speakers_set: set[str] = set()
 
     # 이전 화자를 추적하여 연속 같은 화자 합침
     prev_speaker: str | None = None
     prev_timestamp: str | None = None
+    prev_start: int = 0
+    prev_end: float = 0.0
     prev_text: str = ""
 
     for seg in segments:
@@ -496,17 +503,32 @@ def merge_and_save(diarization, transcription: dict, job_id: str):
         if speaker == prev_speaker and prev_text:
             # 연속 같은 화자 — 텍스트 합침
             prev_text += " " + text
+            prev_end = float(seg.get("end", start_sec) or start_sec)
         else:
             # 이전 화자 저장
             if prev_speaker is not None and prev_text:
                 lines.append(f"{prev_timestamp} {prev_speaker}: {prev_text}")
+                out_segments.append({
+                    "start": prev_start,
+                    "end": prev_end,
+                    "label": prev_speaker,
+                    "text": prev_text,
+                })
             prev_speaker = speaker
             prev_timestamp = timestamp
+            prev_start = int(start_sec)
+            prev_end = float(seg.get("end", start_sec) or start_sec)
             prev_text = text
 
     # 마지막 화자 저장
     if prev_speaker is not None and prev_text:
         lines.append(f"{prev_timestamp} {prev_speaker}: {prev_text}")
+        out_segments.append({
+            "start": prev_start,
+            "end": prev_end,
+            "label": prev_speaker,
+            "text": prev_text,
+        })
 
     # 파일 저장
     INPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -514,7 +536,7 @@ def merge_and_save(diarization, transcription: dict, job_id: str):
     script_path.write_text("\n".join(lines), encoding="utf-8")
 
     speakers_list = sorted(speakers_set)
-    return script_path, speakers_list
+    return script_path, speakers_list, out_segments
 
 
 # ---------------------------------------------------------------------------
@@ -572,7 +594,7 @@ async def process_audio(
     transcription = await run_transcription(str(wav_path), progress_callback, job_id, language=language)
 
     # 4. 매핑 + 저장
-    script_path, speakers = merge_and_save(diarization, transcription, job_id)
+    script_path, speakers, transcript_segments = merge_and_save(diarization, transcription, job_id)
 
     # 5. speakers.json에서 제안 이름 로드
     suggested = load_suggested_names()
@@ -591,6 +613,7 @@ async def process_audio(
     return {
         "script_path": str(script_path),
         "speakers": speakers,
+        "segments": transcript_segments,
         "suggested_names": suggested,
         "duration_sec": int(duration),
         "wav_path": str(wav_path),
