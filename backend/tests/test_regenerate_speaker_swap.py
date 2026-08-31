@@ -15,10 +15,10 @@ QA가 이 테스트를 작성하는 과정에서 **별도의 결함을 하나 �
 읽어 Claude에게 넘기는 app/summarizer.py의 generate_summary()가 자신의
 _replace_speakers()로 같은 speaker_map을 한 번 더 순차 치환해, 이미 올바르게
 렌더된 텍스트 위에서 붕괴를 재현했다. director에게 보고 후 backend-b가
-generate_summary()에서 그 치환 호출 자체를 제거해 닫았다(summarizer.py:118~122
-주석 참고) — 지금은 GREEN이다. `_replace_speakers()` 함수 정의 자체는 이제 아무도
-호출하지 않는 죽은 코드로 남아있다 — 이 프로젝트가 폐기된 방식을 재유입시킨
-이력이 있으므로, 재활용되지 않도록 별도 정리가 필요하면 director에게 보고할 것.
+generate_summary()에서 그 치환 호출을 제거하고, 곧이어 `_replace_speakers()`
+함수 정의 자체도 삭제했다(폐기된 순차-치환 방식이 이 프로젝트에서 다섯 번째로
+재유입됐던 사본 — 죽은 코드로 남겨두지 않고 바로 제거한 것이 맞는 판단이다).
+지금은 GREEN이다.
 
 단언을 통과시키려고 약화하지 말 것.
 """
