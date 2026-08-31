@@ -319,3 +319,58 @@ describe('Transcript — 편집 모드 진입 시 speakerMap 시드 (차단 3 �
     expect(payload.speakerMap['SPEAKER_01']).toBe('이대리')
   })
 })
+
+// [qa-c4, director 지시] 차단 3(중복 표시 이름 회의의 줄 재지정)의 유일한 실제
+// 안전망. 백엔드 T3(patch_transcript 레벨)는 판별력이 없다고 강등됐다 — 라벨 그대로인
+// 본문을 보내면 restore_segment_labels의 (a)가 트리비얼하게 통과해 재지정이 이미
+// 보존되고, 그 지점만 봐서는 차단 3을 재현할 수 없다. 실제 위험은 **여기**(프론트가
+// 표시 이름이 중복인 상태에서 reassignLine payload를 무엇으로 만드는가)에 있다 —
+// 이름이 본문에 구워지면(구계약) 파싱 단계에서 이미 SPEAKER_01/02 구분이 사라진다.
+// 지금 계약(render(seg, {})로 항상 라벨 그대로 렌더)이 그 손실 자체를 구조적으로
+// 막는다는 걸 여기서 직접 확인한다.
+describe('Transcript — 중복 표시 이름 회의에서 reassignLine (차단 3 실제 안전망)', () => {
+  it('표시 이름이 전부 같아도(대표님×3) 재지정된 줄은 라벨 그대로 전송되고 원래 라벨로 되돌아가지 않는다', () => {
+    const transcript =
+      '[00:00] SPEAKER_00: 첫마디\n' +
+      '[00:05] SPEAKER_01: 끼어들기\n' +
+      '[00:10] SPEAKER_02: 셋째마디'
+    const dupSpeakers = { SPEAKER_00: '대표님', SPEAKER_01: '대표님', SPEAKER_02: '대표님' }
+    const onTranscriptChange = vi.fn()
+
+    render(
+      <Transcript
+        transcript={transcript}
+        currentTime={0}
+        onTimeClick={() => {}}
+        editable
+        speakers={dupSpeakers}
+        onTranscriptChange={onTranscriptChange}
+      />
+    )
+
+    // idx 0("SPEAKER_00: 첫마디")의 이름 편집 UI를 연다.
+    const nameSpans = screen.getAllByTitle('클릭하여 이름 변경')
+    fireEvent.click(nameSpans[0])
+
+    // "이 줄만 다른 화자로:" 후보 라벨(SPEAKER_01, SPEAKER_02)의 표시 이름이 전부
+    // "대표님"으로 같다 — 텍스트로는 구분이 안 되므로(이 자체가 중복 이름 UX의
+    // 한계) DOM 순서(otherLabelsFor가 세그먼트 등장 순서로 만든다 — SPEAKER_01이
+    // 먼저)로 골라 SPEAKER_01로 재지정한다.
+    const dupButtons = screen.getAllByText('대표님', { selector: 'button' })
+    expect(dupButtons.length).toBe(2)
+    fireEvent.mouseDown(dupButtons[0]) // SPEAKER_01로 재지정
+
+    const payload = onTranscriptChange.mock.calls.at(-1)![0]
+    // 핵심 단언: transcript는 라벨 그대로다 — "대표님"이라는 표시 이름 문자열이
+    // 본문에 구워지지 않는다. 구워졌다면 이후 어떤 편집에서도 SPEAKER_00/01/02를
+    // 구분할 방법이 없어져 차단 3이 재발한다.
+    expect(payload.transcript).not.toContain('대표님')
+    expect(payload.transcript.match(/SPEAKER_01:/g)?.length).toBe(2)
+    expect(payload.transcript.match(/SPEAKER_00:/g)?.length ?? 0).toBe(0)
+    expect(payload.transcript).toContain('SPEAKER_02: 셋째마디')
+
+    // speakerMap은 시드된 중복 맵 그대로 보존돼야 한다(재지정이 이름 자체를
+    // 바꾸는 게 아니라 줄의 라벨 소속만 옮긴다는 증거).
+    expect(payload.speakerMap).toEqual(dupSpeakers)
+  })
+})
