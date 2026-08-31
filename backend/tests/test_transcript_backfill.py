@@ -199,3 +199,36 @@ def test_identity_mapped_legacy_row_parses_without_corruption(db):
     assert render(segments) == transcript
     labels = {s["label"] for s in segments if s["label"] is not None}
     assert labels == {"김철수", "이영희"}
+
+
+# ---------------------------------------------------------------------------
+# 5) get_job() 경유 타입 계약 — 같은 테이블의 다른 JSON 컬럼과 동일하게 역직렬화된다
+# ---------------------------------------------------------------------------
+
+def test_get_job_returns_transcript_segments_as_list(db):
+    """get_job()이 돌려주는 transcript_segments는 JSON 문자열이 아니라 list다.
+
+    diarization/speakers 등 같은 테이블의 다른 JSON 컬럼과 동일한 계약이다.
+    기존 테스트가 raw SQL로만 단언해 이 구멍을 보지 못했다 — job["transcript_segments"]를
+    직접 쓰는 코드(PR B/C가 넓게 소비한다)가 조용히 문자열을 받는 것을 막는다.
+    """
+    from app.transcript import get_segments, render
+
+    transcript = "[00:00] SPEAKER_00: 안녕하세요\n[00:05] SPEAKER_01: 반갑습니다"
+    db.create_job("job1", "meeting.mp3")
+    db.update_job_result("job1", transcript=transcript)
+
+    get_segments("job1")  # 백필
+
+    job = db.get_job("job1")
+    assert isinstance(job["transcript_segments"], list)
+    assert all(isinstance(seg, dict) for seg in job["transcript_segments"])
+    assert render(job["transcript_segments"]) == job["transcript"]
+
+
+def test_get_job_without_segments_returns_empty_list_not_none(db):
+    """백필 전(컬럼 NULL)에도 문자열/None이 아니라 빈 list를 돌려준다."""
+    db.create_job("job1", "meeting.mp3")
+    db.update_job_result("job1", transcript="[00:00] SPEAKER_00: 안녕")
+
+    assert db.get_job("job1")["transcript_segments"] == []

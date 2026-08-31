@@ -143,6 +143,9 @@ def get_segments(job_or_id: Union[str, dict]) -> list[dict]:
 
     stored = job.get("transcript_segments")
     if stored:
+        # database._row_to_dict 를 거친 job은 이미 list다. 다만 이 함수는 dict를 직접
+        # 받는 시그니처라(job_or_id), _row_to_dict를 거치지 않고 만들어진 dict가 들어올 수
+        # 있어 문자열 방어를 남긴다.
         if isinstance(stored, str):
             try:
                 stored = json.loads(stored)

@@ -24,7 +24,11 @@ def _get_conn() -> sqlite3.Connection:
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
-    """sqlite3.Row -> dict 변환. speakers/action_items JSON 문자열은 파싱."""
+    """sqlite3.Row -> dict 변환.
+
+    JSON 문자열로 저장된 컬럼(speakers/action_items/tags/suggested_speakers/diarization/
+    followup_items/transcript_segments)은 파싱해서 돌려준다.
+    """
     d = dict(row)
     if d.get("speakers"):
         try:
@@ -61,6 +65,13 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
             d["diarization"] = {}
     else:
         d["diarization"] = {}
+    if d.get("transcript_segments"):
+        try:
+            d["transcript_segments"] = json.loads(d["transcript_segments"])
+        except (json.JSONDecodeError, TypeError):
+            d["transcript_segments"] = []
+    else:
+        d["transcript_segments"] = []
     if d.get("followup_items"):
         try:
             d["followup_items"] = json.loads(d["followup_items"])
