@@ -393,6 +393,25 @@ def _diar_label_space(job_id: str) -> set:
     return set()
 
 
+def display_transcript(job: dict) -> str:
+    """**소비 시점 렌더** — 사람과 LLM이 읽는 transcript 문자열을 만든다.
+
+    PR C 확정 계약: 저장되는 `job.transcript` 컬럼은 **항상 라벨**(`SPEAKER_XX`)이고
+    이름은 `job.speakers`가 나른다. 따라서 **본문을 밖으로 내보내는 모든 소비 지점**
+    (ZIP 내보내기·`claude -p` 프롬프트 등)은 raw 컬럼이 아니라 이 함수를 써야 한다.
+    raw 컬럼을 그대로 쓰면 사용자에게는 `SPEAKER_00`이 노출되고, LLM은 "누가 말했나"를
+    알 수 없어 요약·후속조치 대조의 담당자 귀속이 깨진다.
+
+    소비 지점마다 렌더를 복사하지 말 것 — 이 프로젝트는 매칭 규칙 사본 5벌로 5라운드
+    연속 같은 버그를 겪었다. 새 소비 지점이 생기면 여기를 호출한다.
+
+    구세대 행(transcript에 이름이 이미 구워진 기존 행)에서는 라벨 자리에 실명이 있어
+    `speaker_map.get(label)`이 미스하고 `display == label`로 수렴한다 — 즉 **그 텍스트가
+    그대로 나오므로 degrade gracefully** 하다(§10 '두 세대 공존').
+    """
+    return render_transcript(get_segments(job), job.get("speakers") or {})
+
+
 def unique_display_inverse(speaker_map: dict | None) -> dict:
     """`{라벨: 표시이름}` -> `{표시이름: 라벨}` 역맵. **값이 유일한 키만** 넣는다.
 
@@ -691,7 +710,8 @@ async def regenerate_summary(job_id: str, body: dict = {}):
     # 순차 .replace()는 이름 맞바꾸기({"아빠":"엄마","엄마":"아빠"})에서 두 화자를 한 명으로
     # 붕괴시킨다. transcript는 항상 render() 출력으로만 만든다(PR B 불변식).
     speaker_map = job.get("speakers") or {}
-    final_transcript = render_transcript(get_segments(job_id), speaker_map)
+    # 소비 시점 렌더는 공용 헬퍼로만 만든다(ZIP·/ask·후속조치 대조와 같은 코드).
+    final_transcript = display_transcript(job)
 
     script_path = INPUT_DIR / f"{job_id}.txt"
     script_path.write_text(final_transcript, encoding="utf-8")
@@ -1038,7 +1058,9 @@ async def ask_question(job_id: str, body: dict):
     if question is None or not isinstance(question, str) or not question.strip():
         raise HTTPException(status_code=422, detail="question이 필요합니다.")
 
-    transcript = job.get("transcript", "")
+    # 프롬프트에는 **소비 시점 렌더**를 넣는다. raw 컬럼은 라벨이라 Claude가
+    # "누가 말했나"를 알 수 없다(ZIP·후속조치 대조와 같은 헬퍼를 쓴다).
+    transcript = display_transcript(job)
     summary = job.get("summary", "")
 
     prompt = (
@@ -1837,15 +1859,19 @@ async def export_all_meetings():
                 safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)
                 folder = f"{safe_title}/"
 
+                # 내보내는 본문은 **소비 시점 렌더**다. transcript 컬럼은 라벨이므로
+                # 그대로 쓰면 사용자가 받는 파일에 SPEAKER_00이 노출된다.
+                rendered = display_transcript(job) if job.get("transcript") else ""
+
                 if job.get("summary"):
                     date = job.get("created_at", "")[:10]
                     md = f"# {job.get('title', '')}\n\n날짜: {date}\n\n## 요약\n\n{job['summary']}"
-                    if job.get("transcript"):
-                        md += f"\n\n## 스크립트\n\n{job['transcript']}"
+                    if rendered:
+                        md += f"\n\n## 스크립트\n\n{rendered}"
                     zf.writestr(folder + "summary.md", md.encode("utf-8"))
 
-                if job.get("transcript"):
-                    zf.writestr(folder + "transcript.txt", job["transcript"].encode("utf-8"))
+                if rendered:
+                    zf.writestr(folder + "transcript.txt", rendered.encode("utf-8"))
 
                 for ext in AUDIO_EXTENSIONS:
                     audio_path = INPUT_DIR / f"{job_id}{ext}"
@@ -2365,7 +2391,8 @@ async def assign_series(job_id: str, body: dict):
                     _model = get_setting("CLAUDE_MODEL") or "claude-sonnet-4-6"
                     from .summarizer import generate_followup_comparison
                     result = await generate_followup_comparison(
-                        pending, job.get("transcript", ""), job.get("summary", ""),
+                        # 라벨을 넘기면 액션아이템 담당자(assignee) 귀속이 깨진다.
+                        pending, display_transcript(job), job.get("summary", ""),
                         model=_model,
                     )
                     update_job_followup(job_id, result)
@@ -2471,7 +2498,8 @@ async def generate_followup(job_id: str):
     _model = get_setting("CLAUDE_MODEL") or "claude-sonnet-4-6"
     try:
         result = await generate_followup_comparison(
-            pending_items, job.get("transcript", ""), job.get("summary", ""),
+            # 라벨을 넘기면 액션아이템 담당자(assignee) 귀속이 깨진다.
+            pending_items, display_transcript(job), job.get("summary", ""),
             model=_model,
         )
     except Exception as exc:
