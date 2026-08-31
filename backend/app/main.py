@@ -406,17 +406,24 @@ async def finalize_job(job_id: str, body: dict):
         if found_names:
             speaker_map = {name: name for name in found_names}
 
-    update_job_result(job_id, transcript=transcript, speakers=speaker_map)
+    # 편집된 transcript를 파싱해 segments도 함께 갱신한다. 갱신하지 않으면 편집 이전의
+    # 낡은 segments가 남아, 이후 재렌더 경로(apply-match·rename-speakers)가 사용자의
+    # 편집을 덮어쓴다.
+    segments = parse_transcript(transcript)
+    update_job_result(
+        job_id,
+        transcript=transcript,
+        speakers=speaker_map,
+        transcript_segments=segments,
+    )
 
     # speakers.json 업데이트 (이름 기억)
     if speaker_map:
         _save_speakers(speaker_map)
 
-    # speaker_map 적용 후 스크립트 파일 저장
-    final_transcript = transcript
-    for speaker_id, name in speaker_map.items():
-        if name.strip():
-            final_transcript = final_transcript.replace(speaker_id, name)
+    # speaker_map 적용 후 스크립트 파일 저장.
+    # 순차 .replace()는 이름 맞바꾸기에서 화자를 붕괴시킨다 — render()로만 만든다(PR B 불변식).
+    final_transcript = render_transcript(segments, speaker_map)
 
     script_path = INPUT_DIR / f"{job_id}.txt"
     script_path.write_text(final_transcript, encoding="utf-8")
@@ -522,12 +529,11 @@ async def regenerate_summary(job_id: str, body: dict = {}):
     if category_id != job.get("category_id"):
         update_job_category(job_id, category_id)
 
-    # speaker_map 적용 후 스크립트 준비
+    # speaker_map 적용 후 스크립트 준비.
+    # 순차 .replace()는 이름 맞바꾸기({"아빠":"엄마","엄마":"아빠"})에서 두 화자를 한 명으로
+    # 붕괴시킨다. transcript는 항상 render() 출력으로만 만든다(PR B 불변식).
     speaker_map = job.get("speakers") or {}
-    final_transcript = job["transcript"]
-    for speaker_id, name in speaker_map.items():
-        if name.strip():
-            final_transcript = final_transcript.replace(speaker_id, name)
+    final_transcript = render_transcript(get_segments(job_id), speaker_map)
 
     script_path = INPUT_DIR / f"{job_id}.txt"
     script_path.write_text(final_transcript, encoding="utf-8")
@@ -1965,15 +1971,27 @@ async def add_sample_to_profile(
 
 @app.post("/api/jobs/{job_id}/rename-speakers")
 async def rename_speakers(job_id: str, body: dict):
-    """화자 이름 매핑을 적용한다 (요약 없이 speaker_map만 저장).
+    """화자 이름 매핑을 적용하고 transcript를 재렌더한다 (요약은 하지 않는다).
 
     body: {speaker_map: {"SPEAKER_00": "김팀장", ...}}
+    기존 speakers를 베이스로 body의 키만 덮어쓴다(merge-safe) — body에 없는 라벨의
+    이름은 보존된다. 값이 빈/공백뿐이면 관문 정규화로 매핑에서 빠져 라벨이 표시된다.
+    transcript는 항상 render(get_segments(job_id), speaker_map) 출력으로만 만든다.
     """
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
 
-    speaker_map: dict = body.get("speaker_map", {})
+    body_map: dict = body.get("speaker_map", {})
+
+    # apply_match와 **같은 merge-safe 패턴**: 기존 speakers를 베이스로 body의 키만 덮어쓴다.
+    # 전체 교체로 두면 body에 빠진 라벨의 이름이 사라지고, 재렌더가 붙은 지금은 그게
+    # 메타데이터가 아니라 사용자가 읽는 transcript 본문의 데이터 손실이 된다.
+    existing = job.get("speakers") or {}
+    if isinstance(existing, str):
+        existing = json.loads(existing)
+    speaker_map = dict(existing)
+    speaker_map.update(body_map)
 
     # 이름 매핑을 transcript에도 반영한다(재렌더). speakers만 갱신하면 transcript와
     # 구조적으로 어긋난다. segments는 transcript 갱신 **전에** 확보한다.
