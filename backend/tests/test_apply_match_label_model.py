@@ -8,7 +8,9 @@ Scenario A/B(346줄 중 5시나리오) — apply-match 관련 시나리오를 �
     apply_match = 라벨 검증 → speaker_map 갱신 → 재렌더.
     표시 이름은 speaker_map.get(label, label)로만 결정된다. 텍스트 매칭·overlap 휴리스틱 없음.
     라벨 검증: matches의 키가 get_segments(job_id)의 label 집합에 있는지로 판정한다.
-    new_name은 쓰기 시점에 strip. 빈/공백뿐이면 매핑에서 제외(라벨 유지).
+    new_name은 쓰기 시점에 strip. 빈/공백뿐이면 speaker_map을 건드리지 않고
+    skipped에 담는다 — 그 라벨의 기존 이름은 삭제되지 않고 보존된다(매핑에서
+    "제외"가 아니라 "미변경"). 전부 빈 값이면 known이 비어 422.
 
 RED가 정상이다 — 옛 구현(휴리스틱 기반)이 아직 남아있는 동안은 실패한다.
 통과시키려고 단언을 되돌리지 말 것. PR A 테스트(test_transcript_module.py 등)를
