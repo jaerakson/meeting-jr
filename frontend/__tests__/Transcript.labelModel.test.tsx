@@ -132,4 +132,55 @@ describe('Transcript 라벨 모델 — 최종 산출물 검증', () => {
     expect(output).not.toBe(transcript)
     expect(output).not.toContain('안녕하세요\n')
   })
+
+  // [보강, qa-c3] "이 줄을 다른 화자로 재지정"(reassignLine) — PR C(54089fb)에서 새로
+  // 도입됐지만 이 파일에 커버리지가 없었다. "이 항목만 이름 변경"을 대체한 핵심 UX라
+  // §10에 명시적으로 문서화돼 있는데도 회귀 감시자가 없던 공백.
+  it('이 줄을 다른 화자로 재지정하면 그 줄만 다른 라벨의 정체성을 갖는다', () => {
+    const transcript =
+      '[00:00] SPEAKER_00: 첫번째\n' +
+      '[00:05] SPEAKER_01: 끼어들기\n' +
+      '[00:10] SPEAKER_00: 두번째'
+    const onTranscriptChange = vi.fn()
+
+    render(
+      <Transcript
+        transcript={transcript}
+        currentTime={0}
+        onTimeClick={() => {}}
+        editable
+        onTranscriptChange={onTranscriptChange}
+      />
+    )
+
+    // idx 2 = "[00:10] SPEAKER_00: 두번째" 줄의 이름을 클릭해 편집 UI를 연다.
+    const nameSpans = screen.getAllByTitle('클릭하여 이름 변경')
+    fireEvent.click(nameSpans[2])
+
+    // "이 줄만 다른 화자로:" 목록에서 SPEAKER_01 버튼을 클릭 — 재지정.
+    const reassignButton = screen.getByText('SPEAKER_01', { selector: 'button' })
+    fireEvent.mouseDown(reassignButton)
+
+    const output = onTranscriptChange.mock.calls.at(-1)![0] as string
+    // 재지정된 줄은 SPEAKER_01 라벨로 렌더되고, 원래 SPEAKER_01 줄과 합쳐 2건이 된다.
+    expect(output.match(/SPEAKER_01:/g)?.length).toBe(2)
+    // SPEAKER_00에는 idx 0 한 줄만 남는다.
+    expect(output.match(/SPEAKER_00:/g)?.length).toBe(1)
+    expect(output).toContain('SPEAKER_00: 첫번째')
+    expect(output).toContain('SPEAKER_01: 두번째')
+
+    // 재지정 후 SPEAKER_01을 "이대리"로 전체 개명하면, 재지정으로 넘어간 줄도
+    // 같은 라벨(정체성)이므로 함께 바뀌어야 한다 — reassignLine이 값(텍스트)이 아니라
+    // 라벨(정체성) 자체를 옮겼다는 증거.
+    const refreshedSpans = screen.getAllByTitle('클릭하여 이름 변경')
+    fireEvent.click(refreshedSpans[1]) // idx 1 = 원래 SPEAKER_01 줄("끼어들기")
+    const renameInput = screen.getByPlaceholderText('새 이름')
+    fireEvent.change(renameInput, { target: { value: '이대리' } })
+    fireEvent.mouseDown(screen.getByText(/전체 변경/))
+
+    const finalOutput = onTranscriptChange.mock.calls.at(-1)![0] as string
+    expect(finalOutput.match(/이대리:/g)?.length).toBe(2)
+    expect(finalOutput).not.toContain('SPEAKER_01:')
+    expect(finalOutput).toContain('SPEAKER_00: 첫번째')
+  })
 })

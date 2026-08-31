@@ -272,3 +272,52 @@ def test_save_profile_with_name_key_identity_mapping(mock_emb, client, setup_job
     assert ("예전 방식" in detail or "레거시" in detail), (
         f"오류 문구가 '레거시 행이라 안 된다'는 원인을 설명하지 않는다: {detail}"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 테스트 4-1: [보강, qa-c3] 중복된 표시 이름 — 역맵이 추측하지 않고 거부해야 한다
+# ─────────────────────────────────────────────────────────────────────
+#
+# main.py의 표시-이름 역맵 로직({값: 키} 역방향, 값이 중복이면 역맵에서 제외)은
+# 이미 구현돼 있지만(마이그레이션 대상 6건 중 "중복 이름으로 병합 판단 필요 3건"과
+# 같은 축), 이 파일에 이 경로를 직접 겨냥한 테스트가 없었다 — 라벨 키는 정상
+# (SPEAKER_XX)인데 speaker_map "값"만 두 라벨에서 같은 이름으로 중복된 경우다.
+# 추측(첫 매치 사용 등)으로 넘어가면 다른 화자의 목소리를 엉뚱한 이름으로 저장하는
+# 조용한 오염이 생긴다 — apply_match/participation이 이미 폐기한 것과 같은 부류.
+@patch("app.audio_processor.extract_speaker_embedding", side_effect=_mock_embedding)
+def test_save_profile_duplicate_display_name_is_rejected_not_guessed(
+    mock_emb, client, setup_job_with_diarization
+):
+    """speaker_map 값이 중복돼 표시 이름만으로는 라벨을 하나로 결정할 수 없으면,
+    첫 매치를 추측해 쓰지 않고 422로 명시 거부해야 한다."""
+    # SPEAKER_00과 SPEAKER_01 둘 다 표시 이름이 "김팀장"으로 중복(예: 동명이인
+    # 오기입, 또는 병합 전 상태) — 라벨 키 자체는 정상(SPEAKER_XX)이라 레거시 행이
+    # 아니다. speaker_label을 표시 이름("김팀장")으로 호출한 경우가 대상.
+    speakers = {"SPEAKER_00": "김팀장", "SPEAKER_01": "김팀장"}
+    diarization = {
+        "SPEAKER_00": [{"start": 0.0, "end": 5.0}, {"start": 10.0, "end": 15.0}],
+        "SPEAKER_01": [{"start": 5.0, "end": 10.0}],
+    }
+
+    job_id = setup_job_with_diarization(speakers, diarization)
+
+    res = client.post(
+        f"/api/jobs/{job_id}/save-speaker-profile",
+        json={"speaker_label": "김팀장", "profile_name": "김팀장"},
+    )
+
+    assert res.status_code == 422, (
+        f"표시 이름이 중복되면 어느 라벨인지 데이터로 결정할 수 없다 — 추측(첫 매치)해서 "
+        f"200을 반환하면 다른 화자의 목소리를 잘못된 이름으로 저장하는 조용한 오염이다. "
+        f"실제: {res.status_code} {res.text}"
+    )
+
+    # regression 방지: 원래 라벨(SPEAKER_00)로 직접 호출하면 중복과 무관하게 여전히 성공해야 한다 —
+    # 중복 방지 로직이 정상 경로(라벨 직접 지정)까지 과잉 차단하면 안 된다.
+    res2 = client.post(
+        f"/api/jobs/{job_id}/save-speaker-profile",
+        json={"speaker_label": "SPEAKER_00", "profile_name": "김팀장"},
+    )
+    assert res2.status_code == 200, (
+        f"라벨을 직접 지정하면 표시 이름 중복과 무관하게 성공해야 한다: {res2.status_code} {res2.text}"
+    )
