@@ -42,7 +42,9 @@
   라벨이 있으면 diar 가 아무리 풍부해도 복구하지 않고 건너뛴다**는 단언을 테스트에 넣게 했다.
 - 관련 파일: `scripts/migrate_legacy_speaker_map.py`, `backend/app/main.py`(patch_transcript),
   `backend/tests/test_patch_after_rename_legacy_row.py`, `DEVGUIDE.md` §10(1행 정정 + 4행 추가)
-- 푸시 여부: 브랜치 푸시 중. PR 미생성(프리즈 전)
+- 푸시 여부: **PR #82 생성 완료**(https://github.com/jaerakson/meeting-jr/pull/82). 코드리뷰 완료 → **지적 6건 수정 중**(머지 전)
+- **[코드리뷰 지적, 수정 중]** ①**[머지 차단]** `handleResummarize`→`finalize_job` 이 레거시 행을 계속 생성 (`patch_transcript` 와 **같은 결함의 다른 호출부**. summarizer 사본 → patch_transcript → 이번 건으로 **세 번째 반복**) ②(b)의 같은 `start` 충돌 시 first-wins = 추측 ③(b)가 `old_label` 을 라벨 공간에 재검증 안 함 ④공유 페이지가 raw 라벨 표시 ⑤마이그레이션 stale-read ⑥문서 4곳
+- **[교훈] 지목된 한 곳만 고치지 말 것.** `patch_transcript` 를 닫을 때 *"이름이 렌더된 transcript 를 서버로 보내는 호출부"* 를 **전수로 세지 않아** 머지 차단 결함이 남았다. grep 은 증상이 아니라 **패턴**으로 걸어야 한다
 
 ---
 
