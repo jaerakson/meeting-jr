@@ -13,7 +13,7 @@ import SummaryPanel from './SummaryPanel'
 import ParticipationChart from './ParticipationChart'
 import SeriesSelect from './SeriesSelect'
 import FollowupPanel from './FollowupPanel'
-import { parse as parseTranscript } from '@/lib/transcript'
+import { parse as parseTranscript, render as renderTranscript } from '@/lib/transcript'
 
 interface EditData {
   transcript: string
@@ -42,6 +42,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   const [editData, setEditData] = useState<EditData | null>(null)
   const [isEditingTranscript, setIsEditingTranscript] = useState(false)
   const [localTranscript, setLocalTranscript] = useState('')
+  const [localSpeakerMap, setLocalSpeakerMap] = useState<Record<string, string>>({})
   const [resummaryLoading, setResummaryLoading] = useState(false)
   const [showResummarizeModal, setShowResummarizeModal] = useState(false)
   const [resummarizeCategory, setResummarizeCategory] = useState<string>('meeting')
@@ -84,6 +85,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   useEffect(() => {
     setIsEditingTranscript(false)
     setLocalTranscript('')
+    setLocalSpeakerMap({})
     setNotionUrl(job?.notion_url ?? null)
     setResummarizeCategory(job?.category_id || 'meeting')
     setMemo(job?.memo || '')
@@ -183,7 +185,9 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
 
   const downloadTranscript = () => {
     if (!job?.transcript) return
-    const blob = new Blob([job.transcript], { type: 'text/plain;charset=utf-8' })
+    // job.transcript는 항상 라벨 그대로다 — 다운로드는 소비 시점이므로 job.speakers로 이름을 적용해 렌더한다.
+    const rendered = renderTranscript(parseTranscript(job.transcript), job.speakers || {})
+    const blob = new Blob([rendered], { type: 'text/plain;charset=utf-8' })
     const a = Object.assign(document.createElement('a'), {
       href: URL.createObjectURL(blob),
       download: `${job.title || '스크립트'}_스크립트.txt`,
@@ -195,11 +199,13 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   const downloadMarkdown = () => {
     if (!job) return
     const date = job.created_at ? new Date(job.created_at).toLocaleDateString('ko-KR') : ''
+    // 스크립트 섹션도 소비 시점에 job.speakers로 이름을 적용해 렌더한다(raw 라벨 노출 방지).
+    const renderedTranscript = job.transcript ? renderTranscript(parseTranscript(job.transcript), job.speakers || {}) : ''
     const lines = [
       `# ${job.title || '회의록'}`,
       date ? `\n날짜: ${date}` : '',
       job.summary ? `\n## 요약\n\n${job.summary}` : '',
-      job.transcript ? `\n## 스크립트\n\n${job.transcript}` : '',
+      renderedTranscript ? `\n## 스크립트\n\n${renderedTranscript}` : '',
     ]
     const md = lines.filter(Boolean).join('\n')
     const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
@@ -213,25 +219,36 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
 
   const handleStartEditTranscript = () => {
     setLocalTranscript(job?.transcript || '')
+    setLocalSpeakerMap(job?.speakers || {})
     setIsEditingTranscript(true)
   }
 
   const handleCancelEditTranscript = () => {
     setIsEditingTranscript(false)
     setLocalTranscript('')
+    setLocalSpeakerMap({})
   }
 
   const handleSaveTranscript = async () => {
     if (!job) return
     setResummaryLoading(true)
     try {
-      await fetch(`/api/jobs/${job.id}/transcript`, {
+      const res = await fetch(`/api/jobs/${job.id}/transcript`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript: localTranscript || job.transcript }),
+        body: JSON.stringify({
+          transcript: localTranscript || job.transcript,
+          speaker_map: localSpeakerMap ?? job.speakers ?? {},
+        }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.detail || '저장에 실패했습니다.')
+        return
+      }
       setIsEditingTranscript(false)
       setLocalTranscript('')
+      setLocalSpeakerMap({})
       onJobsChange()
     } catch {
       alert('저장에 실패했습니다.')
@@ -244,8 +261,8 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
     if (!job) return
     setResummaryLoading(true)
     try {
-      const speaker_map = job.speakers || {}
-      await fetch(`/api/jobs/${job.id}/finalize`, {
+      const speaker_map = localSpeakerMap ?? job.speakers ?? {}
+      const res = await fetch(`/api/jobs/${job.id}/finalize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -254,8 +271,14 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
           category_id: categoryId || job.category_id || 'meeting',
         }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.detail || '재요약 요청에 실패했습니다.')
+        return
+      }
       setIsEditingTranscript(false)
       setLocalTranscript('')
+      setLocalSpeakerMap({})
       setShowResummarizeModal(false)
       onJobsChange()
     } catch {
@@ -511,7 +534,8 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
                 currentTime={currentTime}
                 onTimeClick={handleTimeClick}
                 editable={isEditingTranscript}
-                onTranscriptChange={setLocalTranscript}
+                speakers={job.speakers || {}}
+                onTranscriptChange={p => { setLocalTranscript(p.transcript); setLocalSpeakerMap(p.speakerMap) }}
                 searchQuery={searchQuery}
               />
             </div>
