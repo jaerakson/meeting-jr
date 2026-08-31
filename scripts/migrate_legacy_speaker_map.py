@@ -15,9 +15,9 @@ PR C 이전의 `TranscriptEditor` 는 화자 이름을 **본문에 구워서** �
 
 ## 무엇을 바꾸는가 (그리고 무엇을 바꾸지 않는가)
 
-바꾸는 것: `transcript_segments` 의 `label` — 실명 → 그 이름을 가리키는 diar 라벨.
-그리고 **중복 이름 병합 경로에서만** `speakers`(speaker_map)에서 비대표 동명 키를 제거한다.
-바꾸지 않는 것: `transcript` 문자열, `diarization`, 그 외 모든 컬럼. `raw` 키는 있던 그대로 둔다.
+바꾸는 것: `transcript_segments` 의 `label` — 실명 → 그 이름을 가리키는 diar 라벨. **그것뿐이다.**
+바꾸지 않는 것: `transcript` 문자열, `speakers`(중복 이름 병합 경로에서도 건드리지 않는다 —
+`_merge_duplicate_names` docstring 참조), `diarization`, 그 외 모든 컬럼. `raw` 키도 그대로 둔다.
 
 표시 이름은 speaker_map 이 나르므로 **사용자 화면은 한 글자도 바뀌지 않아야 정상이다.**
 이것을 희망이 아니라 **검사**로 강제한다 — 재키잉한 segments 를 `render(new_segments,
@@ -161,7 +161,23 @@ def _merge_duplicate_names(speaker_map: dict, diar: dict) -> tuple[dict, list[st
     대표 = diarization 총 발화 길이(sum(end-start)) 최대. 동률이면 키 문자열 정렬로
     tie-break 하여 같은 입력이면 항상 같은 출력이 나온다.
 
-    반환: (대표만 남긴 speaker_map, 중복이던 이름들, 사람이 읽을 메모)
+    ## 비대표 키는 speaker_map 에 **남긴다** — 지우지 말 것
+
+    여기서 만드는 축소 map 은 **역맵 계산용 중간값이고 DB 에 쓰지 않는다.**
+    `--write` 는 `transcript_segments` 만 기록하고 `speakers` 는 건드리지 않는다.
+
+    **지우면 안 되는 이유**: `participation` 의 diar 경로(main.py:2268~)는 **`diar_data`
+    키를 순회**하며 `display = (speaker_map.get(label) or "").strip() or label` 로 이름을
+    찾는다. 비대표 키를 map 에서 지우면 그 클러스터가 참여도 화면에 **raw `SPEAKER_XX` 로
+    표시된다**(실측: `6c5acaa2` 66초/5%, `5938f69c` 145초/3%).
+    **이 스크립트는 "화면은 한 글자도 안 바뀐다"를 약속하고 실행된다.** 소수 구간이라도
+    그 약속을 깨므로 받아들일 수 없다.
+
+    **남겨도 안전한 이유**: transcript 라벨은 대표 라벨로 통일되므로 본문 렌더에 비대표 키가
+    등장하지 않고, 표시 이름 중복은 PR B 가 이미 허용하기로 한 상태이며, apply-match 는 키가
+    diar 라벨이라 값이 중복이어도 동작한다. **"안 쓰이는 키"로 보고 정리하지 말 것.**
+
+    반환: (역맵 계산용 축소 map — **쓰기 대상 아님**, 중복이던 이름들, 사람이 읽을 메모)
     """
     counts = Counter(speaker_map.values())
     duplicated = sorted(n for n, c in counts.items() if c > 1)
@@ -182,7 +198,7 @@ def _merge_duplicate_names(speaker_map: dict, diar: dict) -> tuple[dict, list[st
             dropped = [k for k in sorted(keys) if k != rep]
             notes.append(
                 f"{name}: {sorted(keys)} → 대표 {rep}"
-                f"(총 {seconds.get(rep, 0.0):.1f}초), 제거 {dropped}"
+                f"(총 {seconds.get(rep, 0.0):.1f}초), 비대표 {dropped} 는 map 에 유지"
             )
     return reduced, duplicated, "중복 이름 병합 — " + " / ".join(notes)
 
@@ -256,7 +272,9 @@ def judge(row: dict) -> dict:
         new_segments.append(new_seg)
 
     # --- 핵심 안전장치: 사용자 화면이 한 글자도 바뀌지 않아야 한다 -----------
-    rendered = render(new_segments, working_map)
+    # 축소 map 이 아니라 **DB 에 실제로 남을 speaker_map** 으로 렌더해 검사한다.
+    # (동명 키는 같은 이름을 가리키므로 결과는 같지만, 런타임이 쓰는 값으로 재는 편이 정직하다.)
+    rendered = render(new_segments, speaker_map)
     if rendered != transcript:
         return dict(verdict=SKIP,
                     reason="[안전장치 불성립] 재키잉 후 render() 결과가 현재 transcript 와 바이트 동일하지 "
@@ -268,10 +286,11 @@ def judge(row: dict) -> dict:
              ", ".join(f"{n}→{inverse[n]}" for n in sorted(labels))
     if merge_note:
         reason += f". {merge_note}"
+    # new_speaker_map 은 항상 None 이다 — speakers 컬럼은 쓰지 않는다(위 병합 함수 docstring).
     return dict(verdict=OK_MERGED if duplicated else OK_DIRECT,
                 reason=reason,
                 new_segments=new_segments,
-                new_speaker_map=working_map if working_map != speaker_map else None)
+                new_speaker_map=None)
 
 
 def _first_diff(a: str, b: str) -> str:
@@ -281,23 +300,19 @@ def _first_diff(a: str, b: str) -> str:
     return f"길이 불일치: 기존 {len(a)}자 vs 렌더 {len(b)}자"
 
 
-def _write(db_path: Path, job_id: str, segments: list[dict],
-           speaker_map: "dict | None") -> None:
-    """재키잉된 segments 를(병합 경로면 축소된 speaker_map 도 함께) 기록한다.
+def _write(db_path: Path, job_id: str, segments: list[dict]) -> None:
+    """재키잉된 segments 만 기록한다.
 
-    `transcript` 문자열은 쓰지 않는다 — 안전장치가 바이트 동일을 이미 보장했으므로
-    다시 쓸 이유가 없고, 쓰지 않는 편이 사고 반경이 좁다.
+    `transcript` 도 `speakers` 도 쓰지 않는다 — 안전장치가 이미 바이트 동일을 보장했고,
+    두 컬럼을 건드리지 않는 것이 "화면은 한 글자도 안 바뀐다"는 약속의 가장 강한 보장이다.
+    (`speakers` 를 건드리면 안 되는 이유는 `_merge_duplicate_names` docstring 참조.)
     """
-    fields = ["transcript_segments = ?"]
-    values: list = [json.dumps(segments, ensure_ascii=False)]
-    if speaker_map is not None:
-        fields.append("speakers = ?")
-        values.append(json.dumps(speaker_map, ensure_ascii=False))
-    values.append(job_id)
-
     conn = sqlite3.connect(str(db_path))
     try:
-        conn.execute(f"UPDATE meetings SET {', '.join(fields)} WHERE id = ?", values)
+        conn.execute(
+            "UPDATE meetings SET transcript_segments = ? WHERE id = ?",
+            (json.dumps(segments, ensure_ascii=False), job_id),
+        )
         conn.commit()
     finally:
         conn.close()
@@ -329,11 +344,9 @@ def main(argv=None) -> int:
         print(f"[{verdict}] {row['id'][:8]}  status={row.get('status')}  {title[:40]}")
         print(f"    사유: {result['reason']}")
         if args.write and result["new_segments"] is not None:
-            _write(db_path, row["id"], result["new_segments"], result["new_speaker_map"])
-            wrote = f"transcript_segments {len(result['new_segments'])}건"
-            if result["new_speaker_map"] is not None:
-                wrote += f" + speakers {len(result['new_speaker_map'])}키(중복 제거)"
-            print(f"    → {wrote} 기록 완료")
+            _write(db_path, row["id"], result["new_segments"])
+            print(f"    → transcript_segments {len(result['new_segments'])}건 기록 완료"
+                  f" (transcript·speakers 는 건드리지 않음)")
         print()
 
     print("== 요약 ==")
