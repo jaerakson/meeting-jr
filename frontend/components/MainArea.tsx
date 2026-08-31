@@ -13,6 +13,7 @@ import SummaryPanel from './SummaryPanel'
 import ParticipationChart from './ParticipationChart'
 import SeriesSelect from './SeriesSelect'
 import FollowupPanel from './FollowupPanel'
+import { parse as parseTranscript } from '@/lib/transcript'
 
 interface EditData {
   transcript: string
@@ -159,34 +160,19 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
 
   const handleSpeakerClick = useCallback((speakerName: string) => {
     if (!job?.transcript) return
-    const lines = job.transcript.split('\n')
-    const regex = /^\[(\d{2}):(\d{2})\]\s*(.+?):\s*(.*)$/
+    const segments = parseTranscript(job.transcript)
+    const firstByLabel = (label: string) => segments.find(s => s.label === label)
 
-    for (const line of lines) {
-      const match = line.trim().match(regex)
-      if (match) {
-        const speaker = match[3]
-        if (speaker === speakerName) {
-          const minutes = parseInt(match[1], 10)
-          const seconds = parseInt(match[2], 10)
-          handleTimeClick(minutes * 60 + seconds)
-          return
-        }
-      }
-    }
+    // speakerName 자체가 라벨인 경우(예: identity mapping) 먼저 시도
+    const direct = firstByLabel(speakerName)
+    if (direct) { handleTimeClick(direct.start ?? 0); return }
 
+    // job.speakers(label -> 표시 이름) 역참조로 라벨을 찾아 시도
     if (job.speakers) {
       for (const [label, displayName] of Object.entries(job.speakers)) {
         if (displayName === speakerName) {
-          for (const line of lines) {
-            const match = line.trim().match(regex)
-            if (match && match[3] === label) {
-              const minutes = parseInt(match[1], 10)
-              const seconds = parseInt(match[2], 10)
-              handleTimeClick(minutes * 60 + seconds)
-              return
-            }
-          }
+          const seg = firstByLabel(label)
+          if (seg) { handleTimeClick(seg.start ?? 0); return }
         }
       }
     }
