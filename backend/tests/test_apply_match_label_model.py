@@ -165,6 +165,7 @@ class TestUnknownLabelWithoutDiarization:
         job = client.get("/api/jobs/unknown-nodia-1").json()
         assert "박과장:" in job["transcript"]
         assert "존재안함" not in job["transcript"]
+        _assert_rerender_matches("unknown-nodia-1", job)
 
 
 # ===========================================================================
@@ -275,6 +276,7 @@ class TestUnknownLabelResponseShape:
 
         job = client.get("/api/jobs/shape-partial-1").json()
         assert "김과장:" in job["transcript"]
+        _assert_rerender_matches("shape-partial-1", job)
 
     def test_all_labels_unknown_multi_returns_422(self, client):
         """#11: 여러 라벨이 모두 unknown이면 전부 skipped에 담겨 422, transcript 바이트 불변."""
