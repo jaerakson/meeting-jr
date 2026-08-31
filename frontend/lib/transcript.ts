@@ -135,9 +135,16 @@ export function formatTimestamp(seconds: number | null): string {
 }
 
 /**
- * 세그먼트의 text(또는 label)를 바꿀 때 쓰는 헬퍼. `raw`를 명시적으로 제거한다 —
- * raw는 parse() 시점의 원본 줄이므로, 내용이 바뀐 세그먼트에 그대로 남아있으면
- * render()가 편집을 무시하고 옛 원문을 그대로 출력해버린다(raw 우선순위 규칙).
+ * 세그먼트의 text(또는 label)를 바꿀 때 쓰는 헬퍼. `raw`를 명시적으로 제거한다.
+ *
+ * render()의 raw 우선순위 규칙(DEVGUIDE §10 "raw 필드 규칙", PR B에서 확정)은
+ * `display(=speakerMap 적용 결과) === label` 일 때만 raw를 그대로 출력한다.
+ * 즉 화자 이름을 안 바꾼 세그먼트는 raw가 남아있어도 안전하다 — 하지만 **text 자체를
+ * 편집**하면 raw(= parse() 시점의 원본 줄 전체)가 그 편집 이전 내용을 그대로 담고 있어서,
+ * display가 label과 같은 한(=이름을 안 바꿨다면) render()가 옛 원문(raw)을 그대로
+ * 뱉어버려 방금 한 텍스트 편집이 조용히 사라진다. label을 다른 라벨로 재지정할 때도
+ * 마찬가지로 그 줄의 raw는 이제 "다른 화자 소유의 원본 줄"이라 의미가 없다.
+ * 그래서 text/label을 바꾸는 모든 지점에서 raw를 함께 지워 정규형 렌더를 강제한다.
  */
 export function withoutRaw(seg: TranscriptSegment, patch: Partial<TranscriptSegment>): TranscriptSegment {
   const { raw, ...rest } = seg
