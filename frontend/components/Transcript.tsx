@@ -8,8 +8,12 @@ interface TranscriptProps {
   currentTime: number
   onTimeClick: (sec: number) => void
   editable?: boolean
-  onTranscriptChange?: (transcript: string) => void
+  // 확정 계약(DEVGUIDE §10): transcript는 항상 라벨 그대로(이름을 굽지 않는다).
+  // 표시 이름은 speakerMap이 별도로 나른다 — 소비자가 저장 시점에 필요한 대로 렌더한다.
+  onTranscriptChange?: (payload: { transcript: string; speakerMap: Record<string, string> }) => void
   searchQuery?: string
+  // 비편집 모드에서 화면에 이름을 표시하기 위한 라벨→이름 맵 (job.speakers).
+  speakers?: Record<string, string>
 }
 
 // 화면에 그리기 위한 파생 뷰. label은 세그먼트의 정체성(고정), name은 표시 이름(가변).
@@ -29,12 +33,12 @@ const SPEAKER_COLORS: { bg: string; text: string }[] = [
 ]
 const PASSTHROUGH_COLOR = { bg: 'bg-gray-50 dark:bg-gray-800/40', text: 'text-gray-500 dark:text-gray-400' }
 
-function toViewLines(segments: TranscriptSegment[], speakerMap: Record<string, string>, editable: boolean): ViewLine[] {
+function toViewLines(segments: TranscriptSegment[], speakerMap: Record<string, string>): ViewLine[] {
   return segments.map(seg => ({
     time: seg.start ?? 0,
     timeStr: formatTimestamp(seg.start),
     label: seg.label,
-    name: editable ? resolveDisplayName(seg.label, speakerMap) : (seg.label ?? ''),
+    name: resolveDisplayName(seg.label, speakerMap),
     text: seg.text,
   }))
 }
@@ -56,7 +60,7 @@ function highlightSearchText(text: string, query: string | undefined): ReactNode
   )
 }
 
-export default function Transcript({ transcript, currentTime, onTimeClick, editable, onTranscriptChange, searchQuery }: TranscriptProps) {
+export default function Transcript({ transcript, currentTime, onTimeClick, editable, onTranscriptChange, searchQuery, speakers }: TranscriptProps) {
   const parsedSegments = useMemo(() => parse(transcript), [transcript])
   const [lastClickedSpeaker, setLastClickedSpeaker] = useState<string | null>(null)
 
@@ -83,14 +87,19 @@ export default function Transcript({ transcript, currentTime, onTimeClick, edita
   useEffect(() => {
     if (editable) {
       setEditSegments(parse(transcript))
-      setSpeakerMap({})
+      // speakerMap을 job.speakers로 시드한다. 본문에 이름을 굽지 않는 계약이라
+      // 시드하지 않으면 편집 진입 즉시 모든 화자가 라벨(SPEAKER_00)로 보이고,
+      // 저장 시 시드되지 않은 다른 화자의 기존 이름이 유실된다.
+      setSpeakerMap({ ...(speakers ?? {}) })
       setEditIdx(null)
       setEditingSpeakerIdx(null)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editable, transcript])
 
   const segments = editable ? editSegments : parsedSegments
-  const lines = useMemo(() => toViewLines(segments, speakerMap, !!editable), [segments, speakerMap, editable])
+  const effectiveSpeakerMap = editable ? speakerMap : (speakers ?? {})
+  const lines = useMemo(() => toViewLines(segments, effectiveSpeakerMap), [segments, effectiveSpeakerMap])
 
   const speakerColorMap = useMemo(() => {
     const map = new Map<string, number>()
@@ -165,7 +174,8 @@ export default function Transcript({ transcript, currentTime, onTimeClick, edita
     const updated = editSegments.map((seg, i) => i === idx ? withoutRaw(seg, { text }) : seg)
     setEditSegments(updated)
     setEditIdx(null)
-    onTranscriptChange?.(render(updated, speakerMap))
+    // 저장용 payload는 항상 라벨 그대로 렌더한다(render(updated, {})) — 이름은 speakerMap으로 별도 전달.
+    onTranscriptChange?.({ transcript: render(updated, {}), speakerMap })
   }
 
   // 전체 변경: 이 라벨의 표시 이름을 speakerMap에서만 갱신한다(라벨 자체는 불변).
@@ -175,7 +185,7 @@ export default function Transcript({ transcript, currentTime, onTimeClick, edita
     const updatedMap = { ...speakerMap, [label]: trimmed }
     setSpeakerMap(updatedMap)
     setEditingSpeakerIdx(null)
-    onTranscriptChange?.(render(editSegments, updatedMap))
+    onTranscriptChange?.({ transcript: render(editSegments, {}), speakerMap: updatedMap })
   }
 
   // 이 줄만 다른 화자로 재지정: 이 세그먼트의 label을 이미 존재하는 다른 라벨로 바꾼다.
@@ -187,7 +197,7 @@ export default function Transcript({ transcript, currentTime, onTimeClick, edita
     const updated = editSegments.map((seg, i) => i === idx ? withoutRaw(seg, { label: targetLabel }) : seg)
     setEditSegments(updated)
     setEditingSpeakerIdx(null)
-    onTranscriptChange?.(render(updated, speakerMap))
+    onTranscriptChange?.({ transcript: render(updated, {}), speakerMap })
   }
 
   const otherLabelsFor = (idx: number): string[] => {
