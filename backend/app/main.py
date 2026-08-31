@@ -845,8 +845,8 @@ async def patch_transcript(job_id: str, body: dict):
     # 이 필터가 없으면 라벨 자리에 실명이 들어 있는 본문을 편집할 때
     # `speakerMap["김팀장"] = "박부장"` 같은 **실명 키**가 공간의 정식 멤버로 인정돼
     # (a)를 통과하고, segments에 `label == "김팀장"`인 **레거시 행이 새로 생긴다**
-    # (이 PR이 4라운드째 죽이고 있는 결함). 모르는 키는 추측하지 않고 **버린다** —
-    # 저장하면 job.speakers에 실명 키 고아 항목이 남아 그 행이 레거시로 분류된다.
+    # (이 PR이 4라운드째 죽이고 있는 결함). 저장하면 job.speakers에 실명 키 고아
+    # 항목이 남아 그 행이 레거시로 분류된다.
     known_labels = (
         _diar_label_space(job_id)
         | {seg.get("label") for seg in old_segments if seg.get("label")}
@@ -864,12 +864,31 @@ async def patch_transcript(job_id: str, body: dict):
     # 번역된 항목을 **나중에** 얹는다: 구세대 행의 payload에는 시드된 옛 매핑
     # (`SPEAKER_00 -> 김팀장`)과 방금 바꾼 이름(`김팀장 -> 박부장`)이 **함께** 실려 온다.
     # 뒤에 얹어야 사용자가 방금 지정한 새 이름이 이긴다(dict 순서에 의존하지 않는다).
+    unresolved_keys: list[str] = []
     for raw_key, name in raw_body_map.items():
         if raw_key in known_labels:
             continue
         label = inverse_unique.get(raw_key)
-        if label is not None:
-            body_map[label] = name
+        if label is None:
+            unresolved_keys.append(raw_key)
+            continue
+        body_map[label] = name
+
+    # 라벨로도, 번역으로도 해소되지 않는 키는 **조용히 버리지 않고 422로 거부한다.**
+    # 조용히 버리면 사용자의 개명이 200 응답과 함께 사라진다 — 그건 방어가 아니라
+    # 새로운 무음 실패다. `restore_segment_labels`의 (d)가 이미 같은 선택을 한다
+    # (하나라도 미해소면 422, 부분 저장 없음). 같은 파일 안에서 한쪽만 조용히 버리면
+    # 계약이 갈라진다.
+    if unresolved_keys:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "화자 이름을 어떤 라벨에도 연결할 수 없습니다: "
+                + ", ".join(sorted(unresolved_keys))
+                + ". 표시 이름이 중복이라 라벨을 특정할 수 없거나(예: 같은 이름의 화자가 "
+                "여럿), 이 회의에 없는 화자입니다. 추측해서 저장하지 않습니다."
+            ),
+        )
 
     # 파싱한 라벨을 **원래 라벨로 되돌린 뒤** 저장한다(finalize_job과 같은 헬퍼).
     #
