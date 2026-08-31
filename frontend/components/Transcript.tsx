@@ -94,6 +94,9 @@ export default function Transcript({ transcript, currentTime, onTimeClick, edita
       setEditIdx(null)
       setEditingSpeakerIdx(null)
     }
+    // speakers를 deps에 넣지 않는다(의도적). 편집 중에 job.speakers가 갱신될 때마다 시드를
+    // 다시 하면 사용자가 방금 입력한 이름을 덮어써 버린다. 시드는 편집 진입 시점(editable이
+    // false→true로 바뀌는 순간) 1회만 한다 — deps에 넣으면 편집 중 사용자 입력이 조용히 날아간다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editable, transcript])
 

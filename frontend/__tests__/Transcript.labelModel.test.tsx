@@ -23,6 +23,9 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, within } from '@testing-library/react'
 import Transcript from '../components/Transcript'
 
+// jsdom에서 scrollIntoView 미지원 — 비편집 모드 렌더 시 활성 라인 스크롤 시도에 필요.
+Element.prototype.scrollIntoView = vi.fn()
+
 afterEach(() => {
   cleanup()
 })
@@ -195,5 +198,71 @@ describe('Transcript 라벨 모델 — 최종 산출물 검증', () => {
     // transcript는 여전히 라벨 그대로다 — 재지정으로 옮겨간 줄과 원래 줄 모두 SPEAKER_01.
     expect(finalPayload.transcript.match(/SPEAKER_01:/g)?.length).toBe(2)
     expect(finalPayload.transcript).toContain('SPEAKER_00: 첫번째')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F1 — 차단 1 회귀 잠금 (director 지시, 2026-09-01): 비편집 모드에서 speakerMap 미적용.
+//
+// 수정 전에는 `toViewLines`가 `name: editable ? resolveDisplayName(...) : (seg.label ?? '')`로
+// 비편집 모드에서 speakers prop을 아예 무시하고 라벨을 그대로 표시했다(완료 화면이
+// SPEAKER_00 raw 라벨을 노출). 이 테스트가 없으면 누군가 그 editable 분기를 되돌려도
+// 나머지 vitest 스위트가 전부 초록불이라 회귀를 잡지 못한다.
+// ---------------------------------------------------------------------------
+
+describe('Transcript — 비편집 모드 표시 계약 (차단 1 회귀 잠금)', () => {
+  it('editable=false여도 speakers prop으로 표시 이름을 렌더한다 — 라벨 그대로 노출하지 않는다', () => {
+    const transcript =
+      '[00:00] SPEAKER_00: 안녕하세요\n[00:05] SPEAKER_01: 네'
+
+    render(
+      <Transcript
+        transcript={transcript}
+        currentTime={0}
+        onTimeClick={() => {}}
+        editable={false}
+        speakers={{ SPEAKER_00: '김팀장', SPEAKER_01: '이대리' }}
+      />
+    )
+
+    // 표시 이름이 렌더돼야 한다.
+    expect(screen.getByText('김팀장')).toBeInTheDocument()
+    expect(screen.getByText('이대리')).toBeInTheDocument()
+    // 라벨이 그대로 화면에 남아있으면 안 된다(회귀 시 이 부분이 다시 보인다).
+    expect(screen.queryByText('SPEAKER_00')).not.toBeInTheDocument()
+    expect(screen.queryByText('SPEAKER_01')).not.toBeInTheDocument()
+  })
+
+  it('speakers에 없는 라벨은 라벨 자체로 폴백한다(displayName과 동일 규칙)', () => {
+    const transcript = '[00:00] SPEAKER_00: 안녕하세요\n[00:05] SPEAKER_01: 네'
+
+    render(
+      <Transcript
+        transcript={transcript}
+        currentTime={0}
+        onTimeClick={() => {}}
+        editable={false}
+        speakers={{ SPEAKER_00: '김팀장' }}
+      />
+    )
+
+    expect(screen.getByText('김팀장')).toBeInTheDocument()
+    // SPEAKER_01은 매핑이 없으므로 라벨 그대로 폴백 렌더돼야 한다.
+    expect(screen.getByText('SPEAKER_01')).toBeInTheDocument()
+  })
+
+  it('speakers prop이 없으면(undefined) 라벨 그대로 폴백한다', () => {
+    const transcript = '[00:00] SPEAKER_00: 안녕하세요'
+
+    render(
+      <Transcript
+        transcript={transcript}
+        currentTime={0}
+        onTimeClick={() => {}}
+        editable={false}
+      />
+    )
+
+    expect(screen.getByText('SPEAKER_00')).toBeInTheDocument()
   })
 })
