@@ -378,6 +378,124 @@ async def get_job_detail(job_id: str):
 # 5) POST /api/jobs/{job_id}/finalize  — 편집된 transcript + speaker_map 전송
 # ---------------------------------------------------------------------------
 
+def _diar_label_space(job_id: str) -> set:
+    """diar 라벨 집합. DB 우선, 없으면 파일을 **읽기만** 한다(백필하지 않는다)."""
+    from .database import get_job_diarization
+    labels = set(get_job_diarization(job_id) or {})
+    if labels:
+        return labels
+    diar_path = INPUT_DIR / f"{job_id}_diarization.json"
+    if diar_path.exists():
+        try:
+            return set(json.loads(diar_path.read_text(encoding="utf-8")) or {})
+        except (json.JSONDecodeError, OSError):
+            return set()
+    return set()
+
+
+def restore_segment_labels(
+    job_id: str,
+    transcript: str,
+    *,
+    space_map: dict,
+    restore_map: dict,
+    old_segments: list,
+) -> list:
+    """표시 이름이 렌더된 transcript를 파싱해 **라벨을 원래대로 되돌린** segments를 만든다.
+
+    `patch_transcript`와 `finalize_job`이 **같은 코드**를 쓴다. 사본을 만들지 말 것 —
+    이 프로젝트는 폐기된 매칭 방식의 사본 5벌로 5라운드 연속 같은 버그를 겪었다.
+
+    ## 왜 필요한가
+    두 엔드포인트가 받는 문자열은 프론트가 화면에 보여주던 `job.transcript` 그대로이고,
+    거기엔 이미 **표시 이름이 렌더돼 있다**(rename-speakers·apply-match의 승인된 동작).
+    그대로 parse하면 "김팀장" 같은 실명이 새 라벨이 되어 speaker_map 키와 어긋나는
+    **레거시 행이 새로 생긴다.**
+
+    ## 두 map의 역할이 다르다 (섞지 말 것)
+    - `space_map`: **라벨 공간**을 정의한다. 이 키 ∪ diar 라벨이 "정상 라벨"이다.
+      finalize는 **body의 새 speaker_map**(TranscriptEditor가 라벨 왕복 + 새 이름을 보낸다),
+      patch는 body에 map이 없으므로 `job.speakers`.
+    - `restore_map`: **그 텍스트가 렌더된 시점의 상태**다. 항상 `job.speakers`.
+      body의 새 map으로 (b)(c)를 돌리면 안 된다 — 본문은 **옛 이름**으로 렌더돼 있다.
+
+    ## 해소 순서
+      (a) 라벨이 이미 라벨 공간 안이면 그대로 둔다.
+      (b) 같은 start의 옛 세그먼트의 표시 이름과 같으면 그 세그먼트의 label로 되돌린다.
+      (c) 표시 이름이 유일하면 `restore_map` 역맵으로 되돌린다.
+      (d) 하나라도 미해소면 422. 부분 저장하지 않는다.
+
+    (b)는 폐기된 overlap 휴리스틱이 아니다. 지운 것은 *누가 말했는지*를 시간 겹침으로
+    추측하는 방식이었다. 여기서는 **그 줄에 이미 붙어 있던 라벨을 같은 start로 되찾을 뿐**
+    이고, 되찾지 못하면 추측하지 않고 422로 거부한다.
+    """
+    diar_labels = _diar_label_space(job_id)
+    label_space = set(space_map or {}) | diar_labels
+
+    # start -> 그 줄에 원래 붙어 있던 라벨.
+    # **같은 start에 서로 다른 라벨이 둘 이상이면 그 start를 (b)에서 제외한다.**
+    # 타임스탬프가 초 단위로 절단되므로 빠른 대화에서 같은 start가 실제로 발생하고,
+    # 그때 first-wins로 하나를 고르면 그건 "되찾기"가 아니라 **추측**이다.
+    # (라벨이 전부 같으면 모호하지 않으므로 제외하지 않는다.)
+    _by_start: dict = {}
+    for seg in old_segments or []:
+        label = seg.get("label")
+        start = seg.get("start")
+        if label is None or start is None:
+            continue
+        _by_start.setdefault(start, set()).add(label)
+    old_by_start = {st: next(iter(ls)) for st, ls in _by_start.items() if len(ls) == 1}
+
+    # 표시 이름 -> 라벨 역맵. **값이 유일한 것만** 넣는다 — 중복이면 어느 라벨인지
+    # 데이터로 결정할 수 없고, 추측하지 않는다(save_speaker_profile과 같은 판단).
+    _name_counts = Counter((restore_map or {}).values())
+    inverse_unique = {v: k for k, v in (restore_map or {}).items() if _name_counts[v] == 1}
+
+    new_segments: list = []
+    unresolved: list[str] = []
+    for seg in parse_transcript(transcript):
+        label = seg.get("label")
+        if label is None:
+            new_segments.append(seg)
+            continue
+
+        # (a) 이미 라벨 공간 안이면 그대로 둔다.
+        if label in label_space:
+            new_segments.append(seg)
+            continue
+
+        # (b) 같은 start의 옛 세그먼트에서 되찾는다.
+        #     되찾은 라벨도 **라벨 공간에 있는지 재검증한다** — 검증하지 않으면 이미 깨진
+        #     행(라벨이 실명인 행)을 편집할 때 200으로 깨진 상태가 그대로 유지된다.
+        old_label = old_by_start.get(seg.get("start"))
+        if old_label is not None and old_label in label_space:
+            old_display = ((restore_map or {}).get(old_label) or "").strip() or old_label
+            if old_display == label:
+                new_segments.append({**seg, "label": old_label})
+                continue
+
+        # (c) 표시 이름이 유일하면 역맵으로 되찾는다. (b)와 같은 이유로 공간을 재검증한다.
+        resolved = inverse_unique.get(label)
+        if resolved is not None and resolved in label_space:
+            new_segments.append({**seg, "label": resolved})
+            continue
+
+        # (d) 미해소.
+        unresolved.append(label)
+
+    if unresolved:
+        # 부분 저장하지 않는다 — 조용히 깨진 행을 만드는 것보다 명시적 거부가 낫다
+        # (apply_match·save_speaker_profile과 같은 확립된 판단).
+        raise HTTPException(
+            status_code=422,
+            detail="화자 라벨을 되돌릴 수 없어 저장하지 않았습니다: "
+                   f"{sorted(set(unresolved))}. 화자 이름을 본문에서 직접 바꾸지 말고 "
+                   "화자 이름 편집 기능을 사용해주세요.",
+        )
+
+    return new_segments
+
+
 @app.post("/api/jobs/{job_id}/finalize")
 async def finalize_job(job_id: str, body: dict):
     """편집된 transcript와 speaker_map을 받아 Claude 요약을 시작한다."""
@@ -413,7 +531,22 @@ async def finalize_job(job_id: str, body: dict):
     # 편집된 transcript를 파싱해 segments도 함께 갱신한다. 갱신하지 않으면 편집 이전의
     # 낡은 segments가 남아, 이후 재렌더 경로(apply-match·rename-speakers)가 사용자의
     # 편집을 덮어쓴다.
-    segments = parse_transcript(transcript)
+    #
+    # 파싱 전에 **라벨을 원래대로 되돌린다** — `patch_transcript`와 같은 헬퍼를 쓴다.
+    # MainArea의 "재요약"(handleResummarize)이 **이름이 렌더된 본문 + 갱신 안 된 옛
+    # job.speakers**를 이 엔드포인트로 보내므로, 그냥 parse하면 실명이 라벨로 굳어
+    # 레거시 행이 새로 생긴다(PR C가 patch_transcript에서 막은 것과 같은 경로).
+    #
+    # 공간은 **body의 새 speaker_map**으로, 복원은 **job.speakers**로 한다:
+    # TranscriptEditor는 라벨을 그대로 왕복시키므로 (a)에서 전부 통과하고(주 흐름 보존),
+    # 재요약 경로의 본문은 옛 이름으로 렌더돼 있으므로 (b)(c)가 옛 map으로 되찾는다.
+    segments = restore_segment_labels(
+        job_id,
+        transcript,
+        space_map=speaker_map,
+        restore_map=job.get("speakers") or {},
+        old_segments=job.get("transcript_segments") or parse_transcript(job.get("transcript") or ""),
+    )
     update_job_result(
         job_id,
         transcript=transcript,
@@ -666,89 +799,19 @@ async def patch_transcript(job_id: str, body: dict):
     if not transcript:
         raise HTTPException(status_code=422, detail="transcript가 비어 있습니다.")
 
-    # ------------------------------------------------------------------
-    # 파싱한 라벨을 **원래 라벨로 되돌린 뒤** 저장한다.
-    #
-    # 이 엔드포인트가 받는 문자열은 프론트가 화면에 보여주던 `job.transcript` 그대로이고,
-    # 그 본문에는 이미 **표시 이름이 렌더돼 있다**(rename-speakers·apply-match의 승인된 동작).
-    # 그대로 parse하면 "김팀장" 같은 실명이 새 라벨이 되어 speaker_map 키(SPEAKER_XX)와
-    # 어긋나는 **레거시 행이 새로 생긴다** — PR C가 TranscriptEditor에서 막은 바로 그 손상이
-    # 이 경로(MainArea "회의록 수정")로 다시 들어왔다.
-    # ------------------------------------------------------------------
+    # 파싱한 라벨을 **원래 라벨로 되돌린 뒤** 저장한다(finalize_job과 같은 헬퍼).
+    # 이 엔드포인트가 받는 문자열은 화면에 보여주던 job.transcript 그대로라 이미 표시
+    # 이름이 렌더돼 있고, 그냥 parse하면 실명이 라벨로 굳어 레거시 행이 생긴다.
+    # body에 speaker_map이 없으므로 공간·복원 모두 job.speakers를 쓴다.
     speaker_map = job.get("speakers") or {}
-
-    # 편집 **이전**의 세그먼트. get_segments()는 백필 쓰기가 섞이므로 쓰지 않는다.
-    old_segments = job.get("transcript_segments") or parse_transcript(job.get("transcript") or "")
-
-    # diar 라벨 공간(있으면). DB 우선, 없으면 파일을 **읽기만** 한다(백필하지 않는다).
-    from .database import get_job_diarization
-    diar_labels = set(get_job_diarization(job_id) or {})
-    if not diar_labels:
-        diar_path = INPUT_DIR / f"{job_id}_diarization.json"
-        if diar_path.exists():
-            try:
-                diar_labels = set(json.loads(diar_path.read_text(encoding="utf-8")) or {})
-            except (json.JSONDecodeError, OSError):
-                diar_labels = set()
-
-    # start -> 그 줄에 원래 붙어 있던 라벨. 표시 이름이 중복인 회의(실측 5938f69c: "대표님" 3벌)
-    # 에서도 원래 라벨을 정확히 되찾는 유일한 경로다.
-    #
-    # 이것은 폐기된 overlap 휴리스틱이 아니다. 지운 것은 *누가 말했는지*를 시간 겹침으로
-    # 추측하는 방식이었다. 여기서는 **그 줄에 이미 붙어 있던 라벨을 같은 start로 되찾을 뿐**
-    # 이고, 되찾지 못하면 추측하지 않고 아래에서 422로 거부한다.
-    old_by_start: dict = {}
-    for seg in old_segments:
-        label = seg.get("label")
-        start = seg.get("start")
-        if label is not None and start is not None and start not in old_by_start:
-            old_by_start[start] = label
-
-    # 표시 이름 -> 라벨 역맵. **값이 유일한 것만** 넣는다 — 중복이면 어느 라벨인지
-    # 데이터로 결정할 수 없고, 추측하지 않는다(save_speaker_profile과 같은 판단).
-    _name_counts = Counter(speaker_map.values())
-    inverse_unique = {v: k for k, v in speaker_map.items() if _name_counts[v] == 1}
-
-    new_segments = []
-    unresolved: list[str] = []
-    for seg in parse_transcript(transcript):
-        label = seg.get("label")
-        if label is None:
-            new_segments.append(seg)
-            continue
-
-        # (a) 이미 라벨 공간 안이면 그대로 둔다.
-        if label in speaker_map or label in diar_labels:
-            new_segments.append(seg)
-            continue
-
-        # (b) 같은 start의 옛 세그먼트의 표시 이름과 같으면, 그 세그먼트의 라벨을 되돌린다.
-        old_label = old_by_start.get(seg.get("start"))
-        if old_label is not None:
-            old_display = (speaker_map.get(old_label) or "").strip() or old_label
-            if old_display == label:
-                seg = {**seg, "label": old_label}
-                new_segments.append(seg)
-                continue
-
-        # (c) 표시 이름이 유일하면 역맵으로 라벨을 되찾는다.
-        resolved = inverse_unique.get(label)
-        if resolved is not None:
-            new_segments.append({**seg, "label": resolved})
-            continue
-
-        # (d) 미해소.
-        unresolved.append(label)
-
-    if unresolved:
-        # 부분 저장하지 않는다 — 조용히 깨진 행을 만드는 것보다 명시적 거부가 낫다
-        # (apply_match·save_speaker_profile과 같은 확립된 판단).
-        raise HTTPException(
-            status_code=422,
-            detail="화자 라벨을 되돌릴 수 없어 저장하지 않았습니다: "
-                   f"{sorted(set(unresolved))}. 화자 이름을 본문에서 직접 바꾸지 말고 "
-                   "화자 이름 편집 기능을 사용해주세요.",
-        )
+    new_segments = restore_segment_labels(
+        job_id,
+        transcript,
+        space_map=speaker_map,
+        restore_map=speaker_map,
+        # 편집 **이전**의 세그먼트. get_segments()는 백필 쓰기가 섞이므로 쓰지 않는다.
+        old_segments=job.get("transcript_segments") or parse_transcript(job.get("transcript") or ""),
+    )
 
     # transcript는 받은 문자열 **그대로**, segments는 **재키잉된 것**을 같은 호출로 저장한다.
     # 갱신하지 않으면 편집 이전의 낡은 segments가 남아, 이후 재렌더 경로(apply-match·
