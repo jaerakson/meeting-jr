@@ -1,20 +1,37 @@
 """scripts/migrate_legacy_speaker_map.py 회귀 테스트 (PR C, qa-c3).
 
-되돌릴 수 없는 DB 조작 스크립트라 테스트가 특히 중요하다. director 확정 사양
-(스크립트 docstring, 커밋 754f770)을 명세로 삼아 아래를 검증한다:
+되돌릴 수 없는 DB 조작 스크립트라 테스트가 특히 중요하다. director의 최종 확정
+사양(여러 차례 보정된 것 포함 — 아래가 최신)을 명세로 삼아 검증한다:
 
-- dry-run은 DB를 전혀 건드리지 않는다(바이트 동일).
+- **판정 순서**: "손댈 필요가 있는가"(조치불필요 판별)가 사전조건보다 먼저다.
+  **최종 정의**: 세그먼트 라벨이 전부 diar 라벨 공간 안에 있으면 조치불필요.
+  diar가 없는 행은 `SPEAKER_\\d+` 형태를 공간으로 본다. (director가 처음 준
+  "관계식" 정의 — `∃ label, ∃ k≠label: map[k]==label` — 는 이후 이 diar-공간
+  기준으로 대체됐다. backend-c3 구현이 최초 지시보다 정확해 채택된 것.)
+- **overlap 휴리스틱 재사용 절대 금지**: 재키잉은 표시이름→라벨 역맵 하나로
+  결정적으로 이뤄진다. 시간축·구간·overlap을 보지 않는다. diar가 아무리 풍부해도
+  역맵으로 해소 안 되는 라벨은 복구되지 않고 건너뛴다 — 이걸 직접 단언한다.
 - 사전조건 4개(①값 유일 아니면 병합 분기 ②값집합==라벨집합 ③키⊆diar키 ④매핑실패 0건)
-  중 하나라도 불성립이면 그 행 **전체**를 건너뛴다(부분 복구 금지). 각 조건을
-  독립적으로 깨는 입력을 만들어 확인한다.
+  중 하나라도 불성립이면 그 행 **전체**를 건너뛴다(부분 복구 금지).
 - 재키잉 후 render(new_segments, speaker_map)이 원본 transcript와 바이트 동일하지
   않으면 쓰지 않는다(안전장치).
-- 조건 불성립인데도 쓰는 경로가 없는지 적극적으로 뚫어본다.
-- 중복 이름 병합의 대표 라벨 선택이 결정적이다(같은 입력 → 항상 같은 출력),
-  순서 의존성이 없다.
+- **집계 건수가 아니라 행 구성(ID→판정)을 단언한다** — 건수만 맞고 행이 틀린
+  오구현이 이 데이터에서 실제로 두 번 나왔다(director 보고). "5ab8e338 유형"
+  (조치불필요)과 "60b7b738 유형"(건너뜀)을 **같은 테스트 안에** 넣어 판정이
+  뒤바뀌면 잡히게 한다.
+- **병합 복구도 `speakers` 컬럼을 전혀 건드리지 않는다**(director 사양 변경 —
+  비대표 키를 지우면 participation의 diar 경로가 그 구간을 raw SPEAKER_XX로
+  노출한다, 실측 5%/3%). `--write`는 `transcript_segments`만 쓴다.
+- 병합 복구 행은 `save_speaker_profile`이 여전히 422다(표시 이름 중복이 남으므로) —
+  알려진 한계를 단언으로 고정해 나중에 역맵에 추측을 넣는 걸 막는다.
+- `transcript_segments`가 NULL인 행(실측 DB 10건 중 9건이 이 상태)도 transcript
+  파싱으로 올바르게 판정되고, dry-run 후에도 **NULL 그대로**여야 한다
+  (`get_segments()`를 쓰면 백필 부작용이 생겨 이게 깨진다).
 - 마이그레이션 후 apply-match가 실제로 200을 반환한다(이 스크립트의 존재 목적).
 
 단언을 통과시키려고 약화하지 않는다. 단언이 틀렸다고 판단되면 director에게 보고.
+현재 구현이 이 계약(특히 diar-공간 정의·speakers 불변)에 아직 못 미치는 부분이
+있으면 테스트를 고치지 말고 그대로 실패시켜 보고한다.
 """
 
 import json
@@ -206,6 +223,125 @@ def test_no_op_precedes_condition_checks_for_partial_mapping(db_path):
     result = mig.judge(row)
     assert result["verdict"] == mig.NO_OP, (
         f"레거시 서명이 없는 정상 행이 조건②에 걸려 SKIP으로 오판되면 안 된다. 실제: {result}"
+    )
+
+
+def test_5ab8e338_type_and_60b7b738_type_are_not_swapped(db_path):
+    """[director 지시, 중요] 건수가 맞아도 행 구성이 뒤바뀌는 오구현이 이 데이터에서
+    실제로 두 번 나왔다. 두 실측 유형을 **같은 테스트 안에서 ID→판정으로 함께** 단언해
+    판정이 뒤바뀌면(둘 다 통과하는데 결과가 swap) 잡히게 한다.
+
+    - `5ab8e338` 유형: 세그먼트 라벨이 diar 라벨 공간 안에 있고(SPEAKER_00·SPEAKER_02),
+      speaker_map은 그중 일부만 이름을 붙인 **정상** 행 → 조치불필요.
+    - `60b7b738` 유형: speaker_map 키가 실명("손주환")이라 diarization 라벨 공간과
+      다리가 없는 **복구 불가** 행 → 손댈 필요는 있으나(라벨이 diar 공간 밖) 조건③에서
+      건너뜀.
+    """
+    normal_id = "type-5ab8e338"
+    _make_row(
+        db_path, normal_id,
+        transcript="[00:00] SPEAKER_00: 안녕\n[00:05] SPEAKER_02: 네",
+        speakers={"SPEAKER_00": "김팀장"},
+        diarization={
+            "SPEAKER_00": [{"start": 0.0, "end": 5.0}],
+            "SPEAKER_02": [{"start": 5.0, "end": 10.0}],
+        },
+    )
+    unrecoverable_id = "type-60b7b738"
+    _make_row(
+        db_path, unrecoverable_id,
+        transcript="[00:00] 손주환: 안녕\n[00:05] 손재락: 네",
+        speakers={"손주환": "손주환", "손재락": "손재락"},
+        diarization={
+            "SPEAKER_00": [{"start": 0.0, "end": 5.0}],
+            "SPEAKER_01": [{"start": 5.0, "end": 10.0}],
+        },
+    )
+
+    rows = {r["id"]: r for r in mig._load_rows(db_path)}
+    verdicts = {jid: mig.judge(row)["verdict"] for jid, row in rows.items()}
+
+    assert verdicts == {
+        normal_id: mig.NO_OP,
+        unrecoverable_id: mig.SKIP,
+    }, f"두 유형의 판정이 뒤바뀌면 안 된다. 실제: {verdicts}"
+
+    # 건너뜀 사유가 실제로 조건③(diar 라벨 공간과 다리 없음)인지도 확인 —
+    # 다른 조건에서 우연히 SKIP이 나온 게 아님을 보증.
+    skip_reason = mig.judge(rows[unrecoverable_id])["reason"]
+    assert "조건③" in skip_reason, f"복구 불가 사유가 조건③이어야 한다. 실제: {skip_reason}"
+
+
+def test_diar_richness_does_not_rescue_unresolved_label(db_path):
+    """[overlap 휴리스틱 재유입 방지, director 강조] 역맵으로 해소 안 되는 라벨은
+    diarization이 아무리 풍부해도(정확히 겹치는 시간 구간이 있어도) 복구되지 않는다.
+    재키잉은 시간축을 전혀 보지 않는다 — 이 사실 자체를 단언한다."""
+    job_id = "diar-richness-no-rescue"
+    # "미지의화자"는 speaker_map 어디에도 값으로 없다. 하지만 diar에는 정확히
+    # 그 발화 구간과 겹치는 SPEAKER_02가 존재한다 — overlap 휴리스틱이라면 이걸로
+    # "미지의화자" = SPEAKER_02 라고 추론했을 상황이다.
+    _make_row(
+        db_path, job_id,
+        transcript="[00:00] 아빠: 안녕\n[00:05] 미지의화자: 정확히 SPEAKER_02 구간과 겹침",
+        speakers={"SPEAKER_00": "아빠"},  # "미지의화자"를 가리키는 키가 없다
+        diarization={
+            "SPEAKER_00": [{"start": 0.0, "end": 5.0}],
+            "SPEAKER_02": [{"start": 5.0, "end": 10.0}],  # 시간상 완벽히 겹침
+        },
+    )
+    row = next(r for r in mig._load_rows(db_path) if r["id"] == job_id)
+    result = mig.judge(row)
+    assert result["verdict"] == mig.SKIP, (
+        f"diar 구간이 시간적으로 완벽히 겹쳐도 역맵으로 해소 안 되는 라벨은 복구되면 "
+        f"안 된다(overlap 추론 재유입 금지). 실제: {result}"
+    )
+    assert result["new_segments"] is None
+
+
+# ---------------------------------------------------------------------------
+# 3-b) transcript_segments가 NULL인 행 — 실측 DB 10건 중 9건이 이 상태
+# ---------------------------------------------------------------------------
+
+def test_null_transcript_segments_row_judged_via_transcript_parse(db_path):
+    """transcript_segments가 NULL이어도 transcript를 파싱해 올바르게 판정한다."""
+    job_id = "null-segments-row"
+    _make_row(
+        db_path, job_id,
+        transcript="[00:00] 아빠: 안녕\n[00:05] 손주환: 네",
+        speakers={"SPEAKER_00": "아빠", "SPEAKER_01": "손주환"},
+        diarization={
+            "SPEAKER_00": [{"start": 0.0, "end": 5.0}],
+            "SPEAKER_01": [{"start": 5.0, "end": 10.0}],
+        },
+        transcript_segments=None,
+    )
+    raw_before = _read_raw_row(db_path, job_id)
+    assert raw_before["transcript_segments"] is None, "전제: transcript_segments가 NULL이어야 한다"
+
+    row = next(r for r in mig._load_rows(db_path) if r["id"] == job_id)
+    result = mig.judge(row)
+    assert result["verdict"] == mig.OK_DIRECT, result["reason"]
+    assert {s["label"] for s in result["new_segments"]} == {"SPEAKER_00", "SPEAKER_01"}
+
+
+def test_dry_run_never_backfills_null_transcript_segments(db_path):
+    """[get_segments() 오용 방지] dry-run이 transcript_segments가 NULL인 행을
+    판정하면서 그 컬럼을 **백필해버리면 안 된다** — `app.transcript.get_segments()`를
+    쓰면 조회만 해도 DB에 쓰는 부작용이 있어 dry-run의 읽기 전용 보장이 깨진다."""
+    job_id = "null-segments-dry-run"
+    _make_row(
+        db_path, job_id,
+        transcript="[00:00] SPEAKER_00: 안녕",
+        speakers={"SPEAKER_00": "김팀장"},
+        diarization={"SPEAKER_00": [{"start": 0.0, "end": 5.0}]},
+        transcript_segments=None,
+    )
+    exit_code = mig.main([f"--db={db_path}"])  # dry-run (기본)
+    assert exit_code == 0
+
+    raw_after = _read_raw_row(db_path, job_id)
+    assert raw_after["transcript_segments"] is None, (
+        "dry-run이 transcript_segments를 백필하면 안 된다(get_segments() 오용 증거)"
     )
 
 
@@ -435,8 +571,12 @@ def test_duplicate_merge_end_to_end_via_judge(db_path):
     result = mig.judge(row)
 
     assert result["verdict"] == mig.OK_MERGED, result["reason"]
-    assert result["new_speaker_map"] == {"SPEAKER_02": "이삼희"}, (
-        f"비대표 키(SPEAKER_01)는 speaker_map에서 제거돼야 한다. 실제: {result['new_speaker_map']}"
+    # [director 사양 변경] 비대표 키를 지우면 participation의 diar 경로가 그 구간을
+    # raw SPEAKER_XX로 노출한다(실측 5%/3%) — 그래서 병합 복구도 speakers를 전혀
+    # 건드리지 않는다. new_speaker_map은 항상 None(= "쓰지 않음")이어야 한다.
+    assert result["new_speaker_map"] is None, (
+        f"병합 복구도 speakers 컬럼을 건드리면 안 된다(비대표 키 유지). "
+        f"실제: {result['new_speaker_map']}"
     )
     new_labels = {s["label"] for s in result["new_segments"]}
     assert new_labels == {"SPEAKER_02"}, (
@@ -444,11 +584,107 @@ def test_duplicate_merge_end_to_end_via_judge(db_path):
         f"같은 이름의 모든 줄이 대표로 간다). 실제: {new_labels}"
     )
 
+    # 원본(수정 안 한) speaker_map으로 렌더해도 바이트 동일해야 한다 — 대표 키만
+    # 라벨로 쓰이므로 비대표 키가 map에 남아있어도 조회에 영향이 없다.
     from app.transcript import render as _render
     original = "[00:00] 이삼희: 첫마디\n[00:10] 이삼희: 둘째마디"
-    assert _render(result["new_segments"], result["new_speaker_map"]) == original, (
-        "병합 후에도 화면(표시 이름)은 한 글자도 바뀌면 안 된다"
+    assert _render(result["new_segments"], _dup_speaker_map()) == original, (
+        "병합 후에도 화면(표시 이름)은 한 글자도 바뀌면 안 된다(원본 speaker_map 기준)"
     )
+
+
+def test_duplicate_merge_write_leaves_speakers_column_byte_identical(db_path):
+    """--write 실행 후 병합 복구 행의 speakers 컬럼이 실행 전후 완전히 동일해야 한다
+    (director 사양 변경 — 비대표 키 제거 금지). transcript_segments만 바뀐다."""
+    job_id = "dup-merge-write"
+    _make_row(
+        db_path, job_id,
+        transcript="[00:00] 이삼희: 첫마디\n[00:10] 이삼희: 둘째마디",
+        speakers=_dup_speaker_map(),
+        diarization=_dup_diar_longer_02(),
+    )
+    before = _read_raw_row(db_path, job_id)
+
+    exit_code = mig.main([f"--db={db_path}", "--write"])
+    assert exit_code == 0
+
+    after = _read_raw_row(db_path, job_id)
+    assert after["speakers"] == before["speakers"], (
+        f"병합 복구는 speakers 컬럼을 전혀 건드리면 안 된다. "
+        f"전: {before['speakers']!r}, 후: {after['speakers']!r}"
+    )
+    assert after["transcript"] == before["transcript"], "transcript 문자열도 바뀌면 안 된다"
+    new_labels = {s["label"] for s in json.loads(after["transcript_segments"])}
+    assert new_labels == {"SPEAKER_02"}, "segments만 대표 라벨로 재키잉돼 있어야 한다"
+
+
+def test_duplicate_merge_does_not_expose_raw_speaker_id_in_participation(db_path):
+    """[최종 산출물 검증] 병합 복구 전후로 participation API의 display_name이
+    비대표 라벨(SPEAKER_01)을 포함해 전부 동일해야 한다. speakers에서 비대표 키를
+    지우면 participation의 diar 경로가 그 구간을 raw 'SPEAKER_01'로 노출한다 —
+    이게 director가 사양을 바꾼 이유이고, 중간 산출물(segments 파일)이 아니라
+    최종 산출물(API 응답)로 검증해야 이 회귀를 잡을 수 있다."""
+    import app.database as db_module
+    import app.main as main_module
+    from fastapi.testclient import TestClient
+
+    job_id = "dup-merge-participation"
+    _make_row(
+        db_path, job_id,
+        transcript="[00:00] 이삼희: 첫마디\n[00:10] 이삼희: 둘째마디",
+        speakers=_dup_speaker_map(),
+        diarization=_dup_diar_longer_02(),
+    )
+
+    with TestClient(main_module.app) as client:
+        before = client.get(f"/api/jobs/{job_id}/participation").json()
+
+    exit_code = mig.main([f"--db={db_path}", "--write"])
+    assert exit_code == 0
+
+    with TestClient(main_module.app) as client:
+        after = client.get(f"/api/jobs/{job_id}/participation").json()
+
+    before_names = {s["label"]: s["display_name"] for s in before["speakers"]}
+    after_names = {s["label"]: s["display_name"] for s in after["speakers"]}
+    assert after_names == before_names, (
+        f"병합 복구 후 participation의 display_name이 바뀌면 안 된다(특히 비대표 라벨이 "
+        f"raw SPEAKER_XX로 노출되면 안 된다). 전: {before_names}, 후: {after_names}"
+    )
+    for label, name in after_names.items():
+        assert name == "이삼희", (
+            f"비대표 라벨({label})의 표시 이름이 raw로 노출됐다 — speakers에서 키가 "
+            f"지워졌다는 증거. 실제: {after_names}"
+        )
+
+
+def test_save_speaker_profile_still_422_after_merge_recovery(db_path):
+    """[알려진 한계, 고정] 병합 복구된 행은 표시 이름이 여전히 중복이므로
+    save_speaker_profile은 계속 422다. 복구했다고 이 기능까지 되는 게 아니다 —
+    이 단언이 없으면 나중에 '왜 안 되지' 하며 역맵에 추측(중복 시 임의 선택)을
+    집어넣는 재유입 압력이 생긴다."""
+    import app.database as db_module
+    import app.main as main_module
+    from fastapi.testclient import TestClient
+
+    job_id = "dup-merge-profile-limit"
+    _make_row(
+        db_path, job_id,
+        transcript="[00:00] 이삼희: 첫마디\n[00:10] 이삼희: 둘째마디",
+        speakers=_dup_speaker_map(),
+        diarization=_dup_diar_longer_02(),
+    )
+    exit_code = mig.main([f"--db={db_path}", "--write"])
+    assert exit_code == 0
+
+    with TestClient(main_module.app) as client:
+        res = client.post(f"/api/jobs/{job_id}/save-speaker-profile", json={
+            "speaker_label": "이삼희", "profile_name": "이삼희",
+        })
+        assert res.status_code == 422, (
+            f"병합 복구 행은 표시 이름이 여전히 중복이라 프로필 추출이 422여야 한다 "
+            f"(알려진 한계, 되돌리지 말 것). 실제: {res.status_code} {res.text}"
+        )
 
 
 # ---------------------------------------------------------------------------
