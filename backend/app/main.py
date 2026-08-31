@@ -75,7 +75,7 @@ from .database import (
     update_job_followup,
 )
 from .job_queue import job_queue, start_worker, progress_store, update_progress
-from .transcript import parse as parse_transcript
+from .transcript import parse as parse_transcript, render as render_transcript, get_segments
 from .settings_manager import get_settings_status, get_setting, set_setting, SETTING_KEYS
 
 load_dotenv()
@@ -1799,169 +1799,42 @@ async def apply_match(job_id: str, body: dict):
     if not matches:
         return {"ok": True}
 
-    transcript = job.get("transcript", "")
     speakers = job.get("speakers") or {}
     if isinstance(speakers, str):
         speakers = json.loads(speakers)
 
-    # 1) SPEAKER_XX → 현재 transcript 토큰 매핑 구축
-    label_to_current: dict[str, str] = {}
-    for raw_label in matches:
-        if raw_label in speakers:
-            # 비-identity: speakers에 SPEAKER_XX 키가 있음
-            val = speakers[raw_label]
-            label_to_current[raw_label] = val.strip() if isinstance(val, str) else val
-        else:
-            label_to_current[raw_label] = raw_label.strip()  # 기본값
+    # 라벨 검증 → speaker_map 갱신 → 재렌더.
+    # 표시 이름은 speaker_map.get(label, label)로만 결정된다(텍스트 매칭·overlap 휴리스틱 없음).
+    # matches의 키는 segments의 실제 label이어야 한다. 레거시 행(label이 실명)에
+    # 옛 diarization 라벨(SPEAKER_XX)로 요청이 오면 조용히 틀리는 대신 skipped로 보고한다.
+    segments = get_segments(job_id)
+    known_labels = {seg.get("label") for seg in segments if seg.get("label")}
 
-    # 2) diarization 데이터 조회 (identity 해석 + 충돌 해소 양쪽에 사용)
-    from .database import get_job_diarization
-    diar_data = get_job_diarization(job_id)
-    if not diar_data:
-        diar_path = INPUT_DIR / f"{job_id}_diarization.json"
-        if diar_path.exists():
-            diar_data = json.loads(diar_path.read_text(encoding="utf-8"))
-
-    # identity-mapped 케이스 처리: diarization 타임스탬프로 역매핑
-    identity_labels = [l for l in matches if l not in speakers]
-    if identity_labels and diar_data:
-        for raw_label in identity_labels:
-            segs = diar_data.get(raw_label, [])
-            resolved = _resolve_speaker_display(raw_label, segs, transcript)
-            if resolved:
-                label_to_current[raw_label] = resolved
-
-    # 3) 치환 맵 구축 + 원자적 transcript 교체
-    replace_map: dict[str, str] = {}
     new_speakers = dict(speakers)
     skipped_labels: list[str] = []
-
-    # 3a) 충돌 감지: current_name → [(raw_label, new_name)] 그룹화
-    current_name_groups: dict[str, list[tuple[str, str]]] = {}
     for raw_label, new_name in matches.items():
-        current_name = label_to_current.get(raw_label, raw_label)
-
-        # identity label인데 해석 실패 → 건너뛰기 (불일치 방지)
-        if raw_label not in speakers and current_name == raw_label:
+        if raw_label not in known_labels:
             skipped_labels.append(raw_label)
             continue
+        new_speakers[raw_label] = new_name.strip() if isinstance(new_name, str) else new_name
 
-        current_name_groups.setdefault(current_name, []).append((raw_label, new_name))
-
-    # 3b) 충돌 없는 그룹 → replace_map, 충돌 그룹 → 타임스탬프 기반 치환 예약
-    collision_groups: dict[str, list[tuple[str, str]]] = {}
-    for current_name, entries in current_name_groups.items():
-        if len(entries) == 1:
-            # 충돌 없음: 기존 방식
-            raw_label, new_name = entries[0]
-            if current_name != new_name:
-                replace_map[current_name] = new_name
-            if raw_label in new_speakers:
-                new_speakers[raw_label] = new_name
-            else:
-                if current_name in new_speakers:
-                    del new_speakers[current_name]
-                new_speakers[raw_label] = new_name
-        else:
-            # 충돌: 여러 라벨이 같은 current_name으로 해석됨
-            if diar_data:
-                collision_groups[current_name] = entries
-                # new_speakers 업데이트는 3d 치환 이후로 미룸
-            else:
-                # diar 없이 충돌 해소 불가: 첫 항목만 적용, 나머지 skip
-                first_raw, first_new = entries[0]
-                if current_name != first_new:
-                    replace_map[current_name] = first_new
-                if first_raw in new_speakers:
-                    new_speakers[first_raw] = first_new
-                else:
-                    if current_name in new_speakers:
-                        del new_speakers[current_name]
-                    new_speakers[first_raw] = first_new
-                for raw_label, new_name in entries[1:]:
-                    skipped_labels.append(raw_label)
-
-    # 전체 실패: matches의 모든 키가 skipped
-    if skipped_labels and len(skipped_labels) == len(matches):
+    if len(skipped_labels) == len(matches):
+        # 전체 실패: DB를 아예 건드리지 않는다(재렌더가 우연히 같은 문자열을 내는 것에 기대지 않음).
         from fastapi.responses import JSONResponse
         return JSONResponse(
             status_code=422,
-            content={"detail": "매칭할 수 있는 화자가 없습니다", "skipped": skipped_labels},
+            content={
+                "detail": "매칭할 수 있는 화자가 없습니다. 예전 방식으로 저장된 회의일 수 있습니다.",
+                "skipped": skipped_labels,
+            },
         )
 
-    # 3c) 단일 정규식 콜백으로 원자적 치환 (충돌 없는 이름)
-    if replace_map:
-        escaped = '|'.join(re.escape(k) for k in replace_map)
-        pattern = re.compile(
-            r'^(\[\d+:\d{2}\]\s*)(' + escaped + r')(:\s)',
-            re.MULTILINE
-        )
-        transcript = pattern.sub(
-            lambda m: m.group(1) + replace_map[m.group(2)] + m.group(3),
-            transcript
-        )
-
-    # 3d) 충돌 그룹: diarization 구간 overlap 기반 라인별 치환
-    applied_labels: set[str] = set()  # 실제 치환에 성공한 라벨 추적
-    if collision_groups:
-        lines = transcript.split('\n')
-        # 각 라인의 타임스탬프 파싱
-        line_times: list[tuple[int, float]] = []  # (line_index, start_sec)
-        for i, line in enumerate(lines):
-            tm = re.match(r'\[(\d+):(\d{2})\]', line)
-            if tm:
-                line_times.append((i, int(tm.group(1)) * 60 + int(tm.group(2))))
-
-        new_lines = list(lines)
-        for lt_idx, (line_idx, line_start) in enumerate(line_times):
-            line = lines[line_idx]
-            line_m = re.match(r'^(\[\d+:\d{2}\]\s*)(.+?)(:\s)', line)
-            if not line_m or line_m.group(2) not in collision_groups:
-                continue
-
-            prefix, spk_name, colon = line_m.group(1), line_m.group(2), line_m.group(3)
-            rest = line[line_m.end():]
-
-            # 발화 구간: 현재 라인 시작 ~ 다음 라인 시작 (마지막은 +30초)
-            line_end = line_times[lt_idx + 1][1] if lt_idx + 1 < len(line_times) else line_start + 30.0
-
-            # 각 후보 라벨의 overlap 면적 계산
-            best_name = spk_name  # 폴백: 원래 이름 유지
-            best_overlap = 0.0
-            best_label: str | None = None
-            for raw_label, new_name in collision_groups[spk_name]:
-                label_overlap = 0.0
-                for seg in diar_data.get(raw_label, []):
-                    seg_s = seg.get("start", 0)
-                    seg_e = seg.get("end", 0)
-                    overlap = min(seg_e, line_end) - max(seg_s, line_start)
-                    if overlap > 0:
-                        label_overlap += overlap
-                if label_overlap > best_overlap:
-                    best_overlap = label_overlap
-                    best_name = new_name
-                    best_label = raw_label
-
-            if best_label:
-                applied_labels.add(best_label)
-            new_lines[line_idx] = prefix + best_name + colon + rest
-
-        transcript = '\n'.join(new_lines)
-
-    # 3e) 충돌 그룹 speakers 확정: 실제 치환된 라벨만
-    for current_name, entries in collision_groups.items():
-        for raw_label, new_name in entries:
-            if raw_label in applied_labels:
-                if raw_label in new_speakers:
-                    new_speakers[raw_label] = new_name
-                else:
-                    if current_name in new_speakers:
-                        del new_speakers[current_name]
-                    new_speakers[raw_label] = new_name
-            else:
-                skipped_labels.append(raw_label)
-
-    update_job_result(job_id, transcript=transcript, speakers=new_speakers)
+    update_job_result(
+        job_id,
+        transcript=render_transcript(segments, new_speakers),
+        speakers=new_speakers,
+        transcript_segments=segments,
+    )
 
     response: dict = {"ok": True}
     if skipped_labels:
@@ -2094,7 +1967,19 @@ async def rename_speakers(job_id: str, body: dict):
 
     speaker_map: dict = body.get("speaker_map", {})
 
-    update_job_result(job_id, speakers=speaker_map)
+    # 이름 매핑을 transcript에도 반영한다(재렌더). speakers만 갱신하면 transcript와
+    # 구조적으로 어긋난다. 빈/공백 값은 render()가 라벨 유지로 흡수하고,
+    # 쓰기 정규화(strip·빈 값 제외)는 update_job_result 관문이 담당한다.
+    segments = get_segments(job_id)
+    if segments:
+        update_job_result(
+            job_id,
+            transcript=render_transcript(segments, speaker_map),
+            speakers=speaker_map,
+            transcript_segments=segments,
+        )
+    else:
+        update_job_result(job_id, speakers=speaker_map)
 
     if speaker_map:
         _save_speakers(speaker_map)
@@ -2297,63 +2182,16 @@ async def generate_followup(job_id: str):
 # 발언 참여도 분석
 # ---------------------------------------------------------------------------
 
-def _resolve_speaker_display(
-    label: str, segments: list[dict], transcript: str,
-) -> str | None:
-    """diar 세그먼트와 transcript 발화 구간의 overlap 면적으로 화자명을 찾는다.
-
-    각 transcript 화자의 발화 구간(시작~다음 발화 시작)과 diarization segments의
-    시간 overlap을 합산하여 가장 높은 화자명을 반환한다.
-    매칭 실패(segments/transcript 비어있음, overlap 0) 시 None 반환.
-    """
-    if not segments or not transcript:
-        return None
-
-    # transcript에서 발화 (시작초, 화자명) 파싱
-    utterances: list[tuple[float, str]] = []
-    for line in transcript.split("\n"):
-        m = re.match(r"\[(\d+):(\d{2})\]\s*(.+?):", line)
-        if m:
-            t = int(m.group(1)) * 60 + int(m.group(2))
-            utterances.append((t, m.group(3).strip()))
-
-    if not utterances:
-        return None
-
-    # 각 화자별 발화 구간 구성 (시작~다음 발화 시작, 마지막은 +30초)
-    from collections import defaultdict
-    speaker_ranges: dict[str, list[tuple[float, float]]] = defaultdict(list)
-    for i, (t, name) in enumerate(utterances):
-        end_t = utterances[i + 1][0] if i + 1 < len(utterances) else t + 30.0
-        speaker_ranges[name].append((t, end_t))
-
-    # 각 화자의 구간과 diarization 세그먼트의 overlap 면적 계산
-    best_name = None
-    best_score = 0.0
-    for name, ranges in speaker_ranges.items():
-        score = 0.0
-        for seg in segments:
-            seg_start = seg.get("start", 0)
-            seg_end = seg.get("end", 0)
-            for rng_start, rng_end in ranges:
-                overlap = min(seg_end, rng_end) - max(seg_start, rng_start)
-                if overlap > 0:
-                    score += overlap
-        if score > best_score:
-            best_score = score
-            best_name = name
-
-    return best_name if best_name and best_score > 0 else None
-
-
 @app.get("/api/jobs/{job_id}/participation")
 async def get_participation(job_id: str):
     """화자별 발언 시간·비율·턴수 분석.
 
     데이터 소스 우선순위:
-      1. diarization DB 조회
+      1. diarization DB 조회 (speaker_map이 diar 라벨 키일 때만)
       2. diarization 파일 폴백 ({job_id}_diarization.json) + lazy migration
-      3. transcript [MM:SS] 화자명: 타임스탬프 폴백
+      3. transcript_segments 폴백 (레거시 identity-mapped 행은 항상 이 경로)
+
+    표시 이름은 speaker_map.get(label, label)로만 결정한다(추측 없음).
     """
     job = get_job(job_id)
     if not job:
@@ -2363,39 +2201,30 @@ async def get_participation(job_id: str):
     result_speakers: list[dict] = []
     total_duration: float = 0.0
 
-    # --- 1) diarization 기반 (DB → 파일 폴백 + lazy migration) ---
-    from .database import get_job_diarization
-    diar_data = get_job_diarization(job_id)
-    if not diar_data:
-        diar_path = INPUT_DIR / f"{job_id}_diarization.json"
-        if diar_path.exists():
-            diar_data = json.loads(diar_path.read_text(encoding="utf-8"))
-            update_job_result(job_id, diarization=diar_data)
-
-    _transcript_text: str = job.get("transcript") or ""
-
-    # identity-mapped 판별: 실명 키가 하나라도 있으면 identity-mapped
+    # identity-mapped 판별: 실명 키가 하나라도 있으면 identity-mapped.
     # (부분 apply-match 후 혼합 상태 {"SPEAKER_00": "김과장", "엄마": "엄마"}도 True)
+    # 용도는 **경로 선택뿐**이다 — 레거시 행은 segment label이 이미 실명이므로
+    # diar 라벨(SPEAKER_XX)과 짝지을 수 없다. 추측(overlap 휴리스틱)은 하지 않는다.
     _is_identity_mapped = bool(speaker_map) and any(
         not re.match(r'^SPEAKER_\d+$', k) for k in speaker_map
     )
 
+    # --- 1) diarization 기반 (DB → 파일 폴백 + lazy migration) ---
+    diar_data = None
+    if not _is_identity_mapped:
+        from .database import get_job_diarization
+        diar_data = get_job_diarization(job_id)
+        if not diar_data:
+            diar_path = INPUT_DIR / f"{job_id}_diarization.json"
+            if diar_path.exists():
+                diar_data = json.loads(diar_path.read_text(encoding="utf-8"))
+                update_job_result(job_id, diarization=diar_data)
+
     use_diar = False
-    seen_display_names: set[str] = set()
     if diar_data:
         for label, segments in diar_data.items():
-            display = speaker_map.get(label)
-            if not display:
-                if _is_identity_mapped:
-                    resolved = _resolve_speaker_display(label, segments, _transcript_text)
-                    display = resolved if resolved and resolved not in seen_display_names else label
-                else:
-                    display = label
-            elif display == label:
-                resolved = _resolve_speaker_display(label, segments, _transcript_text)
-                display = resolved if resolved and resolved not in seen_display_names else label
-
-            seen_display_names.add(display)
+            # 표시 이름은 이 공식 하나로만 결정된다.
+            display = (speaker_map.get(label) or "").strip() or label
 
             if not segments:
                 # 빈 세그먼트라도 diarization이 존재한다고 간주
@@ -2425,20 +2254,17 @@ async def get_participation(job_id: str):
             use_diar = True
         total_duration = sum(s["total_seconds"] for s in result_speakers)
 
-    # --- 2) transcript 폴백 ---
+    # --- 2) transcript(segments) 폴백 ---
     if not use_diar:
-        transcript: str = job.get("transcript") or ""
-        import re as _re
-        pattern = _re.compile(r"^\[(\d{1,3}):(\d{2})\]\s*(.+?):\s", _re.MULTILINE)
-        matches = list(pattern.finditer(transcript))
+        # 라벨은 segments에서 온다. label이 None인 passthrough 줄((웃음)·빈 줄 등)은
+        # 화자가 아니므로 집계에서 제외한다.
+        entries: list[tuple[float, str]] = [
+            (float(seg["start"]), seg["label"])
+            for seg in get_segments(job_id)
+            if seg.get("label") and seg.get("start") is not None
+        ]
 
-        if matches:
-            # 각 발언의 시작 시각(초)과 화자
-            entries: list[tuple[float, str]] = []
-            for m in matches:
-                mm, ss, spk = int(m.group(1)), int(m.group(2)), m.group(3)
-                entries.append((mm * 60 + ss, spk))
-
+        if entries:
             # 각 발언 구간 = 다음 발언 시작까지, 마지막은 10초 기본값
             from collections import defaultdict
             spk_stats: dict[str, dict] = defaultdict(lambda: {"total": 0.0, "turns": 0})
@@ -2459,7 +2285,7 @@ async def get_participation(job_id: str):
                 avg_turn = total_sec / turn_count if turn_count else 0.0
                 result_speakers.append({
                     "label": label,
-                    "display_name": speaker_map.get(label, label),
+                    "display_name": (speaker_map.get(label) or "").strip() or label,
                     "total_seconds": round(total_sec, 2),
                     "percentage": 0.0,
                     "turn_count": turn_count,
