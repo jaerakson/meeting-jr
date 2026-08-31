@@ -185,6 +185,22 @@ class TestIdentityLabelNoResolutionNeeded:
 # ===========================================================================
 
 class TestNoDuplicateDisplayNames:
+    """입력 데이터는 원본(participation_collision.py)과 완전히 동일하게 유지한다
+    (director 지시 — 손대지 않음). speakers={"아빠":"아빠","엄마":"엄마"}는 실명 키라
+    identity-mapped로 판정되어 **transcript(segments) 경로**를 탄다(diar 경로 아님) —
+    2026-08-31 설계 정정(`_is_identity_mapped`는 경로 선택에만 존치) 반영.
+
+    이 경로 전환이 세 시나리오의 기대값을 바꾼다 — 대응표의 재작성 표 참고:
+      - transcript에 라벨이 "아빠"/"엄마" 둘뿐이라 참가자 항목도 2개만 생긴다.
+      - 과분할 diar 라벨(SPEAKER_02)은 transcript 어디에도 없어 항목 자체가 사라진다.
+      - 숫자(total_seconds/percentage)는 diar 정밀시간 → transcript 추정시간으로
+        바뀐다. "다음 발언까지, 마지막 10초" 규칙(변경 없음)을 그대로 적용하면:
+        아빠(0시)=다음(엄마,30초)까지=30s / 엄마(30초 줄)=다음(엄마,55초)까지=25s +
+        엄마(55초 줄, 마지막)=기본 10s → 엄마 합계 35s, turn_count=2.
+        total_duration = 30+35 = 65 (기존 60에서 변경). 원인은 경로 전환 하나뿐이어야
+        한다 — 계산 규칙에서 기인한 차이가 보이면 구현이 조건을 어긴 것이니 보고 대상.
+    """
+
     def _setup(self, job_id):
         diarization = {
             "SPEAKER_00": [{"start": 0, "end": 30, "speaker": "SPEAKER_00"}],
@@ -193,14 +209,15 @@ class TestNoDuplicateDisplayNames:
         }
         _create_done_meeting(
             job_id,
-            "[00:00] SPEAKER_00: 안녕\n[00:30] SPEAKER_01: 반가워\n[00:55] SPEAKER_02: 마무리",
-            speakers={"SPEAKER_00": "아빠", "SPEAKER_01": "엄마"},  # SPEAKER_02는 미매핑
+            "[00:00] 아빠: 안녕\n[00:30] 엄마: 반가워\n[00:55] 엄마: 마무리",
+            speakers={"아빠": "아빠", "엄마": "엄마"},
             diarization=diarization,
         )
 
-    def test_no_duplicate_display_names(self, client):
-        """#24: display_name은 모두 서로 달라야 한다 — speaker_map.get(label,label)이
-        라벨마다 독립적으로 결정되므로 애초에 충돌이 구조적으로 불가능하다."""
+    def test_no_duplicate_display_names_and_names_not_lost(self, client):
+        """#24: display_name은 모두 서로 달라야 하고(구조적으로 불가능해짐), **레거시 행이
+        설정해둔 이름을 잃지 않아야 한다** — SPEAKER_00/01로 퇴화하면 실패(설계문서 위험 2번).
+        이게 이 세 시나리오의 새로운 핵심 단언이다."""
         self._setup("nodupe-1")
         res = client.get("/api/jobs/nodupe-1/participation")
         assert res.status_code == 200
@@ -208,22 +225,73 @@ class TestNoDuplicateDisplayNames:
         assert len(display_names) == len(set(display_names)), (
             f"중복 display_name: {display_names}"
         )
+        assert set(display_names) == {"아빠", "엄마"}, (
+            f"레거시 행의 이름이 유지돼야 함(SPEAKER_XX로 퇴화 금지). 실제: {display_names}"
+        )
 
-    def test_unmapped_label_falls_back_to_own_label(self, client):
-        """#25: speaker_map에 없는 라벨(SPEAKER_02)은 raw 라벨 그대로 표시된다."""
+    def test_over_split_diar_label_has_no_participation_entry(self, client):
+        """#25 (재해석): speaker_map에 없는 여분 diar 라벨(SPEAKER_02)은 더 이상
+        raw 라벨로 폴백해 나타나지 않는다 — transcript 경로는 diar_data를 아예 조회하지
+        않으므로, transcript에 없는 라벨은 참가자 항목 자체가 생기지 않는다."""
         self._setup("nodupe-2")
         res = client.get("/api/jobs/nodupe-2/participation")
         data = res.json()
-        sp02 = next(s for s in data["speakers"] if s["label"] == "SPEAKER_02")
-        assert sp02["display_name"] == "SPEAKER_02", f"실제: {sp02}"
+        labels = {s["label"] for s in data["speakers"]}
+        assert labels == {"아빠", "엄마"}, (
+            f"SPEAKER_02 항목이 생기면 안 됨(과분할 diar 라벨은 transcript에 없음). 실제: {labels}"
+        )
 
-    def test_display_name_appears_exactly_once(self, client):
-        """#26: 모든 display_name이 정확히 1회씩만 등장한다."""
+    def test_display_name_appears_exactly_once_and_timing_matches_transcript_path(self, client):
+        """#26: 모든 display_name이 정확히 1회씩만 등장하고, "숫자 변경 기록"에 적은
+        예상값(아빠 30s/엄마 35s, total_duration 65)과 실제 응답이 일치한다 —
+        변경 원인이 경로 전환 하나뿐임을 숫자로 못박는다."""
         self._setup("nodupe-3")
         res = client.get("/api/jobs/nodupe-3/participation")
         data = res.json()
+
         counts: dict[str, int] = {}
         for s in data["speakers"]:
             counts[s["display_name"]] = counts.get(s["display_name"], 0) + 1
         for name, count in counts.items():
             assert count == 1, f"'{name}'이 {count}번 등장 (1번이어야 함): {counts}"
+
+        by_name = {s["display_name"]: s for s in data["speakers"]}
+        assert by_name["아빠"]["total_seconds"] == 30, f"실제: {by_name['아빠']}"
+        assert by_name["아빠"]["turn_count"] == 1
+        assert by_name["엄마"]["total_seconds"] == 35, f"실제: {by_name['엄마']}"
+        assert by_name["엄마"]["turn_count"] == 2
+        assert data["total_duration"] == 65, f"실제: {data['total_duration']}"
+
+
+# ===========================================================================
+# 신규 (교체로 생긴 위험 대응 — 시나리오 추가, 26개 보존과 무관)
+#   participation의 transcript 경로를 get_segments()로 교체하면, PR A 계약상
+#   구조화 실패 줄이 label=None 통과 세그먼트로 보존되어 화자로 잘못 집계될 위험이
+#   새로 생긴다. 현행 정규식 경로는 매칭 실패 줄을 버려서 이 문제가 없었다.
+# ===========================================================================
+
+class TestPassthroughSegmentsExcludedFromParticipation:
+    def test_non_speech_lines_are_not_counted_as_speakers(self, client):
+        """(웃음)·빈 줄·형식 없는 줄이 섞여도 화자 항목으로 집계되지 않고,
+        turn_count·total_seconds도 실제 발화 줄만으로 계산된다."""
+        transcript = (
+            "[00:00] 아빠: 안녕\n"
+            "(웃음)\n"
+            "\n"
+            "[00:30] 엄마: 반가워\n"
+            "아무 형식 없는 줄"
+        )
+        _create_done_meeting(
+            "passthrough-1", transcript,
+            speakers={"아빠": "아빠", "엄마": "엄마"},
+        )
+        res = client.get("/api/jobs/passthrough-1/participation")
+        assert res.status_code == 200
+        data = res.json()
+
+        labels = {s["label"] for s in data["speakers"]}
+        assert labels == {"아빠", "엄마"}, (
+            f"passthrough 줄이 화자로 집계되면 안 됨. 실제: {labels}"
+        )
+        turn_counts = {s["label"]: s["turn_count"] for s in data["speakers"]}
+        assert turn_counts == {"아빠": 1, "엄마": 1}, f"실제: {turn_counts}"

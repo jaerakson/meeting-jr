@@ -232,10 +232,15 @@ class TestZeroSegmentLabel:
 
 class TestUnknownLabelResponseShape:
     def test_all_labels_unknown_returns_422(self, client):
-        """#9: matches의 모든 라벨이 segments에 없으면 422 + skipped, transcript·speakers 불변."""
+        """#9: matches의 모든 라벨이 segments에 없으면 422 + skipped, transcript·speakers 불변.
+
+        transcript는 **바이트 단위로 원본과 완전히 동일**해야 한다(부분 문자열 부재 확인만으로는
+        불충분 — director 지시). 전체 실패 시 backend는 update_job_result 자체를 호출하지
+        않도록 구현한다 — 재렌더가 우연히 같은 문자열을 내는 것에 기대지 않기 위함이다."""
+        original_transcript = "[00:00] 아빠: 안녕하세요\n[00:30] 엄마: 반갑습니다"
         _create_done_meeting(
             "shape-all-1",
-            "[00:00] 아빠: 안녕하세요\n[00:30] 엄마: 반갑습니다",
+            original_transcript,
             speakers={"아빠": "아빠", "엄마": "엄마"},
         )
         res = client.post("/api/jobs/shape-all-1/apply-match", json={
@@ -247,7 +252,9 @@ class TestUnknownLabelResponseShape:
         assert "SPEAKER_00" in data["skipped"]
 
         job = client.get("/api/jobs/shape-all-1").json()
-        assert "김과장" not in job["transcript"]
+        assert job["transcript"] == original_transcript, (
+            f"skipped 시 transcript가 바이트 단위로 불변이어야 함. 실제: {job['transcript']!r}"
+        )
         assert _get_speakers(job) == {"아빠": "아빠", "엄마": "엄마"}
 
     def test_partial_unknown_returns_200_with_skipped_and_warning(self, client):
@@ -270,10 +277,10 @@ class TestUnknownLabelResponseShape:
         assert "김과장:" in job["transcript"]
 
     def test_all_labels_unknown_multi_returns_422(self, client):
-        """#11: 여러 라벨이 모두 unknown이면 전부 skipped에 담겨 422."""
+        """#11: 여러 라벨이 모두 unknown이면 전부 skipped에 담겨 422, transcript 바이트 불변."""
+        original_transcript = "[00:00] 아빠: 안녕하세요\n[00:30] 엄마: 반갑습니다"
         _create_done_meeting(
-            "shape-all-2",
-            "[00:00] 아빠: 안녕하세요\n[00:30] 엄마: 반갑습니다",
+            "shape-all-2", original_transcript,
             speakers={"아빠": "아빠", "엄마": "엄마"},
         )
         res = client.post("/api/jobs/shape-all-2/apply-match", json={
@@ -282,6 +289,11 @@ class TestUnknownLabelResponseShape:
         assert res.status_code == 422
         data = res.json()
         assert set(data["skipped"]) == {"SPEAKER_00", "SPEAKER_01"}, f"실제: {data}"
+
+        job = client.get("/api/jobs/shape-all-2").json()
+        assert job["transcript"] == original_transcript, (
+            f"skipped 시 transcript가 바이트 단위로 불변이어야 함. 실제: {job['transcript']!r}"
+        )
 
 
 # ===========================================================================
@@ -418,9 +430,9 @@ class TestIdentityMappedRowUsesOwnLabel:
             "SPEAKER_00": [{"start": 0, "end": 5, "speaker": "SPEAKER_00"}],
             "SPEAKER_01": [{"start": 5, "end": 10, "speaker": "SPEAKER_01"}],
         }
+        original_transcript = "[00:00] 아빠: 안녕하세요\n[00:05] 엄마: 반갑습니다"
         _create_done_meeting(
-            "identity-1",
-            "[00:00] 아빠: 안녕하세요\n[00:05] 엄마: 반갑습니다",
+            "identity-1", original_transcript,
             speakers={"아빠": "아빠", "엄마": "엄마"},
             diarization=diarization,
         )
@@ -431,6 +443,11 @@ class TestIdentityMappedRowUsesOwnLabel:
         })
         assert res_old_key.status_code == 422, (
             f"레거시 diar 라벨 키는 더 이상 유효하지 않아야 함. 실제: {res_old_key.status_code}"
+        )
+        # 전체 skipped 시 transcript는 바이트 단위로 원본과 완전히 동일해야 한다.
+        job_after_skip = client.get("/api/jobs/identity-1").json()
+        assert job_after_skip["transcript"] == original_transcript, (
+            f"skipped 시 transcript가 바이트 단위로 불변이어야 함. 실제: {job_after_skip['transcript']!r}"
         )
 
         # 실제 segment label("아빠")로 보내야 정상 적용된다.

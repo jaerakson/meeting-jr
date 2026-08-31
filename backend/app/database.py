@@ -304,8 +304,17 @@ def update_job_result(
         fields.append("summary = ?")
         values.append(summary)
     if speakers is not None:
+        # speaker_map 쓰기 정규화 — 이 관문 한 곳에서만 한다.
+        # 값 앞뒤 공백 제거, 빈 값은 매핑에서 제외(빈 이름을 저장하지 않는다).
+        # 호출부 5곳(txt업로드/finalize/apply_match/rename-speakers/job_queue)이 모두
+        # 여기를 지나므로, 새 쓰기 경로가 생겨도 구멍이 나지 않는다.
+        normalized = {
+            k: v.strip() if isinstance(v, str) else v
+            for k, v in speakers.items()
+            if not isinstance(v, str) or v.strip()
+        }
         fields.append("speakers = ?")
-        values.append(json.dumps(speakers, ensure_ascii=False))
+        values.append(json.dumps(normalized, ensure_ascii=False))
     if suggested_speakers is not None:
         fields.append("suggested_speakers = ?")
         values.append(json.dumps(suggested_speakers, ensure_ascii=False))
