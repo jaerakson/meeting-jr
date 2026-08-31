@@ -24,17 +24,17 @@ PR C 이전의 `TranscriptEditor` 는 화자 이름을 **본문에 구워서** �
 speaker_map)` 한 결과가 현재 transcript 와 **바이트 동일**하지 않으면 그 행은 쓰지 않는다.
 안 맞으면 우리가 이 행에 대해 뭔가 잘못 알고 있는 것이다.
 
-## 판정 순서 — 레거시 서명이 사전조건보다 **먼저**다
+## 판정 순서 — 라벨 공간 판정이 사전조건보다 **먼저**다
 
 먼저 "손댈 필요가 있는가"를 판정하고, 없으면 **조치불필요**로 분류하고 사전조건은 검사하지 않는다.
 
-    레거시 서명: 세그먼트 라벨 L 중, **자기 자신이 아닌 다른 키의 표시 이름**인 것이
-    하나라도 있으면 복구 대상이다. (∃ label ∈ L, ∃ k ∈ speaker_map: map[k]==label and k!=label)
+    기준: 세그먼트 라벨이 **diar 라벨 공간** 안에 있는가.
+    (apply-match 의 `matches` 키가 항상 diar 라벨이므로, 이것이 실제로 요구되는 성질이다.)
 
-`SPEAKER_\d+` 같은 **형태 판별을 쓰지 않는다.** 키는 전부 `SPEAKER_XX` 인데 본문 라벨만
-실명인 행이 실재하고(`92c731af`·`2e3a65c4`), 형태로 판별하면 이 복구 대상들을 "정상"으로
-놓친다. 순서도 중요하다 — 사전조건 ②를 먼저 걸면, 매핑되지 않은 diar 라벨이 본문에 남아
-있을 뿐인 **정상 행**(`5ab8e338`)이 "건너뜀"으로 잘못 보고된다.
+"라벨이 speaker_map 키에 있는가"로 판별하면 **깨진 행을 정상으로 숨긴다** — 실명 키를
+identity 로 함께 들고 있는 레거시 행(`{"손주환":"손주환"}`)이 그 기준으로는 통과하지만
+apply-match 는 여전히 422 다. 순서도 중요하다 — 사전조건 ②를 먼저 걸면, 매핑되지 않은
+diar 라벨이 본문에 남아 있을 뿐인 **정상 행**(`5ab8e338`)이 "건너뜀"으로 잘못 보고된다.
 
 ## 행별 사전조건 (하나라도 불성립이면 그 행 **전체**를 건너뛴다 — 부분 복구 금지)
 
@@ -71,6 +71,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sqlite3
 import sys
 from collections import Counter
@@ -221,19 +222,33 @@ def judge(row: dict) -> dict:
     none = dict(new_segments=None, new_speaker_map=None)
 
     # --- 레거시 서명: 손댈 필요가 있는가 -------------------------------------
-    # 세그먼트 라벨 중 "자기 자신이 아닌 다른 키의 표시 이름"인 것이 하나라도 있으면 복구 대상.
-    # 순수하게 데이터 관계로만 판정한다 — `SPEAKER_\d+` 같은 형태 판별을 쓰지 않는다.
-    # (키가 전부 SPEAKER_XX 인데 본문 라벨만 실명인 행이 실재한다: 92c731af, 2e3a65c4)
-    baked = sorted(
-        label for label in labels
-        if any(v == label and k != label for k, v in speaker_map.items())
-    )
-    if not baked:
+    # 기준은 **"세그먼트 라벨이 diar 라벨 공간 안에 있는가"** 다 — apply-match 가 실제로
+    # 요구하는 성질이 그것이기 때문이다(`matches` 의 키는 항상 diar 라벨이다).
+    #
+    # "라벨이 speaker_map 키에 있는가" 로 판별하면 안 된다: 레거시 행 중에는 실명 키를
+    # identity 로 함께 들고 있는 것이 있어({"손주환":"손주환", ...}) 그 기준으로는 정상으로
+    # 보이지만 apply-match 는 여전히 422 다 — **깨진 행을 정상으로 숨긴다.**
+    #
+    # diar 가 없는 행은 대조할 실물이 없으므로 `SPEAKER_\d+` 형태를 공간으로 본다.
+    # **이 형태 폴백이 잘못된 쓰기로 이어질 수는 없다**: diar 가 비어 있으면 조건③의
+    # `stray` 가 반드시 비어있지 않고(speaker_map 이 비면 조건②에서 걸린다) 항상 SKIP 이다.
+    # 즉 폴백은 **보고 분류에만** 영향한다. "형태 판별이 남아있다"는 이유로 고치지 말 것 —
+    # 고치려면 위의 두 문단이 말하는 성질을 유지하는지 먼저 확인해야 한다.
+    if diar:
+        in_label_space = labels <= set(diar)
+        space_desc = f"diarization 키 {sorted(diar)}"
+        outside = sorted(l for l in labels if l not in diar)
+    else:
+        in_label_space = all(re.fullmatch(r"SPEAKER_\d+", l) for l in labels)
+        space_desc = "SPEAKER_XX 형태(diarization 없음)"
+        outside = sorted(l for l in labels if not re.fullmatch(r"SPEAKER_\d+", l))
+
+    if in_label_space:
         return dict(verdict=NO_OP,
-                    reason="본문 라벨 중 다른 키의 표시 이름인 것이 없다 — 라벨 공간이 이미 정합하다.",
+                    reason=f"모든 segment 라벨이 이미 라벨 공간 안에 있다 — {space_desc}.",
                     **none)
 
-    detail = f"본문에 구워진 표시 이름 {baked}"
+    detail = f"라벨 공간({space_desc}) 밖 라벨 {outside}"
 
     # --- 조건 ①: 값 유일. 중복이면 병합 경로로 분기(스킵이 아니다) -----------
     working_map, duplicated, merge_note = _merge_duplicate_names(speaker_map, diar)
