@@ -393,6 +393,20 @@ def _diar_label_space(job_id: str) -> set:
     return set()
 
 
+def unique_display_inverse(speaker_map: dict | None) -> dict:
+    """`{라벨: 표시이름}` -> `{표시이름: 라벨}` 역맵. **값이 유일한 키만** 넣는다.
+
+    중복 이름(`대표님`×3)은 어느 라벨인지 **데이터로 결정할 수 없으므로 제외한다** —
+    추측하지 않는다(`save_speaker_profile`·마이그레이션과 같은 판단).
+
+    `restore_segment_labels`(c)와 `patch_transcript`의 키 번역이 **같은 규칙**을 쓰도록
+    한 곳에 둔다. 사본을 만들지 말 것 — 이 프로젝트는 매칭 규칙 사본 5벌로 5라운드
+    연속 같은 버그를 겪었다.
+    """
+    counts = Counter((speaker_map or {}).values())
+    return {v: k for k, v in (speaker_map or {}).items() if counts[v] == 1}
+
+
 def restore_segment_labels(
     job_id: str,
     transcript: str,
@@ -448,8 +462,7 @@ def restore_segment_labels(
 
     # 표시 이름 -> 라벨 역맵. **값이 유일한 것만** 넣는다 — 중복이면 어느 라벨인지
     # 데이터로 결정할 수 없고, 추측하지 않는다(save_speaker_profile과 같은 판단).
-    _name_counts = Counter((restore_map or {}).values())
-    inverse_unique = {v: k for k, v in (restore_map or {}).items() if _name_counts[v] == 1}
+    inverse_unique = unique_display_inverse(restore_map)
 
     new_segments: list = []
     unresolved: list[str] = []
@@ -504,7 +517,15 @@ async def finalize_job(job_id: str, body: dict):
         raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
 
     transcript: str = body.get("transcript", "").strip()
-    speaker_map: dict = body.get("speaker_map", {})
+    # 빈 맵(`{}`)은 "이름을 전부 지운다"가 아니라 **"이 요청은 이름 정보를 싣지 않았다"**
+    # 는 뜻이다 — 모든 화자 이름을 지우는 UI 동작이 존재하지 않는다(TranscriptEditor는
+    # 항상 identity 폴백을 채운다). 그대로 쓰면 `update_job_result`가 speakers를 `{}`로
+    # 덮어써 **그 회의의 화자 이름이 영구 소실된다.**
+    #
+    # 이름과 **라벨 공간** 두 축 모두 이 값으로 닫는다 — 이름만 살리고 공간을 놓치면
+    # diar가 없는 회의에서 라벨이 미해소가 되어 422가 남는다.
+    body_map: dict = body.get("speaker_map") or {}
+    speaker_map: dict = body_map if body_map else (job.get("speakers") or {})
     body_category_id: str | None = body.get("category_id")
 
     if not transcript:
@@ -831,7 +852,24 @@ async def patch_transcript(job_id: str, body: dict):
         | {seg.get("label") for seg in old_segments if seg.get("label")}
         | set(old_speakers)
     )
+    # 라벨이 아닌 키를 **버리기 전에 번역을 시도한다.** 구세대 행(transcript에 이름이
+    # 구워져 있는 행)을 편집하면 프론트가 그 실명을 라벨로 인식해 `{"김팀장": "박부장"}`
+    # 같은 키가 실려 온다. 그냥 버리면 200인 채로 **사용자의 개명이 조용히 사라진다** —
+    # 이번 라운드에 닫은 무음 드롭을 다른 문으로 되살리는 셈이다.
+    # 번역은 추측이 아니다: `restore_segment_labels`(c)와 **같은 규칙**(값이 유일한
+    # 표시 이름만 역맵에 넣는다)으로 라벨을 되찾을 뿐이고, 중복 이름(`대표님`×3)이라
+    # 되찾지 못하면 그때는 버린다.
+    inverse_unique = unique_display_inverse(old_speakers)
     body_map = {k: v for k, v in raw_body_map.items() if k in known_labels}
+    # 번역된 항목을 **나중에** 얹는다: 구세대 행의 payload에는 시드된 옛 매핑
+    # (`SPEAKER_00 -> 김팀장`)과 방금 바꾼 이름(`김팀장 -> 박부장`)이 **함께** 실려 온다.
+    # 뒤에 얹어야 사용자가 방금 지정한 새 이름이 이긴다(dict 순서에 의존하지 않는다).
+    for raw_key, name in raw_body_map.items():
+        if raw_key in known_labels:
+            continue
+        label = inverse_unique.get(raw_key)
+        if label is not None:
+            body_map[label] = name
 
     # 파싱한 라벨을 **원래 라벨로 되돌린 뒤** 저장한다(finalize_job과 같은 헬퍼).
     #

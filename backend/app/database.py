@@ -304,10 +304,14 @@ def update_job_result(
         fields.append("summary = ?")
         values.append(summary)
     if speakers is not None:
-        # speaker_map 쓰기 정규화 — 이 관문 한 곳에서만 한다.
+        # speaker_map **값** 쓰기 정규화 — 이 관문 한 곳에서만 한다.
         # 값 앞뒤 공백 제거, 빈 값은 매핑에서 제외(빈 이름을 저장하지 않는다).
-        # 호출부 5곳(txt업로드/finalize/apply_match/rename-speakers/job_queue)이 모두
-        # 여기를 지나므로, 새 쓰기 경로가 생겨도 구멍이 나지 않는다.
+        #
+        # **이 관문이 보장하는 것은 값 정규화뿐이다.** 호출부가 모두 여기를 지난다는
+        # 사실은 "구멍이 없다"는 뜻이 아니다 — 관문을 **지나는 것**과 관문이 **옳은
+        # 값을 받는 것**은 다르다. 실제로 빈 맵(`{}`)이 넘어와 speakers 전체를 덮어써
+        # 회의의 화자 이름이 통째로 사라진 사고가 있었다(PR C). 맵 전체를 교체하는
+        # 입력은 여기서 막지 못하므로, **요청 경계(body를 받는 엔드포인트)에서** 막는다.
         normalized = {
             k: v.strip() if isinstance(v, str) else v
             for k, v in speakers.items()
