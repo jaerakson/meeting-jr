@@ -1,4 +1,4 @@
-"""POST /api/jobs/{id}/regenerate — 이름 맞바꾸기(swap) 시 화자 붕괴 회귀 테스트.
+"""POST /api/jobs/{id}/regenerate, /finalize — 이름 맞바꾸기(swap) 시 화자 붕괴 회귀 테스트.
 
 배경 (코드리뷰 발견, director 지시): finalize_job·regenerate_summary가 과거
 순차 `.replace()`로 speaker_map을 적용해, {"아빠":"엄마","엄마":"아빠"} 같은
@@ -8,15 +8,19 @@
 transcript를 안 건드려 메타데이터만 틀어졌지만, 재렌더가 붙은 지금은 사용자가
 읽는 요약 스크립트의 데이터 손실이다.
 
-main.py의 regenerate_summary는 render_transcript()로 스크립트를 만들어 이 문제를
-main.py 선에서는 피했다. 하지만 그 스크립트를 읽어 Claude에게 넘기는
-app/summarizer.py의 generate_summary()가 **자신의 _replace_speakers()로 같은
-speaker_map을 한 번 더 순차 치환**한다 — 이미 올바르게 렌더된 텍스트 위에 중복
-치환이 걸려 붕괴가 그대로 재현된다. 이 테스트는 main.py가 아니라 이 이중 치환
-경로(summarizer.py)를 겨냥한다.
+main.py의 finalize_job·regenerate_summary는 이제 둘 다 render_transcript()로
+스크립트를 만들어 이 문제를 main.py 선에서 피한다.
 
-RED가 정상이다 — 통과시키려고 단언을 약화하지 말 것. 단언이 틀렸다고 판단되면
-director에게 보고.
+QA가 이 테스트를 작성하는 과정에서 **별도의 결함을 하나 더 찾았다**: 그 스크립트를
+읽어 Claude에게 넘기는 app/summarizer.py의 generate_summary()가 자신의
+_replace_speakers()로 같은 speaker_map을 한 번 더 순차 치환해, 이미 올바르게
+렌더된 텍스트 위에서 붕괴를 재현했다. director에게 보고 후 backend-b가
+generate_summary()에서 그 치환 호출 자체를 제거해 닫았다(summarizer.py:118~122
+주석 참고) — 지금은 GREEN이다. `_replace_speakers()` 함수 정의 자체는 이제 아무도
+호출하지 않는 죽은 코드로 남아있다 — 이 프로젝트가 폐기된 방식을 재유입시킨
+이력이 있으므로, 재활용되지 않도록 별도 정리가 필요하면 director에게 보고할 것.
+
+단언을 통과시키려고 약화하지 말 것.
 """
 
 import pytest
@@ -90,4 +94,35 @@ def test_regenerate_with_swapped_names_keeps_two_distinct_speakers(client):
     assert prompt.count("아빠:") == 1, (
         f"맞바꾸기 후 스크립트에 '아빠'가 정확히 한 번 남아야 함(label='엄마'였던 화자). "
         f"실제 prompt 발췌: {prompt[:400]!r}"
+    )
+
+
+def test_finalize_with_swapped_names_keeps_two_distinct_speakers_in_script(client, tmp_path):
+    """finalize에 이름 맞바꾸기 speaker_map을 보내도, 요약용으로 저장되는 스크립트
+    파일에 두 화자가 붕괴 없이 남아야 한다. 스크립트 파일은 백그라운드 요약 태스크가
+    시작되기 전에 동기적으로 쓰이므로, 응답 직후 바로 검사할 수 있다."""
+    _create_done_meeting(
+        "finalize-swap-1",
+        "[00:00] 아빠: 첫번째 발언\n[00:05] 엄마: 두번째 발언",
+        speakers={"아빠": "아빠", "엄마": "엄마"},
+    )
+
+    mock_proc = AsyncMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = AsyncMock(return_value=("# 요약".encode("utf-8"), b""))
+
+    with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+        res = client.post("/api/jobs/finalize-swap-1/finalize", json={
+            "transcript": "[00:00] 아빠: 첫번째 발언\n[00:05] 엄마: 두번째 발언",
+            "speaker_map": {"아빠": "엄마", "엄마": "아빠"},  # 맞바꾸기
+        })
+    assert res.status_code == 200, f"실제: {res.status_code}, body: {res.text}"
+
+    script_path = tmp_path / "input" / "finalize-swap-1.txt"
+    content = script_path.read_text(encoding="utf-8")
+    assert content.count("엄마:") == 1, (
+        f"맞바꾸기 후 finalize 스크립트에 '엄마'가 정확히 한 번 남아야 함. 실제: {content!r}"
+    )
+    assert content.count("아빠:") == 1, (
+        f"맞바꾸기 후 finalize 스크립트에 '아빠'가 정확히 한 번 남아야 함. 실제: {content!r}"
     )
