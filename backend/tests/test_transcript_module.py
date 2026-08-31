@@ -282,6 +282,39 @@ def test_label_with_leading_whitespace_still_substitutes():
     assert render(segs, speaker_map={"SPEAKER_00": "김철수"}) == "[00:00] 김철수:  두칸"
 
 
+def test_label_with_trailing_whitespace_before_colon_still_substitutes():
+    """회귀 가드 (commit 1ea13c6, 반대 방향): `[00:00] SPEAKER_00 : 공백앞콜론`처럼
+    콜론 앞에 공백이 끼면 라벨이 'SPEAKER_00 '(뒤공백 포함)으로 잡혀 치환이 조용히
+    실패할 수 있었다. strip은 양쪽 다 제거해야 한다."""
+    raw_line = "[00:00] SPEAKER_00 : 공백앞콜론"
+    segs = parse(raw_line)
+    assert segs[0]["label"] == "SPEAKER_00"  # 뒤공백 없이 순수 라벨
+    assert render(segs) == raw_line  # 치환 없으면 바이트 동일 왕복 (raw 경유)
+    assert render(segs, speaker_map={"SPEAKER_00": "김철수"}) == "[00:00] 김철수: 공백앞콜론"
+
+
+def test_label_that_is_only_whitespace_becomes_passthrough():
+    """콜론 앞이 공백뿐이면(strip 후 빈 문자열) 라벨로 인정하지 않고 passthrough로
+    떨어진다 — 빈 라벨을 speaker_map에 억지로 걸지 않는다."""
+    raw_line = "[00:00]   : 텍스트"
+    segs = parse(raw_line)
+    assert len(segs) == 1
+    assert segs[0]["label"] is None
+    assert segs[0]["text"] == raw_line
+    assert render(segs) == raw_line
+    assert render(segs, speaker_map={"SPEAKER_00": "김철수"}) == raw_line  # 치환 대상 자체가 아님
+
+
+def test_internal_space_in_label_preserved_after_strip():
+    """strip은 라벨 앞뒤만 제거하고 내부 공백은 보존한다 — "김 팀장"이 "김팀장"으로
+    뭉개지면 안 된다."""
+    raw_line = "[00:00] 김 팀장: 회의 시작합니다"
+    segs = parse(raw_line)
+    assert segs[0]["label"] == "김 팀장"
+    assert render(segs) == raw_line
+    assert render(segs, speaker_map={"김 팀장": "박부장"}) == "[00:00] 박부장: 회의 시작합니다"
+
+
 # ---------------------------------------------------------------------------
 # 보강 1 — 정규형 코퍼스에서는 raw가 생기지 않는다 (raw가 파싱 실패를 은폐하지 못하게)
 # ---------------------------------------------------------------------------
