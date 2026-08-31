@@ -1,3 +1,39 @@
+## 2026-08-31 (작업 PC: 로컬) — 세션 56 (화자 매핑 라벨 리팩터링: 설계 확정, 구현 착수 전)
+- 브랜치: main
+- 완료:
+  - CLAUDE.md 1순위 과제인 **화자 매핑 라벨 기반 리팩터링**의 설계를 확정했다.
+    → `docs/ai_analysis/20260831_화자매핑_라벨_리팩터링_설계.md` (설계안 전문, 이 파일만 읽으면 이어갈 수 있다)
+  - director 가 코드 전수 실측. 팀리드가 핵심 근거 4건을 직접 코드에서 재확인:
+    finalize 재키잉(main.py:396-401) / TranscriptEditor `\S+` 파서(:25) /
+    rename-speakers 의 transcript 미갱신(:2084-2093) / search 의 `transcript LIKE`(database.py:419)
+  - **근본 원인 특정**: `finalize_job:396-401` 이 speaker_map 키를 라벨→이름으로 갈아끼워 라벨 정체성을 파괴한다.
+    하위 코드는 전부 그것을 되짚는 추측이고, DEVGUIDE §10 의 다섯 "확정 결정사항"이 그 손실의 보상 장치다.
+  - **확정 설계**: `transcript_segments TEXT`(JSON `[{start,end,label,text}]`) 신설 + 문자열 transcript 는 파생값 유지.
+    완전 교체 안 함 — 소비자가 "구조 파싱"과 "문자열 통과"로 깨끗이 갈리고 버그는 전부 변경 경로에만 있다.
+    강제 불변식: transcript 는 다시는 in-place 변경하지 않고 `render(segments, speaker_map)` 출력으로만 쓴다.
+    하위 호환은 lazy 파싱 + 조회 시 백필 (일괄 마이그레이션 안 함).
+  - **PR 3분할**: A 도입(additive, 동작 변화 0) → B apply_match·participation 라벨 전환(3a~3e 130줄 등 삭제)
+    → C finalize·프론트 왕복(파서 4개+시리얼라이저 2개 공유 모듈 통합)
+  - 부수 발견 결함 3건 기록: rename-speakers desync(백엔드 테스트 0건) / `\S+` 로 공백 포함 실명 파싱 실패 /
+    타임스탬프 자릿수 불일치(100분 초과 회의에서 이미 깨져 있음)
+- 현재 상태: **설계 승인 완료, 구현 코드 변경 0.** 백엔드 215 / 프론트 13 통과 상태 그대로.
+- 막힌 점/주의:
+  - qa-engineer·backend-dev·director 3명이 **세션 사용 한도로 동시 중단**됐다 (리셋 05:30 KST).
+    코드 변경 전이라 유실은 없다. 다음 세션은 설계 문서를 팀에 브리핑하고 PR A 부터 착수하면 된다.
+  - 기존 회귀 안전망 1,094줄(test_apply_match_collision 576 / consistency 346 / participation_collision 172)은
+    **시나리오 보존, 단언만 재작성.** 지우면 6라운드째 사고다.
+  - PR A 합격 기준은 "기존 215 테스트 **무수정** 통과 + 문자열 **바이트 동일**". 팀리드가 직접 실행해 확인한다.
+- 다음 할 일:
+  - 팀 재구성(qa-engineer sonnet / backend-dev opus, frontend-dev 는 PR C 시점) → PR A 착수
+  - 브랜치 `refactor/speaker-label-mapping-a`. TDD 선행(qa → backend → qa 재검증) → PR → 코드리뷰 → 머지
+- 관련 파일: docs/ai_analysis/20260831_화자매핑_라벨_리팩터링_설계.md,
+  backend/app/main.py(apply_match 1828-1956, finalize 380-430, participation, save_speaker_profile),
+  backend/app/database.py(_migrate 92-110, update_job_result 272, search_jobs 419),
+  backend/app/audio_processor.py(merge_and_save 465), frontend/components/{TranscriptEditor,Transcript,MainArea,SpeakerMapper}.tsx
+- 푸시 여부: 로컬 커밋만 (main 직접 푸시는 사용자 확인 후)
+
+---
+
 ## 2026-08-29 (작업 PC: 로컬) — 세션 55 (PR #79: apply-match 이름 충돌 외 4건)
 - 브랜치: main (PR #79 b132d14)
 - 배경: PR #78 머지 후 정식 코드리뷰를 한 번 더 돌려 새 버그 4건 발견 → 이번 PR로 수정
