@@ -1,27 +1,30 @@
 """app.transcript (`parse` / `render`) 계약 테스트 — PR A.
 
-이 파일은 구현(backend-dev)보다 먼저 작성된 명세다. 설계 문서:
-docs/ai_analysis/20260831_화자매핑_라벨_리팩터링_설계.md
-
-## 가정한 API 계약 (설계 문서가 함수명만 정하고 시그니처는 비워둠 — QA가 아래로 확정)
+director-2 확정 계약 (재정정 반영 완료: 2단 매칭 / raw+speaker_map 우선순위):
 
     parse(raw: str) -> list[dict]
-        각 세그먼트: {"start": int(초) | None, "end": None, "label": str | None, "text": str}
-        - 표준 줄 `[MM:SS] LABEL: TEXT` (MM은 자릿수 무제한, SS는 정확히 2자리,
-          LABEL과 TEXT 사이 구분자는 정확히 ": " 한 칸)에 매칭되면 구조화된 세그먼트.
-        - 매칭 실패(타임스탬프 없음/깨진 형식/빈 줄)는 원본 줄을 그대로 보존하는
-          passthrough 세그먼트: {"start": None, "end": None, "label": None, "text": <원본 줄>}.
-        - raw == "" 이면 [] 반환.
-        - 줄바꿈(\\n) 기준으로 줄 단위 파싱. 세그먼트 개수 == 원본 줄 개수(빈 문자열 제외 규칙 없음).
+        각 세그먼트: {"start": int(초)|None, "end": None, "label": str|None, "text": str, "raw": str(선택)}
+        2단 매칭:
+          1단(STRICT) r'^\\[(\\d+):(\\d{2})\\]\\s(.+?):\\s(.*)$'  — 콜론 뒤 공백 필수, 라벨 non-greedy
+          2단(EMPTY)  r'^\\[(\\d+):(\\d{2})\\]\\s(.+?):$'          — 1단 실패 시에만. text="" 로 구조화
+            (`[00:00] SPEAKER_00:` 처럼 콜론 뒤 공백 없이 줄이 끝나는 빈 발언 라인용.
+             passthrough로 떨어뜨리면 PR B 라벨 치환 대상에서 조용히 빠지므로 반드시 label을 잡는다.)
+        1·2단 모두 실패 → passthrough: {"start": None, "end": None, "label": None, "text": <원본 줄>}.
+          (`\\s(.+?):\\s`에 맞는 콜론이 아예 없거나, EMPTY처럼 줄 끝 콜론이 아니면 실패 —
+           예: "결론:다음주로 미룬다"는 콜론 뒤에 공백도 없고 줄 끝 콜론도 아니므로 passthrough.
+           오탐 방지: `.+?`가 아무 콜론이나 라벨 경계로 삼지 않는다.)
+        raw == "" 이면 []. 줄바꿈 기준 줄 단위 파싱.
+        "raw" 키: 정규형 렌더가 원본 줄과 바이트 동일하지 않을 때만 채운다(같으면 키 생략).
 
     render(segments: list[dict], speaker_map: dict | None = None) -> str
-        - label이 있는 세그먼트: f"[{MM:02d}:{SS:02d}] {speaker_map.get(label, label) if speaker_map else label}: {text}"
-        - label이 None인 세그먼트(passthrough): text를 그대로 한 줄로 출력.
-        - "\\n".join(lines) 로 재조립.
-        - speaker_map을 넘기지 않거나 빈 값이면 label을 그대로 사용 (identity) →
-          render(parse(s)) == s 를 보장하는 핵심 성질.
+        label=None(passthrough) → speaker_map과 무관하게 text 그대로 출력 (본문 오염 봉쇄).
+        label 있음 → display = (speaker_map or {}).get(label, label) 계산 후:
+          - display == label (치환 없음) 이고 raw가 있으면 → raw 그대로 출력 (바이트 보존 우선)
+          - display != label (실제 치환) 이면 → raw 무시하고 정규형 `[MM:SS] {display}: {text}` 렌더
+            (raw는 "아무도 안 건드렸을 때" 보험이지 치환을 막는 수단이 아니다 — PR B가 이 경로로
+             라벨을 실명으로 바꾸므로, raw가 무조건 이기면 치환이 조용히 죽는다.)
+        "\\n".join(...). speaker_map 생략/빈 값이면 label 그대로 → render(parse(s)) == s.
 
-    이 두 함수만으로 "PR A 합격 기준: render(parse(s)) == s" 를 검증한다.
     get_segments()의 백필 계약은 test_transcript_backfill.py 에서 별도 검증.
 """
 
@@ -87,7 +90,10 @@ ROUNDTRIP_CASES = {
     ),
     "완전히 빈 transcript": "",
     "공백 텍스트 (개행만)": "\n\n",
-    "라벨은 있으나 텍스트가 빈 세그먼트": "[00:00] SPEAKER_00: ",
+    "라벨은 있으나 텍스트가 빈 세그먼트 (콜론 뒤 공백 있음, 1단)": "[00:00] SPEAKER_00: ",
+    "빈 발언, 콜론 뒤 공백 없이 줄 끝 (2단 EMPTY)": "[00:00] SPEAKER_00:",
+    "오탐 방지 — 콜론이 라벨 경계가 아닌 일반 문장": "[00:00] 결론:다음주로 미룬다",
+    "라벨 뒤 텍스트에 콜론이 또 있는 경우": "[00:00] 결론: 다음:",
     "단일 깨진 라인만 존재": "이것은 그냥 메모입니다. 타임스탬프가 전혀 없습니다.",
 }
 
@@ -153,6 +159,54 @@ def test_parse_empty_string_returns_empty_list():
     assert parse("") == []
 
 
+# ---------------------------------------------------------------------------
+# 판정 4 — 빈 발언 2단 매칭(EMPTY): label을 잃지 않고, 오탐도 만들지 않는다
+# ---------------------------------------------------------------------------
+
+def test_parse_empty_utterance_no_trailing_space_keeps_label():
+    """`[00:00] SPEAKER_00:` (콜론 뒤 공백 없이 줄 끝)은 passthrough가 아니라
+    label="SPEAKER_00", text="" 로 구조화된다 (2단 EMPTY 매칭).
+    passthrough로 떨어지면 PR B에서 이 줄의 화자가 조용히 치환 대상에서 빠진다."""
+    raw = "[00:00] SPEAKER_00:"
+    segs = parse(raw)
+    assert len(segs) == 1
+    assert segs[0]["label"] == "SPEAKER_00"
+    assert segs[0]["text"] == ""
+    # 정규형 렌더([00:00] SPEAKER_00: )가 원본과 다르므로 raw로 왕복 보존된다.
+    assert segs[0].get("raw") == raw
+    assert render(segs) == raw
+
+
+def test_empty_utterance_segment_is_still_substitutable():
+    """2단(EMPTY)으로 잡힌 빈 발언 라인도 실제 화자 치환 대상이다 —
+    raw가 있어도 speaker_map 치환이 우선한다(판정 5)."""
+    segs = parse("[00:00] SPEAKER_00:")
+    out = render(segs, speaker_map={"SPEAKER_00": "김철수"})
+    assert out == "[00:00] 김철수: "
+
+
+def test_parse_false_positive_colon_is_not_treated_as_label():
+    """`결론:다음주로 미룬다` — 콜론 뒤에 공백도 없고 줄 끝 콜론도 아니므로
+    1단·2단 모두 실패해야 한다. label="결론"으로 잡히면 과잉 완화이자 회귀다."""
+    raw = "[00:00] 결론:다음주로 미룬다"
+    segs = parse(raw)
+    assert len(segs) == 1
+    assert segs[0]["label"] is None
+    assert segs[0]["text"] == raw
+    assert render(segs) == raw
+
+
+def test_parse_label_with_colon_inside_trailing_text():
+    """`결론: 다음:` — 1단이 최초의 ': '(공백 포함)에서 끊으므로
+    label="결론", text="다음:" 으로 정확히 분리된다 (콜론이 라벨 뒤에 하나 더 있어도 무관)."""
+    raw = "[00:00] 결론: 다음:"
+    segs = parse(raw)
+    assert len(segs) == 1
+    assert segs[0]["label"] == "결론"
+    assert segs[0]["text"] == "다음:"
+    assert render(segs) == raw
+
+
 def test_render_empty_list_returns_empty_string():
     assert render([]) == ""
 
@@ -180,3 +234,61 @@ def test_render_passthrough_segment_ignores_speaker_map():
     """label=None 세그먼트는 speaker_map과 무관하게 원본 텍스트 그대로 나온다."""
     segs = [{"start": None, "end": None, "label": None, "text": "(웃음)"}]
     assert render(segs, speaker_map={"SPEAKER_00": "김 팀장"}) == "(웃음)"
+
+
+def test_render_passthrough_does_not_substitute_speaker_id_inside_text():
+    """label=None 통과 라인의 본문 안에 'SPEAKER_00' 문자열이 있어도 치환되지 않는다
+    — 나이브 .replace 본문 오염 재유입 봉쇄점(설계문서 지적 결함)."""
+    segs = [{"start": None, "end": None, "label": None, "text": "SPEAKER_00 얘기 좀 그만해"}]
+    out = render(segs, speaker_map={"SPEAKER_00": "김 팀장"})
+    assert out == "SPEAKER_00 얘기 좀 그만해"
+
+
+# ---------------------------------------------------------------------------
+# 판정 5 — raw와 speaker_map 치환의 우선순위
+#   display == label(치환 없음) → raw 사용(바이트 보존) / display != label(치환) → 정규형 렌더
+# ---------------------------------------------------------------------------
+
+def test_raw_is_used_when_no_substitution_happens():
+    """비정규 자릿수(분 앞자리 0 과다)처럼 raw가 생기는 세그먼트는,
+    치환이 일어나지 않으면 raw 그대로 왕복된다."""
+    raw_line = "[007:05] SPEAKER_00: 안녕"
+    segs = parse(raw_line)
+    assert segs[0].get("raw") == raw_line  # 비정규 자릿수라 raw가 채워졌는지 사전 확인
+    assert render(segs) == raw_line
+    assert render(segs, speaker_map={}) == raw_line
+    assert render(segs, speaker_map={"SPEAKER_01": "다른사람"}) == raw_line  # 무관한 라벨 치환도 영향 없음
+
+
+def test_canonical_render_wins_over_raw_when_substitution_happens():
+    """같은 세그먼트라도 실제 치환이 일어나면 raw(원본 자릿수)를 포기하고
+    정규형으로 렌더한다 — raw가 PR B의 라벨 치환을 조용히 막아서는 안 된다."""
+    raw_line = "[007:05] SPEAKER_00: 안녕"
+    segs = parse(raw_line)
+    out = render(segs, speaker_map={"SPEAKER_00": "김철수"})
+    assert out == "[07:05] 김철수: 안녕"
+    assert out != raw_line
+
+
+# ---------------------------------------------------------------------------
+# 보강 1 — 정규형 코퍼스에서는 raw가 생기지 않는다 (raw가 파싱 실패를 은폐하지 못하게)
+# ---------------------------------------------------------------------------
+
+CANONICAL_NO_RAW_CASES = {
+    "표준 다중 세그먼트": ROUNDTRIP_CASES["표준 다중 세그먼트"],
+    "100분 초과 회의": ROUNDTRIP_CASES["100분 초과 회의 (자릿수 무제한)"],
+    "공백 포함 실명": ROUNDTRIP_CASES["공백 포함 실명"],
+    "이름에 콜론 포함": ROUNDTRIP_CASES["화자 이름에 콜론 포함 (naive replace가 남긴 실데이터 형태)"],
+    "이름에 대괄호 포함": ROUNDTRIP_CASES["화자 이름에 대괄호 포함"],
+    "ClovaNote 유래 변환 결과": ROUNDTRIP_CASES["ClovaNote 유래 변환 결과 (멀티라인 병합 텍스트)"],
+}
+
+
+@pytest.mark.parametrize(
+    "raw", CANONICAL_NO_RAW_CASES.values(), ids=list(CANONICAL_NO_RAW_CASES.keys())
+)
+def test_canonical_lines_never_produce_raw(raw):
+    """생산자가 만드는 정규형 라인들은 raw 키가 전혀 생기지 않는다.
+    raw가 여기서 생긴다면 정규형 렌더 로직 자체가 원본과 어긋난다는 뜻 — 파싱 실패 은폐를 조기 발견."""
+    segments = parse(raw)
+    assert all("raw" not in seg or seg["raw"] is None for seg in segments)
