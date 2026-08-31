@@ -66,6 +66,13 @@ diar 라벨이 본문에 남아 있을 뿐인 **정상 행**(`5ab8e338`)이 "건
 
 **기본은 dry-run 이다. 자동 실행 금지** — 서버 시작·요청 처리 경로에서 부르지 말 것.
 사람이 결과 리포트를 읽고 판단한 뒤 `--write` 로 한 번 돌리는 일회성 도구다.
+
+## `--write` 실행 조건 — **백엔드 서버를 중지하고 실행할 것**
+
+판정은 읽은 시점의 `transcript` 를 근거로 한다. 서버가 떠 있으면 읽기~쓰기 사이의 편집이
+낡은 근거로 덮어써질 수 있다. `_write` 에 낙관적 잠금(`WHERE ... AND transcript = ?`)을
+두었지만 그건 **감지**일 뿐 **방지가 아니다** — 되돌릴 수 없는 조작이므로 감지만으로는
+부족하다. 실행 전 DB 백업도 권장한다.
 """
 from __future__ import annotations
 
@@ -315,26 +322,38 @@ def _first_diff(a: str, b: str) -> str:
     return f"길이 불일치: 기존 {len(a)}자 vs 렌더 {len(b)}자"
 
 
-def _write(db_path: Path, job_id: str, segments: list[dict]) -> None:
-    """재키잉된 segments 만 기록한다.
+def _write(db_path: Path, job_id: str, segments: list[dict], expected_transcript: str) -> bool:
+    """재키잉된 segments 만 기록한다. 기록했으면 True.
 
     `transcript` 도 `speakers` 도 쓰지 않는다 — 안전장치가 이미 바이트 동일을 보장했고,
     두 컬럼을 건드리지 않는 것이 "화면은 한 글자도 안 바뀐다"는 약속의 가장 강한 보장이다.
     (`speakers` 를 건드리면 안 되는 이유는 `_merge_duplicate_names` docstring 참조.)
+
+    **낙관적 잠금**: 판정은 읽은 시점의 `transcript` 를 근거로 하므로, 읽기~쓰기 사이에
+    누가 편집하면 낡은 근거로 덮어쓰게 된다. `WHERE ... AND transcript = ?` 로 쓰기 직전
+    재검증하고 `rowcount == 0` 이면 쓰지 않는다.
+
+    **이건 방지가 아니라 감지다.** 되돌릴 수 없는 조작이므로 감지만으로는 부족하다 —
+    실행 조건은 **서버 중지**다(모듈 docstring·`--help` 참조).
     """
     conn = sqlite3.connect(str(db_path))
     try:
-        conn.execute(
-            "UPDATE meetings SET transcript_segments = ? WHERE id = ?",
-            (json.dumps(segments, ensure_ascii=False), job_id),
+        cur = conn.execute(
+            "UPDATE meetings SET transcript_segments = ? WHERE id = ? AND transcript = ?",
+            (json.dumps(segments, ensure_ascii=False), job_id, expected_transcript),
         )
         conn.commit()
+        return cur.rowcount > 0
     finally:
         conn.close()
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap = argparse.ArgumentParser(
+        description=__doc__.split("\n")[0],
+        epilog="[실행 조건] --write 는 **백엔드 서버를 중지한 상태에서** 실행할 것. "
+               "낙관적 잠금은 동시 편집을 감지만 하고 방지하지 못한다. DB 백업 권장.",
+    )
     ap.add_argument("--write", action="store_true",
                     help="실제로 DB에 기록한다. 기본은 dry-run(읽기 전용).")
     ap.add_argument("--db", default=str(DEFAULT_DB), help=f"DB 경로 (기본: {DEFAULT_DB})")
@@ -351,6 +370,7 @@ def main(argv=None) -> int:
 
     rows = _load_rows(db_path)
     tally = Counter()
+    stale = 0
     for row in rows:
         result = judge(row)
         verdict = result["verdict"]
@@ -359,15 +379,22 @@ def main(argv=None) -> int:
         print(f"[{verdict}] {row['id'][:8]}  status={row.get('status')}  {title[:40]}")
         print(f"    사유: {result['reason']}")
         if args.write and result["new_segments"] is not None:
-            _write(db_path, row["id"], result["new_segments"])
-            print(f"    → transcript_segments {len(result['new_segments'])}건 기록 완료"
-                  f" (transcript·speakers 는 건드리지 않음)")
+            if _write(db_path, row["id"], result["new_segments"], row.get("transcript") or ""):
+                print(f"    → transcript_segments {len(result['new_segments'])}건 기록 완료"
+                      f" (transcript·speakers 는 건드리지 않음)")
+            else:
+                stale += 1
+                print("    → **기록하지 않음**: 판정에 쓴 transcript 와 현재 DB 값이 다르다. "
+                      "읽은 뒤 이 행이 편집됐다(서버가 떠 있었을 가능성). "
+                      "서버를 중지하고 다시 실행하세요.")
         print()
 
     print("== 요약 ==")
     for key in (OK_DIRECT, OK_MERGED, NO_OP, SKIP):
         print(f"  {key}: {tally[key]}건")
     print(f"  전체: {len(rows)}건")
+    if stale:
+        print(f"  ** 낙관적 잠금으로 기록하지 않은 행: {stale}건 — 서버를 중지하고 재실행하세요 **")
     if not args.write:
         print("\n(dry-run 이었다. 실제 반영하려면 --write)")
     return 0
