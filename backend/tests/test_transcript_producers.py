@@ -272,6 +272,11 @@ async def test_audio_pipeline_wiring_persists_segments_to_db(queue_db, tmp_path,
     import app.audio_processor as apmod
     from app.transcript import parse as parse_transcript, render
 
+    # job_queue.job_queue는 프로세스 전역 싱글턴이라 다른 테스트 파일(test_upload.py의
+    # 오디오 업로드 등)이 워커 없이 남겨둔 미소비 job_id가 큐에 남아있을 수 있다.
+    # 이 테스트만의 격리된 큐로 교체해 순서 의존적 오염을 원천 차단한다.
+    monkeypatch.setattr(jq, "job_queue", asyncio.Queue(maxsize=0))
+
     job_id = f"qa-wiring-{uuid.uuid4().hex[:8]}"
     real_input_dir = Path(__file__).resolve().parent.parent / "input"
     real_input_dir.mkdir(parents=True, exist_ok=True)
