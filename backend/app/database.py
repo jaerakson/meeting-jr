@@ -105,6 +105,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("share_token", "TEXT"),
         ("series_id", "TEXT"),
         ("followup_items", "TEXT"),
+        ("transcript_segments", "TEXT"),
     ]:
         if col not in existing:
             conn.execute(f"ALTER TABLE meetings ADD COLUMN {col} {definition}")
@@ -277,6 +278,7 @@ def update_job_result(
     speakers: Optional[dict] = None,
     suggested_speakers: Optional[dict] = None,
     diarization: Optional[dict] = None,
+    transcript_segments: Optional[list] = None,
     duration_sec: Optional[int] = None,
     status: Optional[str] = None,
 ) -> None:
@@ -299,6 +301,9 @@ def update_job_result(
     if diarization is not None:
         fields.append("diarization = ?")
         values.append(json.dumps(diarization, ensure_ascii=False))
+    if transcript_segments is not None:
+        fields.append("transcript_segments = ?")
+        values.append(json.dumps(transcript_segments, ensure_ascii=False))
     if duration_sec is not None:
         fields.append("duration_sec = ?")
         values.append(duration_sec)
