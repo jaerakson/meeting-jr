@@ -46,3 +46,6 @@ test-*.png
 
 # 에이전트 Playwright 스크린샷
 *.png
+
+# sqlite 부산물 (WAL 모드)
+backend/meetings.db-*

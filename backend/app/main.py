@@ -650,6 +650,10 @@ async def patch_tags(job_id: str, body: dict):
 
 @app.patch("/api/jobs/{job_id}/transcript")
 async def patch_transcript(job_id: str, body: dict):
+    """편집된 transcript를 재요약 없이 저장한다 (segments도 함께 갱신).
+
+    body: {transcript: "[00:00] SPEAKER_00: ..."}
+    """
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
@@ -658,7 +662,14 @@ async def patch_transcript(job_id: str, body: dict):
     if not transcript:
         raise HTTPException(status_code=422, detail="transcript가 비어 있습니다.")
 
-    update_job_result(job_id, transcript=transcript)
+    # 편집된 transcript를 파싱해 segments도 같은 호출에 실어 갱신한다. 갱신하지 않으면
+    # 편집 이전의 낡은 segments가 남아, 이후 재렌더 경로(apply-match·rename-speakers)가
+    # 사용자의 편집을 통째로 덮어쓴다(finalize_job에서 닫은 것과 같은 결함).
+    update_job_result(
+        job_id,
+        transcript=transcript,
+        transcript_segments=parse_transcript(transcript),
+    )
 
     script_path = OUTPUT_DIR / f"{job_id}_스크립트.txt"
     script_path.write_text(transcript, encoding="utf-8")
@@ -2389,53 +2400,32 @@ async def save_speaker_profile(job_id: str, body: dict):
 
     speaker_segs = diar_data.get(speaker_label)
 
-    # speaker_label이 매핑된 이름(예: "김팀장")인 경우, job.speakers에서 역조회
+    # speaker_label이 라벨이 아니라 표시 이름으로 온 경우, speaker_map 역맵으로 라벨을 되찾는다.
+    # 값이 중복이면(여러 diar 라벨이 한 사람으로 병합된 행 — 실제 DB에 3건) 어느 라벨인지
+    # 데이터만으로 결정할 수 없으므로 역맵에서 제외한다. 추측하지 않고 아래 422로 떨어뜨린다.
     if not speaker_segs:
-        job_speakers = job.get("speakers") or {}
-        for key, val in job_speakers.items():
-            if val == speaker_label and key in diar_data:
-                speaker_label = key
-                speaker_segs = diar_data[key]
-                break
+        speaker_map = job.get("speakers") or {}
+        if isinstance(speaker_map, str):
+            speaker_map = json.loads(speaker_map)
+        from collections import Counter as _Counter
+        _counts = _Counter(speaker_map.values())
+        inverse = {v: k for k, v in speaker_map.items() if _counts[v] == 1}
+        resolved = inverse.get(speaker_label)
+        if resolved and resolved in diar_data:
+            speaker_label = resolved
+            speaker_segs = diar_data[resolved]
 
-    # identity mapping ({아빠: 아빠}) 등으로 SPEAKER_XX 매핑이 소실된 경우,
-    # transcript 구간과 diarization 세그먼트를 교차 비교하여 추론
+    # 레거시 행(speaker_map 키가 실명이라 diar 라벨과 다리가 없는 행)은 여기서 끝난다.
+    # 예전에는 transcript 구간과 diar 세그먼트의 overlap으로 추론했지만, 그 휴리스틱은
+    # apply_match·participation에서 삭제한 것과 같은 방식이라 함께 제거했다.
+    # 조용히 틀리는 대신 아래에서 명시적으로 422를 낸다.
     if not speaker_segs:
-        transcript = job.get("transcript") or ""
-        # transcript의 모든 발화 시작 시각을 파싱하여 각 화자의 구간을 구성
-        utterances: list[tuple[float, str]] = []  # (start_sec, speaker_name)
-        for line in transcript.split("\n"):
-            m = re.match(r"\[(\d+):(\d+)\]\s*(.+?):", line)
-            if m:
-                t = int(m.group(1)) * 60 + int(m.group(2))
-                utterances.append((t, m.group(3).strip()))
-        if utterances:
-            # 각 발화의 시작~다음 발화 시작까지를 해당 화자의 구간으로 설정
-            target_ranges: list[tuple[float, float]] = []
-            for i, (t, name) in enumerate(utterances):
-                if name == speaker_label:
-                    end_t = utterances[i + 1][0] if i + 1 < len(utterances) else t + 30.0
-                    target_ranges.append((t, end_t))
-            if target_ranges:
-                # 각 SPEAKER_XX의 세그먼트가 target 구간에 겹치는 비율로 점수 계산
-                best_key = None
-                best_score = 0.0
-                for diar_key, segs in diar_data.items():
-                    score = 0.0
-                    for seg in segs:
-                        for rng_start, rng_end in target_ranges:
-                            overlap = min(seg["end"], rng_end) - max(seg["start"], rng_start)
-                            if overlap > 0:
-                                score += overlap
-                                break
-                    if score > best_score:
-                        best_score = score
-                        best_key = diar_key
-                if best_key and best_score > 0:
-                    speaker_segs = diar_data[best_key]
-
-    if not speaker_segs:
-        raise HTTPException(status_code=422, detail=f"화자 {speaker_label}의 구간을 찾을 수 없습니다.")
+        raise HTTPException(
+            status_code=422,
+            detail=f"화자 {speaker_label}의 구간을 찾을 수 없습니다. "
+                   "예전 방식으로 저장된 회의(화자 이름이 스크립트에 직접 기록된 회의)에서는 "
+                   "음성 프로필을 추출할 수 없습니다.",
+        )
 
     # WAV 파일 경로
     wav_path = INPUT_DIR / f"{job_id}_16k.wav"
