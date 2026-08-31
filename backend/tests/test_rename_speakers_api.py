@@ -72,7 +72,10 @@ def _assert_rerender_matches(job_id: str, job: dict):
     from app.transcript import get_segments, render
 
     segments = get_segments(job_id)
-    assert render(segments, _get_speakers(job)) == job["transcript"]
+    # PR C 계약: 저장된 transcript 컬럼은 **라벨 공간 렌더**와 바이트 동일해야 한다
+    # (이름은 speakers가 나른다). 표시 문자열 검증은 _display_transcript가 맡는다.
+    assert render(segments, {}) == job["transcript"]
+    assert render(segments, _get_speakers(job)) == _display_transcript(job)
 
 
 # ===========================================================================
@@ -91,8 +94,8 @@ def test_rename_speakers_updates_transcript(client):
     })
     assert res.status_code == 200
     job = client.get("/api/jobs/rename-1").json()
-    assert "박부장:" in job["transcript"], f"실제: {job['transcript']}"
-    assert "김팀장" not in job["transcript"]
+    assert "박부장:" in _display_transcript(job), f"실제: {_display_transcript(job)}"
+    assert "김팀장" not in _display_transcript(job)
     _assert_rerender_matches("rename-1", job)
 
 
@@ -109,7 +112,10 @@ def test_rename_speakers_rerender_matches_stored_transcript(client):
     })
     job = client.get("/api/jobs/rename-2").json()
     segments = get_segments("rename-2")
-    assert render(segments, _get_speakers(job)) == job["transcript"]
+    # PR C 계약: 저장된 transcript 컬럼은 **라벨 공간 렌더**와 바이트 동일해야 한다
+    # (이름은 speakers가 나른다). 표시 문자열 검증은 _display_transcript가 맡는다.
+    assert render(segments, {}) == job["transcript"]
+    assert render(segments, _get_speakers(job)) == _display_transcript(job)
 
 
 # ===========================================================================
@@ -131,8 +137,8 @@ def test_empty_value_keeps_label_not_erased(client):
 
     job = client.get("/api/jobs/rename-3").json()
     # 렌더 방어: 라벨(SPEAKER_01)이 이름을 잃지 않고 transcript에 유지된다
-    assert "SPEAKER_01:" in job["transcript"], f"실제: {job['transcript']}"
-    assert "반갑습니다" in job["transcript"]  # 본문 자체는 그대로
+    assert "SPEAKER_01:" in _display_transcript(job), f"실제: {_display_transcript(job)}"
+    assert "반갑습니다" in _display_transcript(job)  # 본문 자체는 그대로
 
     # 쓰기 방어: DB speakers에 빈 값이 저장되지 않는다
     speakers = _get_speakers(job)
@@ -152,7 +158,7 @@ def test_whitespace_only_value_keeps_label_not_erased(client):
     })
     assert res.status_code == 200
     job = client.get("/api/jobs/rename-4").json()
-    assert "SPEAKER_01:" in job["transcript"], f"실제: {job['transcript']}"
+    assert "SPEAKER_01:" in _display_transcript(job), f"실제: {_display_transcript(job)}"
     speakers = _get_speakers(job)
     assert (speakers.get("SPEAKER_01") or "").strip() == "", f"실제: {speakers}"
     # 저장이 되더라도(구현에 따라 완전 제외될 수도 있음) transcript에 공백 이름이
@@ -172,8 +178,8 @@ def test_value_with_surrounding_whitespace_is_stripped(client):
     })
     assert res.status_code == 200
     job = client.get("/api/jobs/rename-5").json()
-    assert "김철수:" in job["transcript"], f"실제: {job['transcript']}"
-    assert " 김철수 :" not in job["transcript"]
+    assert "김철수:" in _display_transcript(job), f"실제: {_display_transcript(job)}"
+    assert " 김철수 :" not in _display_transcript(job)
     speakers = _get_speakers(job)
     assert speakers.get("SPEAKER_00") == "김철수", f"실제: {speakers}"
     _assert_rerender_matches("rename-5", job)
@@ -192,8 +198,8 @@ def test_empty_value_does_not_crash_when_all_values_empty(client):
     })
     assert res.status_code == 200
     job = client.get("/api/jobs/rename-6").json()
-    assert "SPEAKER_00:" in job["transcript"]
-    assert "SPEAKER_01:" in job["transcript"]
+    assert "SPEAKER_00:" in _display_transcript(job)
+    assert "SPEAKER_01:" in _display_transcript(job)
     _assert_rerender_matches("rename-6", job)
 
 
@@ -219,12 +225,12 @@ class TestPartialMapMergeSafe:
         assert res.status_code == 200
 
         job = client.get("/api/jobs/rename-partial-1").json()
-        assert "박부장:" in job["transcript"]
-        assert "이대리:" in job["transcript"], (
+        assert "박부장:" in _display_transcript(job)
+        assert "이대리:" in _display_transcript(job), (
             f"부분 map에서 언급 안 된 라벨의 기존 이름이 transcript에서 사라지면 안 됨. "
-            f"실제: {job['transcript']}"
+            f"실제: {_display_transcript(job)}"
         )
-        assert "SPEAKER_01:" not in job["transcript"]
+        assert "SPEAKER_01:" not in _display_transcript(job)
 
         speakers = _get_speakers(job)
         assert speakers.get("SPEAKER_00") == "박부장", f"실제: {speakers}"
@@ -254,7 +260,7 @@ class TestPartialMapMergeSafe:
         assert res.status_code == 200
 
         job = client.get("/api/jobs/rename-partial-2").json()
-        transcript = job["transcript"]
+        transcript = _display_transcript(job)
         assert "박부장:" in transcript
         assert "정과장:" in transcript
         assert "최부장:" in transcript, (
@@ -266,3 +272,24 @@ class TestPartialMapMergeSafe:
         assert speakers.get("SPEAKER_01") == "정과장"
         assert speakers.get("SPEAKER_02") == "최부장", f"실제: {speakers}"
         _assert_rerender_matches("rename-partial-2", job)
+
+
+def _display_transcript(job: dict) -> str:
+    """소비 시점 렌더로 **표시 문자열**을 만든다.
+
+    PR C 확정 계약: 저장되는 `job.transcript` 컬럼은 **항상 라벨**(`SPEAKER_XX`)이고
+    이름은 `job.speakers`가 나른다. 표시(화면·다운로드·복사·공유)는 소비 시점에
+    `render(segments, speakers)`로 만든다. 따라서 "이름이 보이는가"를 검증하는 단언은
+    저장 문자열이 아니라 **이 함수의 결과**를 봐야 한다. 단언의 판별력은 그대로다 —
+    이름이 잘못 매핑되면 여기서 똑같이 실패한다.
+    """
+    from app.transcript import parse as _parse, render as _render
+    speakers = job.get("speakers") or {}
+    if isinstance(speakers, str):
+        import json as _json
+        speakers = _json.loads(speakers)
+    segments = job.get("transcript_segments") or _parse(job.get("transcript") or "")
+    if isinstance(segments, str):
+        import json as _json
+        segments = _json.loads(segments)
+    return _render(segments, speakers)

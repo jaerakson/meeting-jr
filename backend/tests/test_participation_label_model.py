@@ -77,7 +77,7 @@ class TestParticipationAfterRematch:
 
         import re
         job = client.get("/api/jobs/part-rematch-1").json()
-        transcript_speakers = set(re.findall(r"\[\d{2}:\d{2}\]\s*(.+?):", job["transcript"]))
+        transcript_speakers = set(re.findall(r"\[\d{2}:\d{2}\]\s*(.+?):", _display_transcript(job)))
         participation_names = {s["display_name"] for s in data["speakers"]}
         for name in transcript_speakers:
             assert name in participation_names, (
@@ -300,3 +300,24 @@ class TestPassthroughSegmentsExcludedFromParticipation:
         )
         turn_counts = {s["label"]: s["turn_count"] for s in data["speakers"]}
         assert turn_counts == {"아빠": 1, "엄마": 1}, f"실제: {turn_counts}"
+
+
+def _display_transcript(job: dict) -> str:
+    """소비 시점 렌더로 **표시 문자열**을 만든다.
+
+    PR C 확정 계약: 저장되는 `job.transcript` 컬럼은 **항상 라벨**(`SPEAKER_XX`)이고
+    이름은 `job.speakers`가 나른다. 표시(화면·다운로드·복사·공유)는 소비 시점에
+    `render(segments, speakers)`로 만든다. 따라서 "이름이 보이는가"를 검증하는 단언은
+    저장 문자열이 아니라 **이 함수의 결과**를 봐야 한다. 단언의 판별력은 그대로다 —
+    이름이 잘못 매핑되면 여기서 똑같이 실패한다.
+    """
+    from app.transcript import parse as _parse, render as _render
+    speakers = job.get("speakers") or {}
+    if isinstance(speakers, str):
+        import json as _json
+        speakers = _json.loads(speakers)
+    segments = job.get("transcript_segments") or _parse(job.get("transcript") or "")
+    if isinstance(segments, str):
+        import json as _json
+        segments = _json.loads(segments)
+    return _render(segments, speakers)

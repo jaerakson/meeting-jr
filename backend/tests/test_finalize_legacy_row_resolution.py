@@ -96,11 +96,11 @@ def test_resummarize_with_name_rendered_body_does_not_create_legacy_row(client):
     })
     assert res.status_code == 200
     job = client.get(f"/api/jobs/{job_id}").json()
-    assert "김팀장:" in job["transcript"], "전제: rename 후 본문에 이름이 직접 렌더돼야 한다"
+    assert "김팀장:" in _display_transcript(job), "전제: rename 후 본문에 이름이 직접 렌더돼야 한다"
 
     # handleResummarize 그대로: job.transcript(이름 렌더됨) + job.speakers(옛 그대로)를
     # /finalize에 보낸다. 재요약 카테고리 변경 없이 순수 재요약 시나리오.
-    res2 = _finalize(client, job_id, job["transcript"], job["speakers"])
+    res2 = _finalize(client, job_id, _display_transcript(job), job["speakers"])
     assert res2.status_code == 200, f"실제: {res2.status_code} {res2.text}"
 
     job2 = client.get(f"/api/jobs/{job_id}").json()
@@ -188,7 +188,7 @@ def test_patch_transcript_and_finalize_share_resolution_and_agree(client):
     job_a = _setup("shared-helper-patch")
     job_b = _setup("shared-helper-finalize")
 
-    edited = job_a["transcript"] + "\n[00:10] 김팀장: 추가 발언"
+    edited = _display_transcript(job_a) + "\n[00:10] 김팀장: 추가 발언"
 
     res_patch = client.patch("/api/jobs/shared-helper-patch/transcript", json={
         "transcript": edited,
@@ -206,3 +206,24 @@ def test_patch_transcript_and_finalize_share_resolution_and_agree(client):
         f"두 엔드포인트가 같은 입력에 다른 결과를 내면 헬퍼가 공유되지 않은 것이다. "
         f"patch={labels_patch}, finalize={labels_finalize}"
     )
+
+
+def _display_transcript(job: dict) -> str:
+    """소비 시점 렌더로 **표시 문자열**을 만든다.
+
+    PR C 확정 계약: 저장되는 `job.transcript` 컬럼은 **항상 라벨**(`SPEAKER_XX`)이고
+    이름은 `job.speakers`가 나른다. 표시(화면·다운로드·복사·공유)는 소비 시점에
+    `render(segments, speakers)`로 만든다. 따라서 "이름이 보이는가"를 검증하는 단언은
+    저장 문자열이 아니라 **이 함수의 결과**를 봐야 한다. 단언의 판별력은 그대로다 —
+    이름이 잘못 매핑되면 여기서 똑같이 실패한다.
+    """
+    from app.transcript import parse as _parse, render as _render
+    speakers = job.get("speakers") or {}
+    if isinstance(speakers, str):
+        import json as _json
+        speakers = _json.loads(speakers)
+    segments = job.get("transcript_segments") or _parse(job.get("transcript") or "")
+    if isinstance(segments, str):
+        import json as _json
+        segments = _json.loads(segments)
+    return _render(segments, speakers)

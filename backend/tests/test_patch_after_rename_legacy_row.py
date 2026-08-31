@@ -71,10 +71,10 @@ def test_edit_after_rename_no_longer_creates_legacy_row(client):
     })
     assert res.status_code == 200
     job = client.get(f"/api/jobs/{job_id}").json()
-    assert "김팀장:" in job["transcript"], "전제: rename 후 본문에 이름이 직접 렌더된다"
+    assert "김팀장:" in _display_transcript(job), "전제: rename 후 본문에 이름이 직접 렌더된다"
 
     # 이름-렌더된 본문을 그대로 받아 새 줄 하나를 추가하고 PATCH — MainArea 그대로.
-    edited = job["transcript"] + "\n[00:10] 김팀장: 추가 발언"
+    edited = _display_transcript(job) + "\n[00:10] 김팀장: 추가 발언"
     res2 = client.patch(f"/api/jobs/{job_id}/transcript", json={"transcript": edited})
     assert res2.status_code == 200, f"고쳐진 계약: (c) 유일 역맵으로 해소돼 200이어야 한다. {res2.text}"
 
@@ -92,7 +92,7 @@ def test_edit_after_rename_no_longer_creates_legacy_row(client):
         f"labels={labels}, speaker_keys={speaker_keys}"
     )
     # 편집한 내용(새 발언)이 유실되지 않았는지도 확인
-    assert "추가 발언" in job2["transcript"]
+    assert "추가 발언" in _display_transcript(job2)
 
     # apply-match가 정상 동작하는지(레거시 행이면 예전엔 200으로 조용히 고아 키를 만들었다 —
     # 지금은애초에 레거시 행이 아니므로 정상적으로 SPEAKER_00 라벨을 대상으로 성공해야 한다).
@@ -214,3 +214,24 @@ def test_label_already_in_diar_space_passes_through_unchanged(client):
     from app.transcript import get_segments
     labels = {s["label"] for s in get_segments(job_id)}
     assert labels == {"SPEAKER_00", "SPEAKER_01"}
+
+
+def _display_transcript(job: dict) -> str:
+    """소비 시점 렌더로 **표시 문자열**을 만든다.
+
+    PR C 확정 계약: 저장되는 `job.transcript` 컬럼은 **항상 라벨**(`SPEAKER_XX`)이고
+    이름은 `job.speakers`가 나른다. 표시(화면·다운로드·복사·공유)는 소비 시점에
+    `render(segments, speakers)`로 만든다. 따라서 "이름이 보이는가"를 검증하는 단언은
+    저장 문자열이 아니라 **이 함수의 결과**를 봐야 한다. 단언의 판별력은 그대로다 —
+    이름이 잘못 매핑되면 여기서 똑같이 실패한다.
+    """
+    from app.transcript import parse as _parse, render as _render
+    speakers = job.get("speakers") or {}
+    if isinstance(speakers, str):
+        import json as _json
+        speakers = _json.loads(speakers)
+    segments = job.get("transcript_segments") or _parse(job.get("transcript") or "")
+    if isinstance(segments, str):
+        import json as _json
+        segments = _json.loads(segments)
+    return _render(segments, speakers)

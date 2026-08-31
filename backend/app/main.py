@@ -813,7 +813,25 @@ async def patch_transcript(job_id: str, body: dict):
     old_speakers = job.get("speakers") or {}
     # `or {}`로 None(키 부재)과 {}(빈 맵)을 **같은 쪽**으로 몬다. `is not None`으로 쓰면
     # 빈 맵이 갱신 경로로 새어 들어가 speakers를 통째로 지운다.
-    body_map = body.get("speaker_map") or {}
+    raw_body_map = body.get("speaker_map") or {}
+
+    # 편집 **이전**의 세그먼트. get_segments()는 백필 쓰기가 섞이므로 쓰지 않는다.
+    old_segments = job.get("transcript_segments") or parse_transcript(job.get("transcript") or "")
+
+    # body의 map을 **그대로 라벨 공간으로 인정하지 않는다.** 클라이언트가 보내는 키는
+    # 신뢰할 수 없는 입력이고, 라벨 공간은 **이미 존재하는 라벨**로만 정의된다:
+    #   diar 라벨 ∪ 편집 이전 세그먼트의 라벨 ∪ 기존 speakers 키(레거시 행 보존).
+    # 이 필터가 없으면 라벨 자리에 실명이 들어 있는 본문을 편집할 때
+    # `speakerMap["김팀장"] = "박부장"` 같은 **실명 키**가 공간의 정식 멤버로 인정돼
+    # (a)를 통과하고, segments에 `label == "김팀장"`인 **레거시 행이 새로 생긴다**
+    # (이 PR이 4라운드째 죽이고 있는 결함). 모르는 키는 추측하지 않고 **버린다** —
+    # 저장하면 job.speakers에 실명 키 고아 항목이 남아 그 행이 레거시로 분류된다.
+    known_labels = (
+        _diar_label_space(job_id)
+        | {seg.get("label") for seg in old_segments if seg.get("label")}
+        | set(old_speakers)
+    )
+    body_map = {k: v for k, v in raw_body_map.items() if k in known_labels}
 
     # 파싱한 라벨을 **원래 라벨로 되돌린 뒤** 저장한다(finalize_job과 같은 헬퍼).
     #
@@ -830,8 +848,7 @@ async def patch_transcript(job_id: str, body: dict):
         transcript,
         space_map=body_map if body_map else old_speakers,
         restore_map=old_speakers,
-        # 편집 **이전**의 세그먼트. get_segments()는 백필 쓰기가 섞이므로 쓰지 않는다.
-        old_segments=job.get("transcript_segments") or parse_transcript(job.get("transcript") or ""),
+        old_segments=old_segments,
     )
 
     # transcript는 받은 문자열 **그대로**, segments는 **재키잉된 것**을 같은 호출로 저장한다.
@@ -2039,9 +2056,15 @@ async def apply_match(job_id: str, body: dict):
             },
         )
 
+    # transcript 컬럼에는 **이름을 굽지 않는다** — 항상 라벨이다(빈 map 으로 렌더).
+    # 이름은 speakers 컬럼이 나르고, 표시는 소비 시점에 렌더한다. 여기에 new_speakers 를
+    # 넘기면 transcript(실명) 와 transcript_segments(라벨) 가 서로 다른 공간으로 갈라지고,
+    # 새 프론트 계약("본문을 그대로 파싱해 라벨로 쓴다") 과 만나 **레거시 행이 새로 생긴다**:
+    # 실명 본문 → 프론트가 파싱해 label="김팀장" → "전체 변경" 시 speaker_map 에 실명 키가
+    # 실려 오고 → 그것이 라벨 공간이 되어 (a) 를 통과 → segments.label 이 실명으로 굳는다.
     update_job_result(
         job_id,
-        transcript=render_transcript(segments, new_speakers),
+        transcript=render_transcript(segments, {}),
         speakers=new_speakers,
         transcript_segments=segments,
     )
@@ -2199,9 +2222,12 @@ async def rename_speakers(job_id: str, body: dict):
     normalized: dict = get_job(job_id).get("speakers") or {}
 
     if segments:
+        # transcript 컬럼은 **항상 라벨**이다(빈 map 으로 렌더). 이름은 speakers 가 나른다.
+        # normalized 를 넘기면 실명이 본문에 구워져 apply_match 와 같은 경로로 레거시 행을
+        # 만든다(위 주석 참조). 표시는 소비 시점 렌더가 책임진다.
         update_job_result(
             job_id,
-            transcript=render_transcript(segments, normalized),
+            transcript=render_transcript(segments, {}),
             transcript_segments=segments,
         )
 

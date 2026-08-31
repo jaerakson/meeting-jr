@@ -86,8 +86,8 @@ def test_patch_transcript_edit_survives_subsequent_rename_speakers(client):
 
     # PATCH 직후: 편집이 그대로 저장돼 있어야 한다.
     job_after_patch = client.get("/api/jobs/patch-rename-1").json()
-    assert "새로 추가한 발언" in job_after_patch["transcript"], (
-        f"PATCH 직후 편집이 반영돼야 함. 실제: {job_after_patch['transcript']}"
+    assert "새로 추가한 발언" in _display_transcript(job_after_patch), (
+        f"PATCH 직후 편집이 반영돼야 함. 실제: {_display_transcript(job_after_patch)}"
     )
 
     # rename-speakers 호출 — 편집이 여전히 살아있어야 한다.
@@ -97,20 +97,44 @@ def test_patch_transcript_edit_survives_subsequent_rename_speakers(client):
     assert res2.status_code == 200
 
     job = client.get("/api/jobs/patch-rename-1").json()
-    assert "새로 추가한 발언" in job["transcript"], (
+    assert "새로 추가한 발언" in _display_transcript(job), (
         f"PATCH로 추가한 발언이 이후 rename-speakers 호출 뒤 사라지면 안 됨 "
         f"(PATCH가 transcript_segments를 갱신하지 않으면, rename-speakers가 편집 전 "
-        f"낡은 segments로 재렌더해 이 발언이 통째로 사라진다). 실제: {job['transcript']}"
+        f"낡은 segments로 재렌더해 이 발언이 통째로 사라진다). 실제: {_display_transcript(job)}"
     )
-    assert job["transcript"].count("박부장:") == 2, (
+    assert _display_transcript(job).count("박부장:") == 2, (
         f"편집으로 늘어난 SPEAKER_00 발언 2건 모두 새 이름으로 반영돼야 함. "
-        f"실제: {job['transcript']}"
+        f"실제: {_display_transcript(job)}"
     )
-    assert "이대리:" in job["transcript"]
+    assert "이대리:" in _display_transcript(job)
 
     from app.transcript import get_segments, render
     post_segments = get_segments("patch-rename-1")
     assert len(post_segments) == 3, (
         f"PATCH 이후 segments도 편집된 3줄로 갱신돼 있어야 함. 실제: {len(post_segments)}줄"
     )
-    assert render(post_segments, _get_speakers(job)) == job["transcript"]
+    # PR C 계약: 저장된 transcript 컬럼은 **라벨 공간 렌더**와 바이트 동일해야 한다
+    # (이름은 speakers가 나른다). 표시 문자열 검증은 _display_transcript가 맡는다.
+    assert render(post_segments, {}) == job["transcript"]
+    assert render(post_segments, _get_speakers(job)) == _display_transcript(job)
+
+
+def _display_transcript(job: dict) -> str:
+    """소비 시점 렌더로 **표시 문자열**을 만든다.
+
+    PR C 확정 계약: 저장되는 `job.transcript` 컬럼은 **항상 라벨**(`SPEAKER_XX`)이고
+    이름은 `job.speakers`가 나른다. 표시(화면·다운로드·복사·공유)는 소비 시점에
+    `render(segments, speakers)`로 만든다. 따라서 "이름이 보이는가"를 검증하는 단언은
+    저장 문자열이 아니라 **이 함수의 결과**를 봐야 한다. 단언의 판별력은 그대로다 —
+    이름이 잘못 매핑되면 여기서 똑같이 실패한다.
+    """
+    from app.transcript import parse as _parse, render as _render
+    speakers = job.get("speakers") or {}
+    if isinstance(speakers, str):
+        import json as _json
+        speakers = _json.loads(speakers)
+    segments = job.get("transcript_segments") or _parse(job.get("transcript") or "")
+    if isinstance(segments, str):
+        import json as _json
+        segments = _json.loads(segments)
+    return _render(segments, speakers)

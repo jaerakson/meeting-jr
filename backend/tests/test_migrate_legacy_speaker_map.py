@@ -181,7 +181,7 @@ def test_direct_recovery_rekeys_labels_and_apply_match_succeeds(db_path):
         )
         job = client.get(f"/api/jobs/{job_id}").json()
         assert job["speakers"]["SPEAKER_00"] == "박부장"
-        assert "박부장:" in job["transcript"]
+        assert "박부장:" in _display_transcript(job)
 
 
 # ---------------------------------------------------------------------------
@@ -849,3 +849,24 @@ def test_write_flag_never_touches_skip_or_noop_rows(db_path):
     # OK 행만 실제로 바뀌었는지(대조군) 확인 — 위 두 단언이 "아무것도 안 바뀜"이
     # 우연이 아니라 write 로직이 실제로 실행됐다는 증거.
     assert json.loads(after_ok["transcript_segments"])[0]["label"] == "SPEAKER_00"
+
+
+def _display_transcript(job: dict) -> str:
+    """소비 시점 렌더로 **표시 문자열**을 만든다.
+
+    PR C 확정 계약: 저장되는 `job.transcript` 컬럼은 **항상 라벨**(`SPEAKER_XX`)이고
+    이름은 `job.speakers`가 나른다. 표시(화면·다운로드·복사·공유)는 소비 시점에
+    `render(segments, speakers)`로 만든다. 따라서 "이름이 보이는가"를 검증하는 단언은
+    저장 문자열이 아니라 **이 함수의 결과**를 봐야 한다. 단언의 판별력은 그대로다 —
+    이름이 잘못 매핑되면 여기서 똑같이 실패한다.
+    """
+    from app.transcript import parse as _parse, render as _render
+    speakers = job.get("speakers") or {}
+    if isinstance(speakers, str):
+        import json as _json
+        speakers = _json.loads(speakers)
+    segments = job.get("transcript_segments") or _parse(job.get("transcript") or "")
+    if isinstance(segments, str):
+        import json as _json
+        segments = _json.loads(segments)
+    return _render(segments, speakers)
