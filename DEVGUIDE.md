@@ -284,7 +284,7 @@ meeting-jr/
 | PATCH | `/api/jobs/{job_id}/bookmark` | 북마크 토글 |
 | PATCH | `/api/jobs/{job_id}/memo` | 회의 메모 저장 |
 | PATCH | `/api/jobs/{job_id}/tags` | 태그 저장 |
-| PATCH | `/api/jobs/{job_id}/transcript` | 편집된 transcript를 재요약 없이 저장한다 (segments도 함께 갱신). |
+| PATCH | `/api/jobs/{job_id}/transcript` | 편집된 transcript를 재요약 없이 저장한다 (segments·화자 이름도 함께 갱신). |
 | PATCH | `/api/jobs/{job_id}/summary` | 요약 내용 저장 |
 | POST | `/api/insights` | 크로스 회의 인사이트 (keyword/날짜 필터 → claude -p) |
 | POST | `/api/jobs/{job_id}/ask` | AI 추가 질의 (claude -p) |

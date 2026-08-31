@@ -787,9 +787,20 @@ async def patch_tags(job_id: str, body: dict):
 
 @app.patch("/api/jobs/{job_id}/transcript")
 async def patch_transcript(job_id: str, body: dict):
-    """편집된 transcript를 재요약 없이 저장한다 (segments도 함께 갱신).
+    """편집된 transcript를 재요약 없이 저장한다 (segments·화자 이름도 함께 갱신).
 
-    body: {transcript: "[00:00] SPEAKER_00: ..."}
+    body: {transcript: "[00:00] SPEAKER_00: ...", speaker_map?: {"SPEAKER_00": "김팀장"}}
+
+    `speaker_map`은 **선택**이다. 두 세대의 클라이언트를 같은 엔드포인트가 받는다:
+      - **새 계약(PR C)**: 본문은 라벨 그대로, 이름은 `speaker_map`이 나른다.
+        map이 있으면 그것이 **라벨 공간**이 되고 `job.speakers`도 함께 갱신된다.
+      - **구버전 번들·직접 API 호출**: map 없이 이름이 구워진 본문만 온다.
+        이때는 공간·복원 모두 `job.speakers`를 쓰고 `speakers`는 갱신하지 않는다
+        (기존 동작 그대로 — 하위호환).
+
+    빈 맵(`{}`)은 키 부재와 **같게** 취급한다("이름을 전부 지운다"가 아니라 "이 요청은
+    이름 정보를 싣지 않았다"). 그대로 쓰면 `update_job_result`가 `speakers`를 `{}`로
+    덮어써 그 회의의 화자 이름이 영구 소실된다.
     """
     job = get_job(job_id)
     if not job:
@@ -799,16 +810,26 @@ async def patch_transcript(job_id: str, body: dict):
     if not transcript:
         raise HTTPException(status_code=422, detail="transcript가 비어 있습니다.")
 
+    old_speakers = job.get("speakers") or {}
+    # `or {}`로 None(키 부재)과 {}(빈 맵)을 **같은 쪽**으로 몬다. `is not None`으로 쓰면
+    # 빈 맵이 갱신 경로로 새어 들어가 speakers를 통째로 지운다.
+    body_map = body.get("speaker_map") or {}
+
     # 파싱한 라벨을 **원래 라벨로 되돌린 뒤** 저장한다(finalize_job과 같은 헬퍼).
-    # 이 엔드포인트가 받는 문자열은 화면에 보여주던 job.transcript 그대로라 이미 표시
-    # 이름이 렌더돼 있고, 그냥 parse하면 실명이 라벨로 굳어 레거시 행이 생긴다.
-    # body에 speaker_map이 없으므로 공간·복원 모두 job.speakers를 쓴다.
-    speaker_map = job.get("speakers") or {}
+    #
+    # 두 map의 역할이 다르다(섞지 말 것 — restore_segment_labels docstring 참조):
+    #   - `space_map`(라벨 공간): body에 map이 오면 **그것**이다. 오지 않으면 job.speakers.
+    #     body map을 공간으로 쓰지 않으면 새 라벨이 미해소가 되어, diar가 없는 회의는
+    #     422가 나고 diar가 있는 회의는 diar 폴백 덕에 (a)를 통과해 **200인 채로 이름만
+    #     조용히 버려진다**. 두 갈래는 원인이 하나이므로 여기서 같이 닫힌다.
+    #   - `restore_map`(그 텍스트가 렌더된 시점의 상태): 항상 **job.speakers**다.
+    #     본문은 새 이름이 아니라 **옛 이름**으로 렌더돼 있으므로 새 map으로 (b)(c)를
+    #     돌리면 안 된다.
     new_segments = restore_segment_labels(
         job_id,
         transcript,
-        space_map=speaker_map,
-        restore_map=speaker_map,
+        space_map=body_map if body_map else old_speakers,
+        restore_map=old_speakers,
         # 편집 **이전**의 세그먼트. get_segments()는 백필 쓰기가 섞이므로 쓰지 않는다.
         old_segments=job.get("transcript_segments") or parse_transcript(job.get("transcript") or ""),
     )
@@ -816,14 +837,27 @@ async def patch_transcript(job_id: str, body: dict):
     # transcript는 받은 문자열 **그대로**, segments는 **재키잉된 것**을 같은 호출로 저장한다.
     # 갱신하지 않으면 편집 이전의 낡은 segments가 남아, 이후 재렌더 경로(apply-match·
     # rename-speakers)가 사용자의 편집을 통째로 덮어쓴다(finalize_job에서 닫은 것과 같은 결함).
-    update_job_result(
-        job_id,
-        transcript=transcript,
-        transcript_segments=new_segments,
-    )
+    if body_map:
+        update_job_result(
+            job_id,
+            transcript=transcript,
+            transcript_segments=new_segments,
+            speakers=body_map,
+        )
+        _save_speakers(body_map)
+    else:
+        update_job_result(
+            job_id,
+            transcript=transcript,
+            transcript_segments=new_segments,
+        )
 
+    # 사람이 읽는 산출물이므로 **이름 적용본**을 쓴다. 문자열은 항상 render() 출력으로만
+    # 만든다(PR B 불변식) — 순차 .replace()는 이름 맞바꾸기에서 화자를 붕괴시킨다.
+    # 이름은 관문(update_job_result)이 정규화(strip·빈 값 제외)한 결과를 되읽어 쓴다.
+    final_speakers = (get_job(job_id) or {}).get("speakers") or {}
     script_path = OUTPUT_DIR / f"{job_id}_스크립트.txt"
-    script_path.write_text(transcript, encoding="utf-8")
+    script_path.write_text(render_transcript(new_segments, final_speakers), encoding="utf-8")
 
     return {"status": "updated", "job_id": job_id}
 
