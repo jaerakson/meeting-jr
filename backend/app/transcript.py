@@ -109,7 +109,11 @@ def render(segments: list[dict], speaker_map: Optional[dict] = None) -> str:
             lines.append(text)
             continue
 
-        display = (speaker_map or {}).get(label, label)
+        # 빈 문자열·공백뿐인 매핑 값은 매핑이 없는 것으로 취급한다.
+        # (rename-speakers의 프론트 초기값이 ''이라 실제로 도달 가능한 입력이고,
+        #  그대로 치환하면 화자 이름을 지운다.) 빈 값은 display == label 로 수렴해
+        # 아래 raw 우선순위 규칙에 자연히 흡수된다.
+        display = ((speaker_map or {}).get(label) or "").strip() or label
         raw = seg.get("raw")
         if raw is not None and display == label:
             lines.append(raw)

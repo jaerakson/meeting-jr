@@ -59,15 +59,6 @@ DEFAULT_PROMPT = """다음 회의 스크립트를 분석하여 한국어로 회�
 {script}"""
 
 
-def _replace_speakers(script_content: str, speaker_map: dict) -> str:
-    """스크립트 내 SPEAKER_XX를 실제 이름으로 치환한다."""
-    result = script_content
-    for speaker_id, name in speaker_map.items():
-        if name and name.strip():
-            result = result.replace(speaker_id, name.strip())
-    return result
-
-
 def _save_speaker_names(speaker_map: dict) -> None:
     """speaker_map의 이름을 speakers.json에 저장하여 다음 회의에서 제안한다."""
     existing: dict = {}
@@ -124,8 +115,11 @@ async def generate_summary(
 
     script_content = script_file.read_text(encoding="utf-8")
 
-    # 2. 화자 이름 치환
-    script_content = _replace_speakers(script_content, speaker_map)
+    # 2. 화자 이름 치환은 여기서 하지 않는다.
+    #    스크립트 파일은 이미 render(segments, speaker_map) 출력이다(main.py의
+    #    finalize_job·regenerate_summary). 여기서 한 번 더 치환하면 중복 치환이 되어
+    #    이름 맞바꾸기({"아빠":"엄마","엄마":"아빠"})에서 두 화자가 한 명으로 붕괴한다.
+    #    (게다가 줄 앵커 없는 전체 문자열 .replace()라 본문 텍스트까지 오염시켰다.)
 
     # 3. speakers.json 업데이트
     _save_speaker_names(speaker_map)

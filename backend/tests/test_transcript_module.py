@@ -337,3 +337,39 @@ def test_canonical_lines_never_produce_raw(raw):
     raw가 여기서 생긴다면 정규형 렌더 로직 자체가 원본과 어긋난다는 뜻 — 파싱 실패 은폐를 조기 발견."""
     segments = parse(raw)
     assert all("raw" not in seg or seg["raw"] is None for seg in segments)
+
+
+# ---------------------------------------------------------------------------
+# 빈 값 방어 (PR B 준비 — director 사양) — display가 빈/공백뿐이면 라벨 유지
+#   display = (speaker_map.get(label) or "").strip() or label
+#   빈 값은 display == label 로 수렴 → 기존 raw 우선순위 규칙에 자연 흡수된다.
+#   rename-speakers의 프론트 초기값이 ''이라 실제로 도달 가능한 입력이다.
+# ---------------------------------------------------------------------------
+
+def test_empty_speaker_map_value_keeps_label():
+    """speaker_map 값이 빈 문자열이면 치환하지 않고 라벨을 유지한다
+    (이름을 지우는 사고 방지)."""
+    segs = parse("[00:00] SPEAKER_00: 안녕")
+    assert render(segs, speaker_map={"SPEAKER_00": ""}) == "[00:00] SPEAKER_00: 안녕"
+
+
+def test_whitespace_only_speaker_map_value_keeps_label():
+    """공백만 있는 값도 빈 값과 동일하게 취급되어 라벨이 유지된다."""
+    segs = parse("[00:00] SPEAKER_00: 안녕")
+    assert render(segs, speaker_map={"SPEAKER_00": "   "}) == "[00:00] SPEAKER_00: 안녕"
+
+
+def test_speaker_map_value_with_surrounding_whitespace_is_stripped_on_substitution():
+    """앞뒤 공백이 있는 정상 값은 strip되어 치환된다."""
+    segs = parse("[00:00] SPEAKER_00: 안녕")
+    assert render(segs, speaker_map={"SPEAKER_00": " 김철수 "}) == "[00:00] 김철수: 안녕"
+
+
+def test_empty_speaker_map_value_roundtrips_byte_identical_via_raw():
+    """빈 값은 display==label로 수렴해 치환이 실제로는 일어나지 않는다 —
+    왕복만 보면 정상으로 보이는 그 케이스를 여기서 명시적으로 잡는다
+    (라벨 공백 결함이 왕복만으로는 안 잡혔던 것과 같은 종류의 위험)."""
+    raw_line = "[007:05] SPEAKER_00: 안녕"  # 비정규 자릿수 → raw 보유
+    segs = parse(raw_line)
+    assert render(segs, speaker_map={"SPEAKER_00": ""}) == raw_line
+    assert render(segs, speaker_map={"SPEAKER_00": "   "}) == raw_line
