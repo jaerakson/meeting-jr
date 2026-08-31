@@ -98,7 +98,12 @@ export default function Transcript({ transcript, currentTime, onTimeClick, edita
   }, [editable, transcript])
 
   const segments = editable ? editSegments : parsedSegments
-  const effectiveSpeakerMap = editable ? speakerMap : (speakers ?? {})
+  // speakers가 매 렌더 새 객체 리터럴(예: `job.speakers || {}`)로 들어올 수 있으므로,
+  // effectiveSpeakerMap 자체도 useMemo로 감싸 아래 lines의 메모가 매 렌더 무력화되지 않게 한다.
+  const effectiveSpeakerMap = useMemo(
+    () => (editable ? speakerMap : (speakers ?? {})),
+    [editable, speakerMap, speakers]
+  )
   const lines = useMemo(() => toViewLines(segments, effectiveSpeakerMap), [segments, effectiveSpeakerMap])
 
   const speakerColorMap = useMemo(() => {

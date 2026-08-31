@@ -42,7 +42,11 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   const [editData, setEditData] = useState<EditData | null>(null)
   const [isEditingTranscript, setIsEditingTranscript] = useState(false)
   const [localTranscript, setLocalTranscript] = useState('')
-  const [localSpeakerMap, setLocalSpeakerMap] = useState<Record<string, string>>({})
+  // null = 편집으로 갱신된 적 없음(재요약이 편집 모드를 거치지 않는 경로에서 job.speakers로
+  // 폴백해야 한다는 신호). {}는 "편집에서 실제로 빈 맵으로 확정됨"과 구분되는 별개 상태다 —
+  // {}를 초기값으로 쓰면 `localSpeakerMap ?? job.speakers ?? {}`의 `??`가 절대 발동하지 않아
+  // 재요약 시 job.speakers가 빈 맵으로 덮여써진다(회귀, director 리뷰).
+  const [localSpeakerMap, setLocalSpeakerMap] = useState<Record<string, string> | null>(null)
   const [resummaryLoading, setResummaryLoading] = useState(false)
   const [showResummarizeModal, setShowResummarizeModal] = useState(false)
   const [resummarizeCategory, setResummarizeCategory] = useState<string>('meeting')
@@ -85,7 +89,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   useEffect(() => {
     setIsEditingTranscript(false)
     setLocalTranscript('')
-    setLocalSpeakerMap({})
+    setLocalSpeakerMap(null)
     setNotionUrl(job?.notion_url ?? null)
     setResummarizeCategory(job?.category_id || 'meeting')
     setMemo(job?.memo || '')
@@ -226,7 +230,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   const handleCancelEditTranscript = () => {
     setIsEditingTranscript(false)
     setLocalTranscript('')
-    setLocalSpeakerMap({})
+    setLocalSpeakerMap(null)
   }
 
   const handleSaveTranscript = async () => {
@@ -248,7 +252,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
       }
       setIsEditingTranscript(false)
       setLocalTranscript('')
-      setLocalSpeakerMap({})
+      setLocalSpeakerMap(null)
       onJobsChange()
     } catch {
       alert('저장에 실패했습니다.')
@@ -278,7 +282,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
       }
       setIsEditingTranscript(false)
       setLocalTranscript('')
-      setLocalSpeakerMap({})
+      setLocalSpeakerMap(null)
       setShowResummarizeModal(false)
       onJobsChange()
     } catch {
