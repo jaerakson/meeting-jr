@@ -275,6 +275,39 @@ def test_5ab8e338_type_and_60b7b738_type_are_not_swapped(db_path):
     assert "조건③" in skip_reason, f"복구 불가 사유가 조건③이어야 한다. 실제: {skip_reason}"
 
 
+def test_unmapped_real_name_label_is_skipped_not_noop(db_path):
+    """[판정 기준 확정, director 지시] "손댈 필요가 있는가"는 **diar 라벨 공간**
+    기준이지, "speaker_map에 이 라벨을 가리키는 다른 키가 있는가"(관계식) 기준이
+    아니다. 이 테스트가 둘을 가르는 유일한 케이스다.
+
+    라벨이 실명("미지의사람")인데 speaker_map **어느 값에도 없는** 행:
+    - 관계식 기준(예전, 폐기): baked = {label: ∃k≠label, map[k]==label}. 이 라벨을
+      가리키는 키가 아예 없으므로 baked에 안 들어가 **조치불필요**로 오분류된다 —
+      그런데 이 행은 실제로 깨져 있다(apply-match가 "미지의사람" 라벨을 모르므로 422).
+      **깨진 행을 정상이라고 보고하는 것**은 이번 작업에서 이미 두 번 잡은 실패 유형이다.
+    - diar 공간 기준(확정): "미지의사람"이 diarization 키 공간 안에 있는가만 본다.
+      없으면 손댈 필요가 있다고 보고, 조건②(값집합==라벨집합)에서 값 쪽에 없으므로
+      **건너뜀**으로 정확히 보고한다(복구는 못 해도 "정상"이라 속이지 않는다).
+    """
+    job_id = "unmapped-real-name-label"
+    _make_row(
+        db_path, job_id,
+        # SPEAKER_00은 정상적으로 이름이 붙어 있다. "미지의사람"은 speaker_map
+        # 어느 값에도 없다 — 이 라벨을 가리키는 키가 아예 없다(관계식이라면 못 잡는다).
+        transcript="[00:00] SPEAKER_00: 안녕\n[00:05] 미지의사람: 네",
+        speakers={"SPEAKER_00": "김팀장"},
+        diarization={"SPEAKER_00": [{"start": 0.0, "end": 5.0}]},
+    )
+    row = next(r for r in mig._load_rows(db_path) if r["id"] == job_id)
+    result = mig.judge(row)
+    assert result["verdict"] == mig.SKIP, (
+        f"라벨이 실명인데 speaker_map 값에 없는 행은 조치불필요가 아니라 건너뜀이어야 "
+        f"한다(관계식 기준이면 조치불필요로 오분류돼 깨진 행을 정상이라 보고한다). "
+        f"실제: {result}"
+    )
+    assert result["new_segments"] is None
+
+
 def test_diar_richness_does_not_rescue_unresolved_label(db_path):
     """[overlap 휴리스틱 재유입 방지, director 강조] 역맵으로 해소 안 되는 라벨은
     diarization이 아무리 풍부해도(정확히 겹치는 시간 구간이 있어도) 복구되지 않는다.
@@ -659,6 +692,65 @@ def test_duplicate_merge_does_not_expose_raw_speaker_id_in_participation(db_path
             f"비대표 라벨({label})의 표시 이름이 raw로 노출됐다 — speakers에서 키가 "
             f"지워졌다는 증거. 실제: {after_names}"
         )
+
+
+def test_participation_check_actually_has_discriminating_power(db_path):
+    """[판별력 증명, director 지시] 위 test_duplicate_merge_does_not_expose_raw_speaker_id_in_participation가
+    통과한 것이 "무딘 검사가 우연히 통과"가 아니라는 것을 증명한다. 기각된 설계
+    (비대표 키를 speaker_map에서 제거)를 **일부러 시뮬레이션**해서 같은 participation
+    비교가 실제로 차이를 잡아내는지 확인한다 — 차이가 안 잡히면 그 단언은 무의미하다."""
+    import app.database as db_module
+    import app.main as main_module
+    from fastapi.testclient import TestClient
+
+    job_id = "dup-merge-discriminating-power"
+    _make_row(
+        db_path, job_id,
+        transcript="[00:00] 이삼희: 첫마디\n[00:10] 이삼희: 둘째마디",
+        speakers=_dup_speaker_map(),  # {"SPEAKER_01": "이삼희", "SPEAKER_02": "이삼희"}
+        diarization=_dup_diar_longer_02(),
+    )
+
+    with TestClient(main_module.app) as client:
+        before = client.get(f"/api/jobs/{job_id}/participation").json()
+    before_names = {s["label"]: s["display_name"] for s in before["speakers"]}
+
+    # 올바른 마이그레이션 실행(비대표 키 유지) — 실제 코드 경로.
+    exit_code = mig.main([f"--db={db_path}", "--write"])
+    assert exit_code == 0
+
+    # 여기서 기각된 설계를 **수동으로 시뮬레이션**한다: 비대표 키(SPEAKER_01)를
+    # speaker_map에서 강제로 지운 뒤 participation을 다시 조회해 차이가 나는지 본다.
+    import sqlite3
+    conn = sqlite3.connect(str(db_path))
+    try:
+        row = conn.execute("SELECT speakers FROM meetings WHERE id = ?", (job_id,)).fetchone()
+        speakers_now = json.loads(row[0])
+        assert "SPEAKER_01" in speakers_now, (
+            "전제: 올바른 마이그레이션은 비대표 키를 지우지 않는다"
+        )
+        rejected_design_map = {k: v for k, v in speakers_now.items() if k != "SPEAKER_01"}
+        conn.execute(
+            "UPDATE meetings SET speakers = ? WHERE id = ?",
+            (json.dumps(rejected_design_map, ensure_ascii=False), job_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    with TestClient(main_module.app) as client:
+        after_rejected_design = client.get(f"/api/jobs/{job_id}/participation").json()
+    after_rejected_names = {s["label"]: s["display_name"] for s in after_rejected_design["speakers"]}
+
+    assert after_rejected_names != before_names, (
+        "판별력 없음: 비대표 키를 실제로 지웠는데도 participation의 display_name이 "
+        f"안 바뀐다면, 위 회귀 테스트는 무엇을 잘못 만들어도 통과하는 무딘 검사다. "
+        f"before={before_names}, rejected_design={after_rejected_names}"
+    )
+    assert after_rejected_names.get("SPEAKER_01") == "SPEAKER_01", (
+        f"비대표 키를 지우면 그 구간은 raw 라벨로 노출돼야 한다(기각된 설계의 실제 결함). "
+        f"실제: {after_rejected_names}"
+    )
 
 
 def test_save_speaker_profile_still_422_after_merge_recovery(db_path):
