@@ -195,7 +195,10 @@ def test_no_op_when_no_legacy_signature(db_path):
         db_path, job_id,
         transcript="[00:00] SPEAKER_00: 안녕\n[00:05] SPEAKER_01: 네",
         speakers={"SPEAKER_00": "김팀장", "SPEAKER_01": "이대리"},
-        diarization={"SPEAKER_00": [{"start": 0.0, "end": 5.0}]},
+        diarization={
+            "SPEAKER_00": [{"start": 0.0, "end": 5.0}],
+            "SPEAKER_01": [{"start": 5.0, "end": 10.0}],
+        },
     )
     row = next(r for r in mig._load_rows(db_path) if r["id"] == job_id)
     result = mig.judge(row)
