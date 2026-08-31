@@ -266,3 +266,56 @@ describe('Transcript — 비편집 모드 표시 계약 (차단 1 회귀 잠금)
     expect(screen.getByText('SPEAKER_00')).toBeInTheDocument()
   })
 })
+
+// [F2, qa-c4] 편집 진입 시 speakerMap이 job.speakers(=speakers prop)로 시드되는지.
+// 8c47a56이 구현했지만(Transcript.tsx:93 `setSpeakerMap({ ...(speakers ?? {}) })`)
+// 이 계약을 직접 잠그는 테스트가 없었다 — 시드가 없으면 편집 진입 즉시 모든 화자가
+// 라벨(SPEAKER_00)로 보이고, 사용자가 한 화자만 개명해도 저장 시 나머지 화자의
+// 기존 이름이 speakerMap에서 빠져 유실된다(차단 3의 근본 원인과 같은 축).
+describe('Transcript — 편집 모드 진입 시 speakerMap 시드 (차단 3 근본원인 회귀 잠금)', () => {
+  it('editable 진입 즉시(어떤 편집도 하기 전) speakers prop의 이름이 화면에 보인다 — 라벨이 아니다', () => {
+    const transcript = '[00:00] SPEAKER_00: 안녕하세요\n[00:05] SPEAKER_01: 네'
+
+    render(
+      <Transcript
+        transcript={transcript}
+        currentTime={0}
+        onTimeClick={() => {}}
+        editable
+        speakers={{ SPEAKER_00: '김팀장', SPEAKER_01: '이대리' }}
+      />
+    )
+
+    // 시드가 안 되면 speakerMap은 {}로 시작해 라벨이 그대로 보인다(회귀 시 재현).
+    expect(screen.getByText('김팀장')).toBeInTheDocument()
+    expect(screen.getByText('이대리')).toBeInTheDocument()
+    expect(screen.queryByText('SPEAKER_00')).not.toBeInTheDocument()
+    expect(screen.queryByText('SPEAKER_01')).not.toBeInTheDocument()
+  })
+
+  it('한 화자만 개명해 저장해도, 시드된 나머지 화자의 기존 이름이 speakerMap payload에서 유실되지 않는다', () => {
+    const transcript = '[00:00] SPEAKER_00: 첫마디\n[00:05] SPEAKER_01: 둘째마디'
+    const onTranscriptChange = vi.fn()
+
+    render(
+      <Transcript
+        transcript={transcript}
+        currentTime={0}
+        onTimeClick={() => {}}
+        editable
+        speakers={{ SPEAKER_00: '김팀장', SPEAKER_01: '이대리' }}
+        onTranscriptChange={onTranscriptChange}
+      />
+    )
+
+    // SPEAKER_00("김팀장")만 "박부장"으로 개명한다 — SPEAKER_01은 건드리지 않는다.
+    const nameSpans = screen.getAllByTitle('클릭하여 이름 변경')
+    renameByIndex(nameSpans, 0, '박부장')
+
+    const payload = onTranscriptChange.mock.calls.at(-1)![0]
+    expect(payload.speakerMap['SPEAKER_00']).toBe('박부장')
+    // 시드가 없었다면 SPEAKER_01 키 자체가 payload.speakerMap에 없어(빈 맵에서 출발)
+    // 저장 시 "이대리"라는 기존 이름이 사라진다 — 시드가 있어야 이 키가 살아있다.
+    expect(payload.speakerMap['SPEAKER_01']).toBe('이대리')
+  })
+})
