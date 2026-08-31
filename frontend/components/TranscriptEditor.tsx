@@ -1,10 +1,14 @@
 'use client'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import CategorySelect from './CategorySelect'
+import { parse, render, formatTimestamp, withoutRaw, TranscriptSegment } from '@/lib/transcript'
 
 interface Props {
   jobId: string
   initialTranscript: string
+  // 백엔드가 내려주면 우선 사용(재파싱 불필요). 없으면 initialTranscript를 parse()로 폴백 —
+  // 백엔드가 아직 segments를 안 내려주는 구버전 응답도 방어한다.
+  initialTranscriptSegments?: TranscriptSegment[]
   initialSpeakers: string[]
   suggestedNames: Record<string, string>
   suggestedSpeakers?: Record<string, { name: string; confidence: number }>
@@ -12,27 +16,25 @@ interface Props {
   onComplete: () => void
 }
 
+// 화면 렌더용 파생 뷰. label은 세그먼트 배열의 인덱스와 1:1(무손실 — 매칭 실패 줄도 보존).
 interface TLine {
-  id: string
+  idx: number
   timestamp: string
   timeSec: number
-  speaker: string
+  label: string | null
+  displayName: string
   text: string
 }
 
-// "[MM:SS] SPEAKER_XX: 텍스트" 파싱
-function parseTranscript(raw: string): TLine[] {
-  const re = /^\[(\d{2}):(\d{2})\]\s+(\S+):\s*(.*)$/
-  return raw.split('\n').flatMap((line, i) => {
-    const m = line.match(re)
-    if (!m) return []
-    const [, mm, ss, speaker, text] = m
-    return [{ id: `l${i}`, timestamp: `${mm}:${ss}`, timeSec: +mm * 60 + +ss, speaker, text: text.trim() }]
-  })
-}
-
-function serialize(lines: TLine[], names: Record<string, string>): string {
-  return lines.map(l => `[${l.timestamp}] ${names[l.speaker]?.trim() || l.speaker}: ${l.text}`).join('\n')
+function toLines(segments: TranscriptSegment[], names: Record<string, string>): TLine[] {
+  return segments.map((seg, idx) => ({
+    idx,
+    timestamp: formatTimestamp(seg.start),
+    timeSec: seg.start ?? 0,
+    label: seg.label,
+    displayName: seg.label !== null ? (names[seg.label]?.trim() || seg.label) : '',
+    text: seg.text,
+  }))
 }
 
 const COLORS = ['blue', 'emerald', 'violet', 'amber', 'rose', 'cyan'] as const
@@ -47,8 +49,8 @@ const C: Record<Color, { dot: string; text: string; ring: string; bg: string; ro
   cyan:    { dot: 'bg-cyan-500',    text: 'text-cyan-600 dark:text-cyan-400',       ring: 'ring-cyan-300 dark:ring-cyan-700',       bg: 'bg-cyan-50 dark:bg-cyan-900/30',       rowBg: 'bg-cyan-50 dark:bg-cyan-900/20' },
 }
 
-export default function TranscriptEditor({ jobId, initialTranscript, initialSpeakers, suggestedNames, suggestedSpeakers, initialCategoryId = 'meeting', onComplete }: Props) {
-  const [lines, setLines] = useState<TLine[]>(() => parseTranscript(initialTranscript))
+export default function TranscriptEditor({ jobId, initialTranscript, initialTranscriptSegments, initialSpeakers, suggestedNames, suggestedSpeakers, initialCategoryId = 'meeting', onComplete }: Props) {
+  const [segments, setSegments] = useState<TranscriptSegment[]>(() => initialTranscriptSegments ?? parse(initialTranscript))
   const [categoryId, setCategoryId] = useState(initialCategoryId)
   const [names, setNames] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {}
@@ -59,7 +61,7 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
   })
   const [appliedSpeakers, setAppliedSpeakers] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<string | null>(null)
-  const [editId, setEditId] = useState<string | null>(null)
+  const [editIdx, setEditIdx] = useState<number | null>(null)
   const [editText, setEditText] = useState('')
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -68,14 +70,16 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
   const audioRef = useRef<HTMLAudioElement>(null)
   const activeLinesRef = useRef<HTMLDivElement>(null)
 
-  // 고유 화자 목록
-  const speakers = [...new Set(lines.map(l => l.speaker))]
+  const lines = toLines(segments, names)
+
+  // 고유 화자 목록 — segments의 label 기준(매칭 실패 줄은 제외)
+  const speakers = [...new Set(segments.map(s => s.label).filter((l): l is string => l !== null))]
   const colorOf = (s: string): Color => COLORS[speakers.indexOf(s) % COLORS.length]
 
   // 현재 재생 위치에 해당하는 라인 강조
   const activeLineId = useCallback(() => {
     for (let i = lines.length - 1; i >= 0; i--) {
-      if (currentTime >= lines[i].timeSec) return lines[i].id
+      if (lines[i].label !== null && currentTime >= lines[i].timeSec) return lines[i].idx
     }
     return null
   }, [lines, currentTime])
@@ -111,16 +115,21 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
     })
   }
 
-  const saveEdit = (id: string, text: string) => {
-    setLines(prev => prev.map(l => l.id === id ? { ...l, text } : l))
-    setEditId(null)
+  const saveEdit = (idx: number, text: string) => {
+    setSegments(prev => prev.map((seg, i) => i === idx ? withoutRaw(seg, { text }) : seg))
+    setEditIdx(null)
   }
 
   const handleSubmit = async () => {
     setSubmitting(true)
     const speaker_map: Record<string, string> = {}
     speakers.forEach(s => { speaker_map[s] = names[s]?.trim() || s })
-    const transcript = serialize(lines, names)
+    // 계약(PR C): 이름을 본문에 굽지 않는다. segments를 원본 라벨 그대로 렌더해서 보내고,
+    // 이름은 speaker_map이 나른다. 그래야 저장된 segments.label과 speaker_map 키가
+    // 영구히 일치해서(백엔드가 render(segments, speaker_map)로 표시용 문자열을 만든다)
+    // finalize가 "레거시 identity-mapped 행"(라벨 대신 실명이 저장된 행)을 만들지 않는다.
+    // 화면에 보이는 스크립트는 지금과 동일하다 — 서버로 보내는 페이로드만 바뀐다.
+    const transcript = render(segments, {})
     try {
       await fetch(`/api/jobs/${jobId}/finalize`, {
         method: 'POST',
@@ -136,7 +145,8 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
   }
 
   const download = () => {
-    const text = serialize(lines, names)
+    // 다운로드는 사용자가 화면에서 실제로 보는 것(이름 적용된 스크립트) 그대로 내려준다.
+    const text = render(segments, names)
     const a = Object.assign(document.createElement('a'), {
       href: URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' })),
       download: `스크립트_${new Date().toISOString().slice(0, 10)}.txt`,
@@ -207,7 +217,7 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
           <div className="flex md:flex-col overflow-x-auto md:overflow-y-auto p-2 gap-2 md:space-y-1.5">
             {speakers.map(sp => {
               const c = C[colorOf(sp)]
-              const count = lines.filter(l => l.speaker === sp).length
+              const count = segments.filter(s => s.label === sp).length
               const isSelected = selected === sp
               return (
                 <div
@@ -261,15 +271,45 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
         <div className="flex-1 overflow-y-auto" ref={activeLinesRef}>
           <div className="p-3 space-y-0.5">
             {lines.map(line => {
-              const c = C[colorOf(line.speaker)]
-              const isActive = curActive === line.id
-              const isHighlighted = selected === line.speaker
-              const isDimmed = selected !== null && selected !== line.speaker
-              const displayName = names[line.speaker]?.trim() || line.speaker
+              // 매칭 실패 줄(label:null) — 화자 서식 없이 원문만 보존해서 보여준다(무손실 파싱 계약).
+              if (line.label === null) {
+                return (
+                  <div key={line.idx} className="flex gap-2 px-2 py-1.5 rounded-lg text-gray-400 dark:text-gray-500">
+                    <span className="flex-1 text-sm italic min-w-0">
+                      {editIdx === line.idx ? (
+                        <input
+                          autoFocus
+                          value={editText}
+                          onChange={e => setEditText(e.target.value)}
+                          onBlur={() => saveEdit(line.idx, editText)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') saveEdit(line.idx, editText)
+                            if (e.key === 'Escape') setEditIdx(null)
+                          }}
+                          className="w-full border-b border-blue-400 outline-none bg-transparent text-sm not-italic"
+                        />
+                      ) : (
+                        <span
+                          onClick={() => { setEditIdx(line.idx); setEditText(line.text) }}
+                          className="cursor-text hover:bg-yellow-50 rounded px-0.5 leading-relaxed"
+                          title="클릭하여 편집 (화자 인식 실패 줄)"
+                        >
+                          {line.text || '(빈 줄)'}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                )
+              }
+
+              const c = C[colorOf(line.label)]
+              const isActive = curActive === line.idx
+              const isHighlighted = selected === line.label
+              const isDimmed = selected !== null && selected !== line.label
 
               return (
                 <div
-                  key={line.id}
+                  key={line.idx}
                   className={`flex gap-2 px-2 py-1.5 rounded-lg transition-all group ${
                     isActive
                       ? `${c.rowBg} ring-1 ring-inset ${c.ring}`
@@ -289,30 +329,30 @@ export default function TranscriptEditor({ jobId, initialTranscript, initialSpea
 
                   {/* 화자명 — 클릭 시 해당 화자 선택/해제 */}
                   <button
-                    onClick={() => setSelected(prev => prev === line.speaker ? null : line.speaker)}
+                    onClick={() => setSelected(prev => prev === line.label ? null : line.label)}
                     className={`text-xs font-semibold flex-shrink-0 pt-0.5 w-24 text-left truncate ${c.text} hover:underline`}
                     title="클릭하여 화자 선택"
                   >
-                    {displayName}
+                    {line.displayName}
                   </button>
 
                   {/* 발화 텍스트 — 클릭 시 인라인 편집 */}
                   <div className="flex-1 text-sm text-gray-800 dark:text-gray-200 min-w-0">
-                    {editId === line.id ? (
+                    {editIdx === line.idx ? (
                       <input
                         autoFocus
                         value={editText}
                         onChange={e => setEditText(e.target.value)}
-                        onBlur={() => saveEdit(line.id, editText)}
+                        onBlur={() => saveEdit(line.idx, editText)}
                         onKeyDown={e => {
-                          if (e.key === 'Enter') saveEdit(line.id, editText)
-                          if (e.key === 'Escape') setEditId(null)
+                          if (e.key === 'Enter') saveEdit(line.idx, editText)
+                          if (e.key === 'Escape') setEditIdx(null)
                         }}
                         className="w-full border-b border-blue-400 outline-none bg-transparent text-sm"
                       />
                     ) : (
                       <span
-                        onClick={() => { setEditId(line.id); setEditText(line.text) }}
+                        onClick={() => { setEditIdx(line.idx); setEditText(line.text) }}
                         className="cursor-text hover:bg-yellow-50 rounded px-0.5 leading-relaxed"
                         title="클릭하여 편집"
                       >
