@@ -1816,7 +1816,15 @@ async def apply_match(job_id: str, body: dict):
         if raw_label not in known_labels:
             skipped_labels.append(raw_label)
             continue
-        new_speakers[raw_label] = new_name.strip() if isinstance(new_name, str) else new_name
+        name = new_name.strip() if isinstance(new_name, str) else new_name
+        if not name:
+            # 빈/공백뿐인 이름은 매핑을 건드리지 않고 거부한다. 그대로 쓰면
+            # update_job_result 관문이 그 키를 저장에서 제외해 **기존 이름이 사라진다**.
+            skipped_labels.append(raw_label)
+            continue
+        # strip은 여기서도 한다 — render()가 update_job_result 관문보다 먼저 호출되므로,
+        # 관문에만 맡기면 공백이 붙은 이름이 transcript에 그대로 렌더된다.
+        new_speakers[raw_label] = name
 
     if len(skipped_labels) == len(matches):
         # 전체 실패: DB를 아예 건드리지 않는다(재렌더가 우연히 같은 문자열을 내는 것에 기대지 않음).
