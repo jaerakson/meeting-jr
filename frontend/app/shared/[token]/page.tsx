@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import { useTheme } from '@/hooks/useTheme'
-import { parse, formatTimestamp } from '@/lib/transcript'
+import { parse, formatTimestamp, displayName } from '@/lib/transcript'
 
 interface SharedData {
   title: string
@@ -157,7 +157,7 @@ export default function SharedPage() {
                 return (
                   <div key={idx} className={`rounded-xl p-3 ${color.bg}`}>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-sm font-semibold ${color.text}`}>{seg.label}</span>
+                      <span className={`text-sm font-semibold ${color.text}`}>{displayName(seg.label, data.speakers)}</span>
                       <span className="text-xs text-gray-400 font-mono">{formatTimestamp(seg.start)}</span>
                     </div>
                     <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">
