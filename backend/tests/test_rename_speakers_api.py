@@ -1,21 +1,22 @@
-"""POST /api/jobs/{id}/rename-speakers — 신규 테스트 (PR B). 기존 백엔드 테스트 0건.
+"""POST /api/jobs/{id}/rename-speakers — 신규 테스트 (PR B). 기존 백엔드 테스트 0건이었다.
 
-main.py:2085는 현재 speakers만 저장하고 transcript를 전혀 건드리지 않아
-구조적 desync가 보장된다(설계문서 부수 결함 1, `SpeakerMapper.tsx:50`가 실제 호출).
-PR B가 재렌더를 붙여 이 desync를 해소한다.
+main.py의 rename-speakers는 이제 speaker_map을 저장하는 동시에
+render(get_segments(job_id), speaker_map)로 transcript를 재렌더한다 —
+과거엔 speakers만 갱신하고 transcript를 전혀 안 건드려 구조적 desync가
+보장됐었다(설계문서 부수 결함 1, `SpeakerMapper.tsx:50`가 실제 호출).
 
 빈 값 방어 2겹 (director 확정):
     1) 쓰기: speaker_map 저장 시 값 strip 후 빈 값은 매핑에서 제외 (신규 데이터 차단)
     2) 렌더: render()에서 display가 빈/공백뿐이면 라벨 유지 (레거시 행 방어,
        transcript.py의 display = (speaker_map.get(label) or "").strip() or label)
 
-RED가 정상이다 — rename-speakers는 아직 재렌더를 붙이지 않은 옛 구현이다.
-
-가정(director로부터 명시 확답을 받지 못해 QA가 결정 — 합격 기준 4가지를 흔들지 않는
-범위): body의 speaker_map은 기존 값과 **병합이 아니라 완전 치환**이다. 현재 구현
-`update_job_result(job_id, speakers=speaker_map)`이 이미 그렇게 동작하고, 프론트
-SpeakerMapper.tsx가 완전한 현재 상태를 매번 보낸다고 가정하는 편이 더 단순하다
-(카르파시 원칙 ②). 다르면 이 파일의 병합 관련 단언만 director 지시로 교체하면 된다.
+병합 규칙 (director 확정 — **뒤집힌 이력 있음**): body의 speaker_map은 **완전 치환이
+아니라 merge-safe**다. 기존 speakers를 베이스로 body에 있는 키만 덮어쓰고, body에
+없는 라벨의 기존 이름은 보존된다(apply_match와 동일한 규칙). QA가 처음엔 "완전 치환"으로
+가정했으나, 코드리뷰에서 이 가정이 뒤집혔다 — 신규 3파일이 전부 전체 키를 보내는
+케이스만 테스트해 부분 map을 보내면 언급 안 된 라벨의 이름이 transcript에서
+사라지는 회귀(PR B가 재렌더를 붙이며 메타데이터 손실을 본문 데이터 손실로 승격시킨
+것)를 놓쳤었다. `TestPartialMapMergeSafe`가 이 회귀의 가드다.
 """
 
 import pytest
@@ -194,3 +195,74 @@ def test_empty_value_does_not_crash_when_all_values_empty(client):
     assert "SPEAKER_00:" in job["transcript"]
     assert "SPEAKER_01:" in job["transcript"]
     _assert_rerender_matches("rename-6", job)
+
+
+# ===========================================================================
+# 코드리뷰 발견 — 부분 map은 merge-safe여야 한다 (신규 3파일에 0건이었던 공백)
+#   기존: {"SPEAKER_00":"김팀장","SPEAKER_01":"이대리"} 저장 → {"SPEAKER_00":"박부장"}만
+#   전송하면 SPEAKER_01의 "이대리"가 재렌더된 transcript에서 사라졌다 — 재렌더가
+#   붙으며 메타데이터 손실이 사용자가 읽는 본문의 데이터 손실로 승격된 회귀.
+# ===========================================================================
+
+class TestPartialMapMergeSafe:
+    def test_missing_label_keeps_existing_name_in_transcript_and_speakers(self, client):
+        """부분 map을 보내도 언급되지 않은 라벨의 기존 이름은 transcript와 speakers
+        양쪽에서 보존된다(merge-safe) — apply_match와 동일한 병합 규칙."""
+        _create_done_meeting(
+            "rename-partial-1",
+            "[00:00] SPEAKER_00: 안녕\n[00:05] SPEAKER_01: 반갑습니다",
+            speakers={"SPEAKER_00": "김팀장", "SPEAKER_01": "이대리"},
+        )
+        res = client.post("/api/jobs/rename-partial-1/rename-speakers", json={
+            "speaker_map": {"SPEAKER_00": "박부장"},  # SPEAKER_01 누락
+        })
+        assert res.status_code == 200
+
+        job = client.get("/api/jobs/rename-partial-1").json()
+        assert "박부장:" in job["transcript"]
+        assert "이대리:" in job["transcript"], (
+            f"부분 map에서 언급 안 된 라벨의 기존 이름이 transcript에서 사라지면 안 됨. "
+            f"실제: {job['transcript']}"
+        )
+        assert "SPEAKER_01:" not in job["transcript"]
+
+        speakers = _get_speakers(job)
+        assert speakers.get("SPEAKER_00") == "박부장", f"실제: {speakers}"
+        assert speakers.get("SPEAKER_01") == "이대리", (
+            f"부분 map에서 언급 안 된 라벨의 speaker_map 값이 보존돼야 함. 실제: {speakers}"
+        )
+        _assert_rerender_matches("rename-partial-1", job)
+
+    def test_two_separate_partial_calls_accumulate_without_losing_names(self, client):
+        """부분 map을 두 번 나눠 보내도(SPEAKER_00 먼저, SPEAKER_01 나중) 두 이름
+        모두 최종적으로 보존된다 — merge-safe가 매 호출마다 성립해야 한다."""
+        _create_done_meeting(
+            "rename-partial-2",
+            "[00:00] SPEAKER_00: 안녕\n[00:05] SPEAKER_01: 반갑습니다\n[00:10] SPEAKER_02: 마지막",
+            speakers={
+                "SPEAKER_00": "김팀장",
+                "SPEAKER_01": "이대리",
+                "SPEAKER_02": "최부장",
+            },
+        )
+        client.post("/api/jobs/rename-partial-2/rename-speakers", json={
+            "speaker_map": {"SPEAKER_00": "박부장"},
+        })
+        res = client.post("/api/jobs/rename-partial-2/rename-speakers", json={
+            "speaker_map": {"SPEAKER_01": "정과장"},
+        })
+        assert res.status_code == 200
+
+        job = client.get("/api/jobs/rename-partial-2").json()
+        transcript = job["transcript"]
+        assert "박부장:" in transcript
+        assert "정과장:" in transcript
+        assert "최부장:" in transcript, (
+            f"두 차례 부분 map 호출 이후에도 한 번도 언급 안 된 라벨의 이름이 "
+            f"보존돼야 함. 실제: {transcript}"
+        )
+        speakers = _get_speakers(job)
+        assert speakers.get("SPEAKER_00") == "박부장"
+        assert speakers.get("SPEAKER_01") == "정과장"
+        assert speakers.get("SPEAKER_02") == "최부장", f"실제: {speakers}"
+        _assert_rerender_matches("rename-partial-2", job)

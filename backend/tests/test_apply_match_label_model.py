@@ -12,9 +12,9 @@ Scenario A/B(346줄 중 5시나리오) — apply-match 관련 시나리오를 �
     skipped에 담는다 — 그 라벨의 기존 이름은 삭제되지 않고 보존된다(매핑에서
     "제외"가 아니라 "미변경"). 전부 빈 값이면 known이 비어 422.
 
-RED가 정상이다 — 옛 구현(휴리스틱 기반)이 아직 남아있는 동안은 실패한다.
-통과시키려고 단언을 되돌리지 말 것. PR A 테스트(test_transcript_module.py 등)를
-고쳐야 통과한다면 그건 이 파일이 아니라 구현이 틀린 신호 — director에게 보고.
+구현 완료 상태에서는 이 파일 전체가 GREEN이어야 한다. PR A 테스트
+(test_transcript_module.py 등)를 고쳐야 통과한다면 그건 이 파일이 아니라
+구현이 틀린 신호 — director에게 보고. 단언을 통과시키려고 되돌리지 말 것.
 """
 
 import json

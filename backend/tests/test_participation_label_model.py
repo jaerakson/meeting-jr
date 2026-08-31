@@ -5,10 +5,15 @@ test_participation_collision.py(3시나리오) = 7개. 대응표:
 docs/ai_analysis/20260831_PR_B_시나리오_대응표.md
 
 새 불변식 (director 확정): display_name은 speaker_map.get(label, label)로만 결정된다.
-_is_identity_mapped / seen_display_names / _resolve_speaker_display 전부 제거 —
-라벨마다 독립적으로 조회하므로 애초에 이름 충돌이 발생할 수 없다.
+seen_display_names / _resolve_speaker_display는 전부 제거됐다 — 라벨마다 독립적으로
+조회하므로 애초에 이름 충돌이 발생할 수 없다. **`_is_identity_mapped`는 삭제되지
+않고 존치한다** — 설계 정정(2026-08-31) 이후 이 함수는 이름 해석 휴리스틱이 아니라
+"diar_data를 조회할지 transcript/segments 경로를 탈지" 결정하는 경로 선택에만
+쓰인다(main.py 참고). #23(`TestIdentityLabelNoResolutionNeeded`)이 이 경로 선택
+자체를 검증한다.
 
-RED가 정상이다. 통과시키려고 단언을 되돌리지 말 것.
+구현 완료 상태에서는 이 파일 전체가 GREEN이어야 한다. 단언을 통과시키려고
+되돌리지 말 것.
 """
 
 import pytest
