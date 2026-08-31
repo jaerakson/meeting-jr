@@ -397,14 +397,18 @@ async def finalize_job(job_id: str, body: dict):
     if body_category_id:
         update_job_category(job_id, category_id)
 
-    # speaker_map이 identity mapping이면 transcript에서 실제 이름 파싱
-    # SPEAKER_XX 키와 발화순 이름의 매핑이 불확실하므로, 이름 자체를 키로 사용
-    if speaker_map and all(k == v for k, v in speaker_map.items()):
-        found_names = list(dict.fromkeys(
-            m.strip() for m in re.findall(r'\[\d{2}:\d{2}\]\s*(.+?):', transcript)
-        ))
-        if found_names:
-            speaker_map = {name: name for name in found_names}
+    # [삭제됨 — PR C] 여기에 "speaker_map이 identity면 transcript에서 이름을 파싱해
+    # {실명: 실명}으로 재키잉" 하는 분기가 있었다. 되살리지 말 것.
+    #   ① 무엇을 막고 있었나: 사용자가 화자 이름 input이 아니라 **본문에서 직접** 화자명을
+    #      고쳐, speaker_map은 identity인데 transcript 라벨만 실명이 되는 입력. 그대로
+    #      저장하면 speaker_map 키(SPEAKER_XX) ≠ segments 라벨(실명)이 되어 apply-match가
+    #      422로 거부하는 "레거시 행"이 된다. 실제 사용자 데이터(60b7b738)가 그 흔적이다.
+    #   ② 왜 이제 필요 없나: TranscriptEditor가 이름을 본문에 굽지 않고 **라벨 그대로**
+    #      보내고 이름은 speaker_map이 나른다(PR C 계약). 그 입력 자체가 생기지 않는다.
+    #      이름을 채우면 all(k == v)가 False라 분기가 애초에 발동하지 않았고, 이름이 비면
+    #      라벨도 SPEAKER_XX라 재키잉해도 같은 값이 나오는 무동작이었다.
+    #   ③ 되살리면: {실명: 실명} 재키잉이 부활해 라벨 정체성이 다시 깨진다. 이 리팩터링이
+    #      없애려던 레거시 행의 생성자가 그대로 돌아온다.
 
     # 편집된 transcript를 파싱해 segments도 함께 갱신한다. 갱신하지 않으면 편집 이전의
     # 낡은 segments가 남아, 이후 재렌더 경로(apply-match·rename-speakers)가 사용자의
