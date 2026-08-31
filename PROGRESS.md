@@ -1,3 +1,64 @@
+## 2026-09-01 07:29 (작업 PC: 로컬) — 세션 59 (PR C 2라운드 진행 중: 프론트 계약 분리 + 화자 이름 소실 회귀 수정)
+
+- 브랜치: `refactor/speaker-label-mapping-c` — **PR #82 OPEN, 아직 미머지**
+  (https://github.com/jaerakson/meeting-jr/pull/82). 이번 라운드 커밋은 **origin에 아직 미푸시**
+  (로컬이 `origin/refactor/speaker-label-mapping-c` 대비 8커밋 앞섬 — 아래 "완료" 목록).
+- **확정 계약(정본)**: `job.transcript` 컬럼은 항상 화자 라벨 그대로(`SPEAKER_00` 등) 저장한다.
+  화자 이름은 `job.speakers`(label→name)가 별도로 나른다. 표시(화면·다운로드·복사·공유)는
+  **소비 시점**에 `displayName(label, speakers)`(프론트) / 동일 규칙(백엔드)로 렌더한다.
+  이름을 본문에 구워 저장하지 않는다.
+- 완료 (세션 58의 PR #82 코드리뷰 지적 6건 수정 이후, 2라운드 근원 수정):
+  - 프론트: `8c47a56`(`Transcript.tsx` — `onTranscriptChange`를 `{transcript, speakerMap}`로
+    분리, 저장용 페이로드는 항상 라벨 그대로 + 비편집 모드도 `speakers` prop으로 이름 렌더 — **근원**),
+    `6a4b84d`(`MainArea.tsx`가 새 계약에 맞춰 편집·다운로드 소비하도록 갱신),
+    `a4c97fb`(**차단급 회귀 수정** — 아래 "핵심 사고 이력" ②),
+    `07bacf4`(시드 `useEffect`의 `eslint-disable` 사유 주석 + 비편집 모드 실명 렌더 회귀 테스트,
+    팀 내부 호칭 F2)
+  - 백엔드: `124fa94`(B1 — `PATCH /api/jobs/{id}/transcript`가 `speaker_map`을 body로 수용)
+  - 테스트: `d56aa95`(T1~T4, `PATCH /transcript` speaker_map 수용 관련),
+    `1b43abe`(T5 — `apply-match`/`rename-speakers`가 transcript 컬럼에 실명을 굽던 결함의
+    **4번째 재발**을 고정하는 회귀 테스트, qa-c4)
+  - 문서: `b4afe09`(프론트 `fetch` 65곳 중 `res.ok` 미검사 36곳을 두 부류로 구분해
+    `docs/ai_analysis/20260828_잔여_기획_후보.md`에 후속 과제로 기록 — 이번 PR 범위 밖으로 확정,
+    코드 수정 없음)
+- 진행 중 (다음 사람이 이어받을 것):
+  - qa-c4: 백엔드 T5(완료, `1b43abe`)에 이어 T10(서버측 빈 `speaker_map` 방어 테스트) 작성 중.
+    프론트 쪽은 **F3**(`res.ok` 422 응답 시 편집 모드 유지·로컬 상태 미소거 검증, 저장·재요약 양쪽)와
+    **중복 표시이름(`대표님`×3) 픽스처로 `reassignLine` payload의 `transcript`가 라벨 그대로인지
+    검증**(차단 3의 실제 안전망) — 둘 다 **미작성**, qa-c4 전담으로 확정.
+  - back-c4: B2~B7 대기. **B7 = 서버측 빈 `speaker_map` 방어**(아래 ② 회귀의 서버측 쌍둥이 결함에
+    대한 방어 — 프론트 수정이 정본, 서버는 방어. 구버전 번들·직접 API 호출 대응상 **둘 다 필요**).
+- **핵심 사고 이력 (다음 사람이 반드시 알아야 할 것)**:
+  1. `apply-match`·`rename-speakers`가 transcript 컬럼에 이름을 **직접 구웠던 것**이 레거시 행
+     생성 결함의 **4번째 재발** 원인이었다. T5(`1b43abe`)로 회귀를 고정했다.
+  2. **[차단급, 수정 완료]** `MainArea.tsx`의 `localSpeakerMap` 초기값이 `{}`(비-null)였던 탓에
+     `localSpeakerMap ?? job.speakers ?? {}`의 `??`가 **죽은 코드**였다. 재요약 모달은
+     `[job?.id]` 이펙트로 닫히지 않는데(별도 결함, 미수정) 그 이펙트가 `localSpeakerMap`은
+     리셋한다 — 모달을 연 채 다른 회의로 전환하면 편집 진입(시드)을 거친 적 없는 새 회의의
+     `speaker_map: {}`가 그대로 `POST /finalize`로 나가 **회의의 모든 화자 이름이 영구 소실**된다.
+     `a4c97fb`에서 `null` 센티널로 수정(null="편집 미진입", `{}`="편집에서 실제로 빈 맵 확정"을
+     구분). **`showResummarizeModal`이 job 전환 시 안 닫히는 것 자체는 아직 안 고쳤다** — 이번엔
+     증상(speaker_map 소실)만 막았다.
+  3. `backend/meetings.db`는 `.gitignore` 대상이라 **`git status`로 오염 여부를 판단할 수 없다**
+     (실측: `.gitignore:25`). 테스트가 운영 DB를 건드렸는지 의심되면 행 수를 직접 세야 한다
+     (세션 58 참조 — `recording_notes` 404→406행 오염 사례, PR C 범위 밖 후속 과제로 남아있음).
+  4. **팀 프로세스 변경**: 구현자가 자기 구현에 맞춰 테스트를 갱신하면 "의도대로 동작하는가"는
+     검증돼도 "의도 자체가 틀렸는가"는 못 잡는다 — 위 ②를 팀리드/구현자 모두 처음엔 놓쳤고
+     director가 리뷰에서 잡았다. 이후 **프론트 신규 테스트는 qa-c4 전담**으로 역할을
+     재분리했다(이미 나온 산출물은 유지, 신규만 분리 — revert 안 함).
+- 막힌 점/주의: 현재 없음. 각자(front-c4 구현 대기, qa-c4 T10+F3+픽스처, back-c4 B2~B7) 진행 중.
+- 관련 파일: `frontend/components/{Transcript,MainArea}.tsx`,
+  `frontend/__tests__/{Transcript.labelModel,MainArea.resummarize}.test.tsx`,
+  `backend/app/main.py`, `docs/ai_analysis/20260828_잔여_기획_후보.md`
+- 검증: 프론트 `npx vitest run`(6 files, 40 tests) / `npx tsc --noEmit` / `npm run build` 전부
+  통과(front-c4 확인, 세션 59 시점). 백엔드 테스트 결과는 qa-c4가 진행 중이라 이 항목에서
+  확정치로 적지 않는다 — **다음 사람은 이어받을 때 반드시 재확인할 것.**
+- 푸시 여부: **미푸시.** 로컬 8커밋(`8c47a56`~`1b43abe`)이 origin에 안 올라가 있다. PR #82는
+  이전 라운드(세션 58) 기준으로 이미 OPEN 상태이며, 이번 라운드 커밋은 아직 반영 안 됨 —
+  director가 PR 프리즈 직전에 최종 상태로 갱신 후 푸시할 예정.
+
+---
+
 ## 2026-08-31 (작업 PC: 로컬) — 세션 58 (PR C 진행 중: 마이그레이션 + 확정 결함 2건)
 
 > ### ★ 다음 작업 최우선 — **테스트가 운영 DB 를 오염시킨다 (개발 인프라 결함)**
