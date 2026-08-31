@@ -1,4 +1,9 @@
-"""PATCH /api/jobs/{id}/transcript 가 speaker_map 을 수용해야 한다 (PR C 2라운드, 차단 2·3).
+"""PATCH /api/jobs/{id}/transcript 가 speaker_map 을 수용해야 한다 (PR C 2라운드, 차단 2).
+
+[2026-09 정정] 이 파일의 T3(`test_patch_transcript_reassignment_preserved_when_body_is_already_label_form`)는
+애초 "차단 3 재현"으로 작성됐으나 director 검토로 **판별력이 없음이 확인**돼
+"새 계약 회귀 잠금"으로 성격이 바뀌었다 — 자세한 사유는 해당 테스트의 docstring
+참조. 차단 3의 실제 안전망은 `frontend/__tests__/Transcript.labelModel.test.tsx`다.
 
 ## 배경 (director 지시 — 2라운드 코드리뷰에서 확인된 실제 결함)
 프론트는 이미 8c47a56·6a4b84d에서 새 계약(본문은 항상 라벨 그대로, 이름은
@@ -201,16 +206,33 @@ def test_patch_transcript_without_speaker_map_keeps_legacy_name_baked_restore(cl
 
 
 # ---------------------------------------------------------------------------
-# T3 — 중복 표시 이름 회의에서 줄 재지정이 보존된다 [차단 3]
+# T3 — [정정, director 검토] 새 계약(라벨 그대로 본문) 회귀 잠금. "차단 3 재현"이
+# 아니다 — 판별력이 없다고 director가 직접 확인했다.
 # ---------------------------------------------------------------------------
 
-def test_patch_transcript_reassignment_preserved_when_display_names_duplicate(client):
-    """마이그레이션 병합복구가 만드는 상태(대표님×3처럼 여러 라벨이 같은 표시
-    이름)를 재현한다. 프론트가 새 계약대로 라벨 그대로인 본문(한 줄을
-    SPEAKER_00→SPEAKER_01로 재지정한 상태)과 speaker_map을 PATCH로 보내면,
-    그 줄의 라벨이 SPEAKER_01로 **유지**돼야 한다 — 표시 이름이 같다는 이유로
-    조용히 SPEAKER_00으로 되돌아가면 안 된다(폐기된 overlap 휴리스틱이 하던
-    '같은 이름이면 같은 화자로 추측'과 결과적으로 같은 사고다)."""
+def test_patch_transcript_reassignment_preserved_when_body_is_already_label_form(client):
+    """[정정된 성격 — 회귀 잠금, 차단 3 재현 아님] 마이그레이션 병합복구가 만드는
+    상태(대표님×3처럼 여러 라벨이 같은 표시 이름)를 배경으로 두되, 이 테스트가
+    실제로 검증하는 건 "새 계약대로 **라벨 그대로**인 본문을 보내면 재지정이
+    보존된다"는 것뿐이다.
+
+    ## director 검토로 확정된 사실 (2026-09, 판별력 없음 확인)
+    이 body(`[00:00] SPEAKER_01: 발언1` — 라벨 그대로)는 `restore_segment_labels`의
+    (a) "이미 라벨 공간 안이면 그대로 둔다"에서 **트리비얼하게 통과**하고, (b)(같은
+    start·표시이름-일치로 복원 시도)는 애초에 발동조차 하지 않는다. 즉 이 body로는
+    **구계약(패치 전 코드)에서도 재현되지 않았다** — 아래 원래 있던 "(현재 구현·
+    구계약에서 발생하던 결함)"이라는 서술은 director가 직접 되돌려 확인한 결과
+    **사실이 아니었다.** 정정한다.
+
+    차단 3의 진짜 재현 조건은 "**이름이 구워진 본문**(`[00:00] 대표님: 발언1`) +
+    중복 표시 이름"이고, 그건 이제 프론트가 이름을 본문에 굽지 않으므로(8c47a56)
+    이 입력 자체가 서버에 도달하지 않는다. 차단 3의 실제 안전망은
+    `frontend/__tests__/Transcript.labelModel.test.tsx`의 "중복 표시 이름 회의에서
+    reassignLine" 테스트다(qa-c4) — reassignLine의 payload.transcript가 표시 이름이
+    아니라 라벨 그대로 나가는지를 프론트 쪽에서 직접 잠근다.
+
+    이 테스트는 그래도 남긴다: "본문이 이미 라벨 그대로일 때 재지정이 보존된다"는
+    계약 자체는 맞는 동작이고, 회귀 잠금으로서 값어치가 있다."""
     job_id = "patch-dup-display-name-reassign"
     dup_speakers = {"SPEAKER_00": "대표님", "SPEAKER_01": "대표님", "SPEAKER_02": "대표님"}
     original_transcript = (
@@ -236,9 +258,8 @@ def test_patch_transcript_reassignment_preserved_when_display_names_duplicate(cl
     segs = get_segments(job_id)
     labels = [s["label"] for s in segs]
     assert labels == ["SPEAKER_01", "SPEAKER_01", "SPEAKER_02"], (
-        f"재지정이 유지돼야 한다. 표시 이름이 전부 '대표님'으로 같다고 해서 (b)의 "
-        f"같은-start·표시이름-일치 휴리스틱이 SPEAKER_00으로 되돌리면 안 된다 "
-        f"(현재 구현·구계약에서 발생하던 결함). 실제: {labels}"
+        f"본문이 라벨 그대로일 때는 재지정이 (a)에서 트리비얼하게 보존돼야 한다. "
+        f"실제: {labels}"
     )
     assert [s["text"] for s in segs] == ["발언1", "발언2", "발언3"]
 
