@@ -1,36 +1,49 @@
-## 2026-08-31 (작업 PC: 로컬) — 세션 56 (화자 매핑 라벨 리팩터링: 설계 확정, 구현 착수 전)
-- 브랜치: main
-- 완료:
-  - CLAUDE.md 1순위 과제인 **화자 매핑 라벨 기반 리팩터링**의 설계를 확정했다.
-    → `docs/ai_analysis/20260831_화자매핑_라벨_리팩터링_설계.md` (설계안 전문, 이 파일만 읽으면 이어갈 수 있다)
-  - director 가 코드 전수 실측. 팀리드가 핵심 근거 4건을 직접 코드에서 재확인:
-    finalize 재키잉(main.py:396-401) / TranscriptEditor `\S+` 파서(:25) /
-    rename-speakers 의 transcript 미갱신(:2084-2093) / search 의 `transcript LIKE`(database.py:419)
-  - **근본 원인 특정**: `finalize_job:396-401` 이 speaker_map 키를 라벨→이름으로 갈아끼워 라벨 정체성을 파괴한다.
-    하위 코드는 전부 그것을 되짚는 추측이고, DEVGUIDE §10 의 다섯 "확정 결정사항"이 그 손실의 보상 장치다.
-  - **확정 설계**: `transcript_segments TEXT`(JSON `[{start,end,label,text}]`) 신설 + 문자열 transcript 는 파생값 유지.
-    완전 교체 안 함 — 소비자가 "구조 파싱"과 "문자열 통과"로 깨끗이 갈리고 버그는 전부 변경 경로에만 있다.
-    강제 불변식: transcript 는 다시는 in-place 변경하지 않고 `render(segments, speaker_map)` 출력으로만 쓴다.
-    하위 호환은 lazy 파싱 + 조회 시 백필 (일괄 마이그레이션 안 함).
-  - **PR 3분할**: A 도입(additive, 동작 변화 0) → B apply_match·participation 라벨 전환(3a~3e 130줄 등 삭제)
-    → C finalize·프론트 왕복(파서 4개+시리얼라이저 2개 공유 모듈 통합)
-  - 부수 발견 결함 3건 기록: rename-speakers desync(백엔드 테스트 0건) / `\S+` 로 공백 포함 실명 파싱 실패 /
-    타임스탬프 자릿수 불일치(100분 초과 회의에서 이미 깨져 있음)
-- 현재 상태: **설계 승인 완료, 구현 코드 변경 0.** 백엔드 215 / 프론트 13 통과 상태 그대로.
+## 2026-08-31 (작업 PC: 로컬) — 세션 56 (PR #80: 화자 매핑 리팩터링 PR A — transcript_segments 도입)
+- 브랜치: main (PR #80 squash 머지, `8745cad`)
+- 배경: CLAUDE.md 1순위 과제. 이 영역에서 **5라운드 연속 같은 부류 버그**가 나와 패치를 멈추고 설계 안건으로 전환했다.
+  설계 전문: `docs/ai_analysis/20260831_화자매핑_라벨_리팩터링_설계.md` (근본 원인·PR 3분할·회귀 위험)
+- 완료 (PR A = 3단계 중 1단계, **순수 additive·동작 변화 0**):
+  - `transcript_segments TEXT`(JSON `[{start,end,label,text,raw?}]`) 컬럼 + 신규 `backend/app/transcript.py`
+    (`parse` / `render` / `get_segments` — lazy 파싱 + 조회 시 백필)
+  - 생산자 2곳이 segments 기록: `merge_and_save`(3-tuple 확장) / `_parse_txt_transcript`(시그니처 고정, 호출부 parse)
+  - **강제 불변식**: transcript 문자열은 in-place 변경 금지, `render(segments, speaker_map)` 출력으로만 쓴다
+  - `_row_to_dict` 에 역직렬화 추가 → `get_job()["transcript_segments"]` 가 다른 JSON 컬럼과 같은 타입 관행을 따른다
+  - **결함 3건이 이 파서에서 닫혔다**: 100분 초과 회의(`\d{2}`→`\d+`) / 공백 포함 실명("김 팀장", `\S+` 금지) /
+    라벨 앞뒤 공백 오염(왕복은 성립하는데 치환만 조용히 실패)
+- 테스트: **282 passed**. 신규 3파일 제외 시 **기존 215 무수정 통과**(베이스라인 일치).
+  팀리드 독립 검증 — 실제 DB 회의 10건/1,307줄 왕복 불일치 0건, 백필 후 바이트 동일
+- 코드리뷰: 전체 프로토콜(리뷰어 5 + 채점 6) 실행. 지적 6건 중 80점 통과 1건 + 사실 확정 1건 수정
+  - [80점] `_row_to_dict` 미역직렬화 — PR B/C 에서 터질 타입 불일치 (PR #53 과 같은 부류)
+  - [75점] DEVGUIDE §10 한계 기록이 같은 PR 의 테스트와 모순 → 아직 사실인 것만 남김
+  - 제외 4건(브랜치·커밋 접두어, `prev_end` falsy, payload)은 기존 패턴이거나 실질 도달 불가
 - 막힌 점/주의:
-  - qa-engineer·backend-dev·director 3명이 **세션 사용 한도로 동시 중단**됐다 (리셋 05:30 KST).
-    코드 변경 전이라 유실은 없다. 다음 세션은 설계 문서를 팀에 브리핑하고 PR A 부터 착수하면 된다.
-  - 기존 회귀 안전망 1,094줄(test_apply_match_collision 576 / consistency 346 / participation_collision 172)은
-    **시나리오 보존, 단언만 재작성.** 지우면 6라운드째 사고다.
-  - PR A 합격 기준은 "기존 215 테스트 **무수정** 통과 + 문자열 **바이트 동일**". 팀리드가 직접 실행해 확인한다.
-- 다음 할 일:
-  - 팀 재구성(qa-engineer sonnet / backend-dev opus, frontend-dev 는 PR C 시점) → PR A 착수
-  - 브랜치 `refactor/speaker-label-mapping-a`. TDD 선행(qa → backend → qa 재검증) → PR → 코드리뷰 → 머지
-- 관련 파일: docs/ai_analysis/20260831_화자매핑_라벨_리팩터링_설계.md,
-  backend/app/main.py(apply_match 1828-1956, finalize 380-430, participation, save_speaker_profile),
-  backend/app/database.py(_migrate 92-110, update_job_result 272, search_jobs 419),
-  backend/app/audio_processor.py(merge_and_save 465), frontend/components/{TranscriptEditor,Transcript,MainArea,SpeakerMapper}.tsx
-- 푸시 여부: 로컬 커밋만 (main 직접 푸시는 사용자 확인 후)
+  - **테스트가 초록인 상태에서 결함 4건이 나왔다.** 왕복 단언만으로는 구조적으로 안 잡히는 부류가 있다
+    (라벨 공백 결함: 왕복 성립 + 치환 실패 → 258개 전부 통과). → **PR B 부터 왕복과 치환을 항상 짝으로 단언한다.**
+  - 신규 필드에는 "동작 변화 0"이 아니라 **"기존 관행과의 일관성"이 기준**이다(`_row_to_dict` 반려가 이 혼동에서 나왔다)
+  - `job_queue.job_queue` 가 프로세스 전역 싱글턴이라 테스트가 서로 오염됐다(단독 통과·전체 간헐 실패).
+    테스트 안에서만 격리 큐로 해결. 프로덕션 코드 미변경
+- 다음 할 일 — **PR B (apply_match·participation 라벨 전환, 삭제가 본체)**
+  - 삭제: apply_match 3a~3e(main.py 약 130줄), `replace_map`, `collision_groups`, `applied_labels`,
+    overlap 매칭, `_resolve_speaker_display`, `_is_identity_mapped`, `seen_display_names`,
+    `save_speaker_profile` 폴백. participation 은 `speaker_map.get(label, label)` 로 축소
+  - **합격 기준 4가지**: ① 기존 1,094줄의 시나리오 개수 보존(대응표 제출) ② 삭제 대상 함수 0회 참조(grep 증명)
+    ③ 왕복과 치환을 짝으로 단언 ④ **PR A 의 282개 무수정 통과**
+    (PR A 와 달리 "기존 테스트 무수정"이 합격 기준이 될 수 없다 — 삭제가 본체라 옛 동작 단언은 실패해야 정상)
+  - **역할 분리**: 1,094줄 단언 재작성은 qa 담당. backend 는 읽기만 하고 "단언이 틀렸다"고 보면 director 에게 보고.
+    구현자가 자기 테스트를 고치는 형태를 금지한다(5라운드 반복 영역이라 이 안전망이 핵심)
+  - **착수 전 확인된 함정 2건**:
+    ① `SpeakerMapper.tsx:42` 초기값이 `''` 라 빈 이름이 그대로 전송된다. 지금은 `rename_speakers` 가 transcript 를
+       안 건드려 무해하지만, PR B 가 재렌더를 붙이면 **화자 이름을 지운다.**
+       → 렌더 측 `(speaker_map.get(label) or "").strip() or label` 로 기존 `display == label` 규칙에 흡수(별도 분기 금지)
+    ② `rename-speakers` 는 `_save_speakers` 에서만 빈 값을 거르고 `update_job_result(speakers=...)` 에는 body 를
+       그대로 저장한다(비대칭). 쓰기 정규화만으로는 이미 저장된 행을 못 막아 **2겹 방어**가 필요하다.
+       현 DB 10건에 빈 값 보유 행은 0건이지만 쓰기 경로가 허용하므로 언제든 생길 수 있다
+  - `rename-speakers`(main.py:2084)는 **백엔드 테스트 0건**이다. PR B 가 재렌더를 붙이므로 신규 테스트가 필요하다
+    (`SpeakerMapper.tsx:50` 이 실제 호출 — 프론트가 보내는 payload 형태로)
+- 관련 파일: backend/app/transcript.py, backend/app/{database,job_queue,main,audio_processor}.py,
+  backend/tests/test_transcript_{module,backfill,producers}.py, DEVGUIDE.md §10,
+  docs/ai_analysis/20260831_화자매핑_라벨_리팩터링_설계.md, 20260831_PR_A_생산자_정찰.md
+- 푸시 여부: origin/main 푸시 완료 (PR #80 squash 머지 + 브랜치 삭제)
 
 ---
 
