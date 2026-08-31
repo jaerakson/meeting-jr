@@ -406,6 +406,30 @@ def delete_job(job_id: str) -> bool:
         conn.close()
 
 
+def _rendered_transcript(row: dict) -> str:
+    """검색 스니펫용 **표시 문자열**. 스니펫도 사용자에게 보이는 소비 지점이다.
+
+    PR C 이후 `transcript` 컬럼은 라벨이라 그대로 발췌하면 스니펫에 `SPEAKER_00` 이
+    노출된다.
+
+    **`get_segments()` 를 쓰지 않는다** — 그 함수는 조회 시 DB 백필 쓰기를 한다.
+    실측상 `transcript_segments` 는 대부분 NULL 이므로(회의 10건 중 9건), 검색 한 번에
+    페이지 전체가 백필로 써진다. 검색은 읽기 전용 조회 경로이므로 `parse()` 로 직접
+    파싱한다. **쓰기 경로(ZIP·프롬프트 등)는 반대로 `get_segments()` 를 쓴다** —
+    한쪽으로 통일하려다 반대편을 깨뜨리지 말 것.
+
+    지연 import 인 이유: 모듈 최상단에서 `app.transcript` 를 import 하면
+    `database -> transcript -> database` 순환이 된다(이 파일의 다른 함수들과 같은 패턴).
+    """
+    from .transcript import parse as _parse, render as _render
+
+    transcript = row.get("transcript") or ""
+    if not transcript:
+        return ""
+    segments = row.get("transcript_segments") or _parse(transcript)
+    return _render(segments, row.get("speakers") or {})
+
+
 def _extract_snippet(text: str, query: str, length: int = 100) -> str:
     """검색어 주변 텍스트 스니펫 추출."""
     if not text or not query:
@@ -445,9 +469,17 @@ def search_jobs(
         params: list = []
 
         if q:
-            conditions.append("(title LIKE ? OR summary LIKE ? OR transcript LIKE ?)")
+            # `speakers` 도 검색 대상이다. PR C 이후 `transcript` 컬럼은 **라벨**이므로
+            # 화자 이름은 본문에 없다 — 이 조건이 없으면 "김팀장"으로 검색해도 안 걸린다
+            # (그전에는 본문에 이름이 구워져 있어 우연히 걸렸다).
+            # [알려진 트레이드오프] 검색어가 "SPEAKER" 를 포함하면 speakers 의 라벨 키에
+            # 매칭돼 대부분의 행이 걸리고 스니펫은 빈 문자열이 된다. 막으려고 조건을
+            # 특수화하는 쪽이 더 큰 부채라 그대로 둔다.
+            conditions.append(
+                "(title LIKE ? OR summary LIKE ? OR transcript LIKE ? OR speakers LIKE ?)"
+            )
             pattern = f"%{q}%"
-            params.extend([pattern, pattern, pattern])
+            params.extend([pattern, pattern, pattern, pattern])
 
         if category_id:
             conditions.append("category_id = ?")
@@ -485,7 +517,7 @@ def search_jobs(
             for item in items:
                 title_snip = _extract_snippet(item.get("title") or "", q)
                 summary_snip = _extract_snippet(item.get("summary") or "", q)
-                transcript_snip = _extract_snippet(item.get("transcript") or "", q)
+                transcript_snip = _extract_snippet(_rendered_transcript(item), q)
                 if title_snip:
                     item["snippet"] = title_snip
                     item["snippet_source"] = "title"
