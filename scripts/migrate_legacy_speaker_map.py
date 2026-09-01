@@ -200,7 +200,7 @@ def _merge_duplicate_names(speaker_map: dict, diar: dict) -> tuple[dict, list[st
     reduced: dict[str, str] = {}
     notes: list[str] = []
     for name, keys in by_name.items():
-        rep = max(sorted(keys), key=lambda k: (seconds.get(k, 0.0),))
+        rep = _representative(keys, seconds)
         reduced[rep] = name
         if len(keys) > 1:
             dropped = [k for k in sorted(keys) if k != rep]
