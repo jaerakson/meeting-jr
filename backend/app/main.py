@@ -378,6 +378,156 @@ async def get_job_detail(job_id: str):
 # 5) POST /api/jobs/{job_id}/finalize  — 편집된 transcript + speaker_map 전송
 # ---------------------------------------------------------------------------
 
+def _diar_label_space(job_id: str) -> set:
+    """diar 라벨 집합. DB 우선, 없으면 파일을 **읽기만** 한다(백필하지 않는다)."""
+    from .database import get_job_diarization
+    labels = set(get_job_diarization(job_id) or {})
+    if labels:
+        return labels
+    diar_path = INPUT_DIR / f"{job_id}_diarization.json"
+    if diar_path.exists():
+        try:
+            return set(json.loads(diar_path.read_text(encoding="utf-8")) or {})
+        except (json.JSONDecodeError, OSError):
+            return set()
+    return set()
+
+
+def display_transcript(job: dict) -> str:
+    """**소비 시점 렌더** — 사람과 LLM이 읽는 transcript 문자열을 만든다.
+
+    PR C 확정 계약: 저장되는 `job.transcript` 컬럼은 **항상 라벨**(`SPEAKER_XX`)이고
+    이름은 `job.speakers`가 나른다. 따라서 **본문을 밖으로 내보내는 모든 소비 지점**
+    (ZIP 내보내기·`claude -p` 프롬프트 등)은 raw 컬럼이 아니라 이 함수를 써야 한다.
+    raw 컬럼을 그대로 쓰면 사용자에게는 `SPEAKER_00`이 노출되고, LLM은 "누가 말했나"를
+    알 수 없어 요약·후속조치 대조의 담당자 귀속이 깨진다.
+
+    소비 지점마다 렌더를 복사하지 말 것 — 이 프로젝트는 매칭 규칙 사본 5벌로 5라운드
+    연속 같은 버그를 겪었다. 새 소비 지점이 생기면 여기를 호출한다.
+
+    구세대 행(transcript에 이름이 이미 구워진 기존 행)에서는 라벨 자리에 실명이 있어
+    `speaker_map.get(label)`이 미스하고 `display == label`로 수렴한다 — 즉 **그 텍스트가
+    그대로 나오므로 degrade gracefully** 하다(§10 '두 세대 공존').
+    """
+    return render_transcript(get_segments(job), job.get("speakers") or {})
+
+
+def unique_display_inverse(speaker_map: dict | None) -> dict:
+    """`{라벨: 표시이름}` -> `{표시이름: 라벨}` 역맵. **값이 유일한 키만** 넣는다.
+
+    중복 이름(`대표님`×3)은 어느 라벨인지 **데이터로 결정할 수 없으므로 제외한다** —
+    추측하지 않는다(`save_speaker_profile`·마이그레이션과 같은 판단).
+
+    `restore_segment_labels`(c)와 `patch_transcript`의 키 번역이 **같은 규칙**을 쓰도록
+    한 곳에 둔다. 사본을 만들지 말 것 — 이 프로젝트는 매칭 규칙 사본 5벌로 5라운드
+    연속 같은 버그를 겪었다.
+    """
+    counts = Counter((speaker_map or {}).values())
+    return {v: k for k, v in (speaker_map or {}).items() if counts[v] == 1}
+
+
+def restore_segment_labels(
+    job_id: str,
+    transcript: str,
+    *,
+    space_map: dict,
+    restore_map: dict,
+    old_segments: list,
+) -> list:
+    """표시 이름이 렌더된 transcript를 파싱해 **라벨을 원래대로 되돌린** segments를 만든다.
+
+    `patch_transcript`와 `finalize_job`이 **같은 코드**를 쓴다. 사본을 만들지 말 것 —
+    이 프로젝트는 폐기된 매칭 방식의 사본 5벌로 5라운드 연속 같은 버그를 겪었다.
+
+    ## 왜 필요한가
+    두 엔드포인트가 받는 문자열은 프론트가 화면에 보여주던 `job.transcript` 그대로이고,
+    거기엔 이미 **표시 이름이 렌더돼 있다**(rename-speakers·apply-match의 승인된 동작).
+    그대로 parse하면 "김팀장" 같은 실명이 새 라벨이 되어 speaker_map 키와 어긋나는
+    **레거시 행이 새로 생긴다.**
+
+    ## 두 map의 역할이 다르다 (섞지 말 것)
+    - `space_map`: **라벨 공간**을 정의한다. 이 키 ∪ diar 라벨이 "정상 라벨"이다.
+      finalize는 **body의 새 speaker_map**(TranscriptEditor가 라벨 왕복 + 새 이름을 보낸다),
+      patch는 body에 map이 없으므로 `job.speakers`.
+    - `restore_map`: **그 텍스트가 렌더된 시점의 상태**다. 항상 `job.speakers`.
+      body의 새 map으로 (b)(c)를 돌리면 안 된다 — 본문은 **옛 이름**으로 렌더돼 있다.
+
+    ## 해소 순서
+      (a) 라벨이 이미 라벨 공간 안이면 그대로 둔다.
+      (b) 같은 start의 옛 세그먼트의 표시 이름과 같으면 그 세그먼트의 label로 되돌린다.
+      (c) 표시 이름이 유일하면 `restore_map` 역맵으로 되돌린다.
+      (d) 하나라도 미해소면 422. 부분 저장하지 않는다.
+
+    (b)는 폐기된 overlap 휴리스틱이 아니다. 지운 것은 *누가 말했는지*를 시간 겹침으로
+    추측하는 방식이었다. 여기서는 **그 줄에 이미 붙어 있던 라벨을 같은 start로 되찾을 뿐**
+    이고, 되찾지 못하면 추측하지 않고 422로 거부한다.
+    """
+    diar_labels = _diar_label_space(job_id)
+    label_space = set(space_map or {}) | diar_labels
+
+    # start -> 그 줄에 원래 붙어 있던 라벨.
+    # **같은 start에 서로 다른 라벨이 둘 이상이면 그 start를 (b)에서 제외한다.**
+    # 타임스탬프가 초 단위로 절단되므로 빠른 대화에서 같은 start가 실제로 발생하고,
+    # 그때 first-wins로 하나를 고르면 그건 "되찾기"가 아니라 **추측**이다.
+    # (라벨이 전부 같으면 모호하지 않으므로 제외하지 않는다.)
+    _by_start: dict = {}
+    for seg in old_segments or []:
+        label = seg.get("label")
+        start = seg.get("start")
+        if label is None or start is None:
+            continue
+        _by_start.setdefault(start, set()).add(label)
+    old_by_start = {st: next(iter(ls)) for st, ls in _by_start.items() if len(ls) == 1}
+
+    # 표시 이름 -> 라벨 역맵. **값이 유일한 것만** 넣는다 — 중복이면 어느 라벨인지
+    # 데이터로 결정할 수 없고, 추측하지 않는다(save_speaker_profile과 같은 판단).
+    inverse_unique = unique_display_inverse(restore_map)
+
+    new_segments: list = []
+    unresolved: list[str] = []
+    for seg in parse_transcript(transcript):
+        label = seg.get("label")
+        if label is None:
+            new_segments.append(seg)
+            continue
+
+        # (a) 이미 라벨 공간 안이면 그대로 둔다.
+        if label in label_space:
+            new_segments.append(seg)
+            continue
+
+        # (b) 같은 start의 옛 세그먼트에서 되찾는다.
+        #     되찾은 라벨도 **라벨 공간에 있는지 재검증한다** — 검증하지 않으면 이미 깨진
+        #     행(라벨이 실명인 행)을 편집할 때 200으로 깨진 상태가 그대로 유지된다.
+        old_label = old_by_start.get(seg.get("start"))
+        if old_label is not None and old_label in label_space:
+            old_display = ((restore_map or {}).get(old_label) or "").strip() or old_label
+            if old_display == label:
+                new_segments.append({**seg, "label": old_label})
+                continue
+
+        # (c) 표시 이름이 유일하면 역맵으로 되찾는다. (b)와 같은 이유로 공간을 재검증한다.
+        resolved = inverse_unique.get(label)
+        if resolved is not None and resolved in label_space:
+            new_segments.append({**seg, "label": resolved})
+            continue
+
+        # (d) 미해소.
+        unresolved.append(label)
+
+    if unresolved:
+        # 부분 저장하지 않는다 — 조용히 깨진 행을 만드는 것보다 명시적 거부가 낫다
+        # (apply_match·save_speaker_profile과 같은 확립된 판단).
+        raise HTTPException(
+            status_code=422,
+            detail="화자 라벨을 되돌릴 수 없어 저장하지 않았습니다: "
+                   f"{sorted(set(unresolved))}. 화자 이름을 본문에서 직접 바꾸지 말고 "
+                   "화자 이름 편집 기능을 사용해주세요.",
+        )
+
+    return new_segments
+
+
 @app.post("/api/jobs/{job_id}/finalize")
 async def finalize_job(job_id: str, body: dict):
     """편집된 transcript와 speaker_map을 받아 Claude 요약을 시작한다."""
@@ -386,7 +536,15 @@ async def finalize_job(job_id: str, body: dict):
         raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
 
     transcript: str = body.get("transcript", "").strip()
-    speaker_map: dict = body.get("speaker_map", {})
+    # 빈 맵(`{}`)은 "이름을 전부 지운다"가 아니라 **"이 요청은 이름 정보를 싣지 않았다"**
+    # 는 뜻이다 — 모든 화자 이름을 지우는 UI 동작이 존재하지 않는다(TranscriptEditor는
+    # 항상 identity 폴백을 채운다). 그대로 쓰면 `update_job_result`가 speakers를 `{}`로
+    # 덮어써 **그 회의의 화자 이름이 영구 소실된다.**
+    #
+    # 이름과 **라벨 공간** 두 축 모두 이 값으로 닫는다 — 이름만 살리고 공간을 놓치면
+    # diar가 없는 회의에서 라벨이 미해소가 되어 422가 남는다.
+    body_map: dict = body.get("speaker_map") or {}
+    speaker_map: dict = body_map if body_map else (job.get("speakers") or {})
     body_category_id: str | None = body.get("category_id")
 
     if not transcript:
@@ -397,19 +555,38 @@ async def finalize_job(job_id: str, body: dict):
     if body_category_id:
         update_job_category(job_id, category_id)
 
-    # speaker_map이 identity mapping이면 transcript에서 실제 이름 파싱
-    # SPEAKER_XX 키와 발화순 이름의 매핑이 불확실하므로, 이름 자체를 키로 사용
-    if speaker_map and all(k == v for k, v in speaker_map.items()):
-        found_names = list(dict.fromkeys(
-            m.strip() for m in re.findall(r'\[\d{2}:\d{2}\]\s*(.+?):', transcript)
-        ))
-        if found_names:
-            speaker_map = {name: name for name in found_names}
+    # [삭제됨 — PR C] 여기에 "speaker_map이 identity면 transcript에서 이름을 파싱해
+    # {실명: 실명}으로 재키잉" 하는 분기가 있었다. 되살리지 말 것.
+    #   ① 무엇을 막고 있었나: 사용자가 화자 이름 input이 아니라 **본문에서 직접** 화자명을
+    #      고쳐, speaker_map은 identity인데 transcript 라벨만 실명이 되는 입력. 그대로
+    #      저장하면 speaker_map 키(SPEAKER_XX) ≠ segments 라벨(실명)이 되어 apply-match가
+    #      422로 거부하는 "레거시 행"이 된다. 실제 사용자 데이터(60b7b738)가 그 흔적이다.
+    #   ② 왜 이제 필요 없나: TranscriptEditor가 이름을 본문에 굽지 않고 **라벨 그대로**
+    #      보내고 이름은 speaker_map이 나른다(PR C 계약). 그 입력 자체가 생기지 않는다.
+    #      이름을 채우면 all(k == v)가 False라 분기가 애초에 발동하지 않았고, 이름이 비면
+    #      라벨도 SPEAKER_XX라 재키잉해도 같은 값이 나오는 무동작이었다.
+    #   ③ 되살리면: {실명: 실명} 재키잉이 부활해 라벨 정체성이 다시 깨진다. 이 리팩터링이
+    #      없애려던 레거시 행의 생성자가 그대로 돌아온다.
 
     # 편집된 transcript를 파싱해 segments도 함께 갱신한다. 갱신하지 않으면 편집 이전의
     # 낡은 segments가 남아, 이후 재렌더 경로(apply-match·rename-speakers)가 사용자의
     # 편집을 덮어쓴다.
-    segments = parse_transcript(transcript)
+    #
+    # 파싱 전에 **라벨을 원래대로 되돌린다** — `patch_transcript`와 같은 헬퍼를 쓴다.
+    # MainArea의 "재요약"(handleResummarize)이 **이름이 렌더된 본문 + 갱신 안 된 옛
+    # job.speakers**를 이 엔드포인트로 보내므로, 그냥 parse하면 실명이 라벨로 굳어
+    # 레거시 행이 새로 생긴다(PR C가 patch_transcript에서 막은 것과 같은 경로).
+    #
+    # 공간은 **body의 새 speaker_map**으로, 복원은 **job.speakers**로 한다:
+    # TranscriptEditor는 라벨을 그대로 왕복시키므로 (a)에서 전부 통과하고(주 흐름 보존),
+    # 재요약 경로의 본문은 옛 이름으로 렌더돼 있으므로 (b)(c)가 옛 map으로 되찾는다.
+    segments = restore_segment_labels(
+        job_id,
+        transcript,
+        space_map=speaker_map,
+        restore_map=job.get("speakers") or {},
+        old_segments=job.get("transcript_segments") or parse_transcript(job.get("transcript") or ""),
+    )
     update_job_result(
         job_id,
         transcript=transcript,
@@ -533,7 +710,8 @@ async def regenerate_summary(job_id: str, body: dict = {}):
     # 순차 .replace()는 이름 맞바꾸기({"아빠":"엄마","엄마":"아빠"})에서 두 화자를 한 명으로
     # 붕괴시킨다. transcript는 항상 render() 출력으로만 만든다(PR B 불변식).
     speaker_map = job.get("speakers") or {}
-    final_transcript = render_transcript(get_segments(job_id), speaker_map)
+    # 소비 시점 렌더는 공용 헬퍼로만 만든다(ZIP·/ask·후속조치 대조와 같은 코드).
+    final_transcript = display_transcript(job)
 
     script_path = INPUT_DIR / f"{job_id}.txt"
     script_path.write_text(final_transcript, encoding="utf-8")
@@ -650,6 +828,21 @@ async def patch_tags(job_id: str, body: dict):
 
 @app.patch("/api/jobs/{job_id}/transcript")
 async def patch_transcript(job_id: str, body: dict):
+    """편집된 transcript를 재요약 없이 저장한다 (segments·화자 이름도 함께 갱신).
+
+    body: {transcript: "[00:00] SPEAKER_00: ...", speaker_map?: {"SPEAKER_00": "김팀장"}}
+
+    `speaker_map`은 **선택**이다. 두 세대의 클라이언트를 같은 엔드포인트가 받는다:
+      - **새 계약(PR C)**: 본문은 라벨 그대로, 이름은 `speaker_map`이 나른다.
+        map이 있으면 그것이 **라벨 공간**이 되고 `job.speakers`도 함께 갱신된다.
+      - **구버전 번들·직접 API 호출**: map 없이 이름이 구워진 본문만 온다.
+        이때는 공간·복원 모두 `job.speakers`를 쓰고 `speakers`는 갱신하지 않는다
+        (기존 동작 그대로 — 하위호환).
+
+    빈 맵(`{}`)은 키 부재와 **같게** 취급한다("이름을 전부 지운다"가 아니라 "이 요청은
+    이름 정보를 싣지 않았다"). 그대로 쓰면 `update_job_result`가 `speakers`를 `{}`로
+    덮어써 그 회의의 화자 이름이 영구 소실된다.
+    """
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다.")
@@ -658,10 +851,108 @@ async def patch_transcript(job_id: str, body: dict):
     if not transcript:
         raise HTTPException(status_code=422, detail="transcript가 비어 있습니다.")
 
-    update_job_result(job_id, transcript=transcript)
+    old_speakers = job.get("speakers") or {}
+    # `or {}`로 None(키 부재)과 {}(빈 맵)을 **같은 쪽**으로 몬다. `is not None`으로 쓰면
+    # 빈 맵이 갱신 경로로 새어 들어가 speakers를 통째로 지운다.
+    raw_body_map = body.get("speaker_map") or {}
 
+    # 편집 **이전**의 세그먼트. get_segments()는 백필 쓰기가 섞이므로 쓰지 않는다.
+    old_segments = job.get("transcript_segments") or parse_transcript(job.get("transcript") or "")
+
+    # body의 map을 **그대로 라벨 공간으로 인정하지 않는다.** 클라이언트가 보내는 키는
+    # 신뢰할 수 없는 입력이고, 라벨 공간은 **이미 존재하는 라벨**로만 정의된다:
+    #   diar 라벨 ∪ 편집 이전 세그먼트의 라벨 ∪ 기존 speakers 키(레거시 행 보존).
+    # 이 필터가 없으면 라벨 자리에 실명이 들어 있는 본문을 편집할 때
+    # `speakerMap["김팀장"] = "박부장"` 같은 **실명 키**가 공간의 정식 멤버로 인정돼
+    # (a)를 통과하고, segments에 `label == "김팀장"`인 **레거시 행이 새로 생긴다**
+    # (이 PR이 4라운드째 죽이고 있는 결함). 저장하면 job.speakers에 실명 키 고아
+    # 항목이 남아 그 행이 레거시로 분류된다.
+    known_labels = (
+        _diar_label_space(job_id)
+        | {seg.get("label") for seg in old_segments if seg.get("label")}
+        | set(old_speakers)
+    )
+    # 라벨이 아닌 키를 **버리기 전에 번역을 시도한다.** 구세대 행(transcript에 이름이
+    # 구워져 있는 행)을 편집하면 프론트가 그 실명을 라벨로 인식해 `{"김팀장": "박부장"}`
+    # 같은 키가 실려 온다. 그냥 버리면 200인 채로 **사용자의 개명이 조용히 사라진다** —
+    # 이번 라운드에 닫은 무음 드롭을 다른 문으로 되살리는 셈이다.
+    # 번역은 추측이 아니다: `restore_segment_labels`(c)와 **같은 규칙**(값이 유일한
+    # 표시 이름만 역맵에 넣는다)으로 라벨을 되찾을 뿐이고, 중복 이름(`대표님`×3)이라
+    # 되찾지 못하면 그때는 버린다.
+    inverse_unique = unique_display_inverse(old_speakers)
+    body_map = {k: v for k, v in raw_body_map.items() if k in known_labels}
+    # 번역된 항목을 **나중에** 얹는다: 구세대 행의 payload에는 시드된 옛 매핑
+    # (`SPEAKER_00 -> 김팀장`)과 방금 바꾼 이름(`김팀장 -> 박부장`)이 **함께** 실려 온다.
+    # 뒤에 얹어야 사용자가 방금 지정한 새 이름이 이긴다(dict 순서에 의존하지 않는다).
+    unresolved_keys: list[str] = []
+    for raw_key, name in raw_body_map.items():
+        if raw_key in known_labels:
+            continue
+        label = inverse_unique.get(raw_key)
+        if label is None:
+            unresolved_keys.append(raw_key)
+            continue
+        body_map[label] = name
+
+    # 라벨로도, 번역으로도 해소되지 않는 키는 **조용히 버리지 않고 422로 거부한다.**
+    # 조용히 버리면 사용자의 개명이 200 응답과 함께 사라진다 — 그건 방어가 아니라
+    # 새로운 무음 실패다. `restore_segment_labels`의 (d)가 이미 같은 선택을 한다
+    # (하나라도 미해소면 422, 부분 저장 없음). 같은 파일 안에서 한쪽만 조용히 버리면
+    # 계약이 갈라진다.
+    if unresolved_keys:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "화자 이름을 어떤 라벨에도 연결할 수 없어 저장하지 않았습니다: "
+                + ", ".join(sorted(unresolved_keys))
+                + ". 같은 표시 이름을 쓰는 화자가 둘 이상이면 어느 화자인지 데이터로 "
+                "특정할 수 없습니다(추측해서 저장하지 않습니다). 화자 목록에서 이름이 "
+                "겹치는 화자들의 이름을 서로 다르게 바꾼 뒤 다시 저장해 주세요."
+            ),
+        )
+
+    # 파싱한 라벨을 **원래 라벨로 되돌린 뒤** 저장한다(finalize_job과 같은 헬퍼).
+    #
+    # 두 map의 역할이 다르다(섞지 말 것 — restore_segment_labels docstring 참조):
+    #   - `space_map`(라벨 공간): body에 map이 오면 **그것**이다. 오지 않으면 job.speakers.
+    #     body map을 공간으로 쓰지 않으면 새 라벨이 미해소가 되어, diar가 없는 회의는
+    #     422가 나고 diar가 있는 회의는 diar 폴백 덕에 (a)를 통과해 **200인 채로 이름만
+    #     조용히 버려진다**. 두 갈래는 원인이 하나이므로 여기서 같이 닫힌다.
+    #   - `restore_map`(그 텍스트가 렌더된 시점의 상태): 항상 **job.speakers**다.
+    #     본문은 새 이름이 아니라 **옛 이름**으로 렌더돼 있으므로 새 map으로 (b)(c)를
+    #     돌리면 안 된다.
+    new_segments = restore_segment_labels(
+        job_id,
+        transcript,
+        space_map=body_map if body_map else old_speakers,
+        restore_map=old_speakers,
+        old_segments=old_segments,
+    )
+
+    # transcript는 받은 문자열 **그대로**, segments는 **재키잉된 것**을 같은 호출로 저장한다.
+    # 갱신하지 않으면 편집 이전의 낡은 segments가 남아, 이후 재렌더 경로(apply-match·
+    # rename-speakers)가 사용자의 편집을 통째로 덮어쓴다(finalize_job에서 닫은 것과 같은 결함).
+    if body_map:
+        update_job_result(
+            job_id,
+            transcript=transcript,
+            transcript_segments=new_segments,
+            speakers=body_map,
+        )
+        _save_speakers(body_map)
+    else:
+        update_job_result(
+            job_id,
+            transcript=transcript,
+            transcript_segments=new_segments,
+        )
+
+    # 사람이 읽는 산출물이므로 **이름 적용본**을 쓴다. 문자열은 항상 render() 출력으로만
+    # 만든다(PR B 불변식) — 순차 .replace()는 이름 맞바꾸기에서 화자를 붕괴시킨다.
+    # 이름은 관문(update_job_result)이 정규화(strip·빈 값 제외)한 결과를 되읽어 쓴다.
+    final_speakers = (get_job(job_id) or {}).get("speakers") or {}
     script_path = OUTPUT_DIR / f"{job_id}_스크립트.txt"
-    script_path.write_text(transcript, encoding="utf-8")
+    script_path.write_text(render_transcript(new_segments, final_speakers), encoding="utf-8")
 
     return {"status": "updated", "job_id": job_id}
 
@@ -768,7 +1059,9 @@ async def ask_question(job_id: str, body: dict):
     if question is None or not isinstance(question, str) or not question.strip():
         raise HTTPException(status_code=422, detail="question이 필요합니다.")
 
-    transcript = job.get("transcript", "")
+    # 프롬프트에는 **소비 시점 렌더**를 넣는다. raw 컬럼은 라벨이라 Claude가
+    # "누가 말했나"를 알 수 없다(ZIP·후속조치 대조와 같은 헬퍼를 쓴다).
+    transcript = display_transcript(job)
     summary = job.get("summary", "")
 
     prompt = (
@@ -1567,15 +1860,19 @@ async def export_all_meetings():
                 safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)
                 folder = f"{safe_title}/"
 
+                # 내보내는 본문은 **소비 시점 렌더**다. transcript 컬럼은 라벨이므로
+                # 그대로 쓰면 사용자가 받는 파일에 SPEAKER_00이 노출된다.
+                rendered = display_transcript(job) if job.get("transcript") else ""
+
                 if job.get("summary"):
                     date = job.get("created_at", "")[:10]
                     md = f"# {job.get('title', '')}\n\n날짜: {date}\n\n## 요약\n\n{job['summary']}"
-                    if job.get("transcript"):
-                        md += f"\n\n## 스크립트\n\n{job['transcript']}"
+                    if rendered:
+                        md += f"\n\n## 스크립트\n\n{rendered}"
                     zf.writestr(folder + "summary.md", md.encode("utf-8"))
 
-                if job.get("transcript"):
-                    zf.writestr(folder + "transcript.txt", job["transcript"].encode("utf-8"))
+                if rendered:
+                    zf.writestr(folder + "transcript.txt", rendered.encode("utf-8"))
 
                 for ext in AUDIO_EXTENSIONS:
                     audio_path = INPUT_DIR / f"{job_id}{ext}"
@@ -1843,9 +2140,15 @@ async def apply_match(job_id: str, body: dict):
             },
         )
 
+    # transcript 컬럼에는 **이름을 굽지 않는다** — 항상 라벨이다(빈 map 으로 렌더).
+    # 이름은 speakers 컬럼이 나르고, 표시는 소비 시점에 렌더한다. 여기에 new_speakers 를
+    # 넘기면 transcript(실명) 와 transcript_segments(라벨) 가 서로 다른 공간으로 갈라지고,
+    # 새 프론트 계약("본문을 그대로 파싱해 라벨로 쓴다") 과 만나 **레거시 행이 새로 생긴다**:
+    # 실명 본문 → 프론트가 파싱해 label="김팀장" → "전체 변경" 시 speaker_map 에 실명 키가
+    # 실려 오고 → 그것이 라벨 공간이 되어 (a) 를 통과 → segments.label 이 실명으로 굳는다.
     update_job_result(
         job_id,
-        transcript=render_transcript(segments, new_speakers),
+        transcript=render_transcript(segments, {}),
         speakers=new_speakers,
         transcript_segments=segments,
     )
@@ -2003,9 +2306,12 @@ async def rename_speakers(job_id: str, body: dict):
     normalized: dict = get_job(job_id).get("speakers") or {}
 
     if segments:
+        # transcript 컬럼은 **항상 라벨**이다(빈 map 으로 렌더). 이름은 speakers 가 나른다.
+        # normalized 를 넘기면 실명이 본문에 구워져 apply_match 와 같은 경로로 레거시 행을
+        # 만든다(위 주석 참조). 표시는 소비 시점 렌더가 책임진다.
         update_job_result(
             job_id,
-            transcript=render_transcript(segments, normalized),
+            transcript=render_transcript(segments, {}),
             transcript_segments=segments,
         )
 
@@ -2086,7 +2392,8 @@ async def assign_series(job_id: str, body: dict):
                     _model = get_setting("CLAUDE_MODEL") or "claude-sonnet-4-6"
                     from .summarizer import generate_followup_comparison
                     result = await generate_followup_comparison(
-                        pending, job.get("transcript", ""), job.get("summary", ""),
+                        # 라벨을 넘기면 액션아이템 담당자(assignee) 귀속이 깨진다.
+                        pending, display_transcript(job), job.get("summary", ""),
                         model=_model,
                     )
                     update_job_followup(job_id, result)
@@ -2192,7 +2499,8 @@ async def generate_followup(job_id: str):
     _model = get_setting("CLAUDE_MODEL") or "claude-sonnet-4-6"
     try:
         result = await generate_followup_comparison(
-            pending_items, job.get("transcript", ""), job.get("summary", ""),
+            # 라벨을 넘기면 액션아이템 담당자(assignee) 귀속이 깨진다.
+            pending_items, display_transcript(job), job.get("summary", ""),
             model=_model,
         )
     except Exception as exc:
@@ -2389,53 +2697,32 @@ async def save_speaker_profile(job_id: str, body: dict):
 
     speaker_segs = diar_data.get(speaker_label)
 
-    # speaker_label이 매핑된 이름(예: "김팀장")인 경우, job.speakers에서 역조회
+    # speaker_label이 라벨이 아니라 표시 이름으로 온 경우, speaker_map 역맵으로 라벨을 되찾는다.
+    # 값이 중복이면(여러 diar 라벨이 한 사람으로 병합된 행 — 실제 DB에 3건) 어느 라벨인지
+    # 데이터만으로 결정할 수 없으므로 역맵에서 제외한다. 추측하지 않고 아래 422로 떨어뜨린다.
     if not speaker_segs:
-        job_speakers = job.get("speakers") or {}
-        for key, val in job_speakers.items():
-            if val == speaker_label and key in diar_data:
-                speaker_label = key
-                speaker_segs = diar_data[key]
-                break
+        speaker_map = job.get("speakers") or {}
+        if isinstance(speaker_map, str):
+            speaker_map = json.loads(speaker_map)
+        from collections import Counter as _Counter
+        _counts = _Counter(speaker_map.values())
+        inverse = {v: k for k, v in speaker_map.items() if _counts[v] == 1}
+        resolved = inverse.get(speaker_label)
+        if resolved and resolved in diar_data:
+            speaker_label = resolved
+            speaker_segs = diar_data[resolved]
 
-    # identity mapping ({아빠: 아빠}) 등으로 SPEAKER_XX 매핑이 소실된 경우,
-    # transcript 구간과 diarization 세그먼트를 교차 비교하여 추론
+    # 레거시 행(speaker_map 키가 실명이라 diar 라벨과 다리가 없는 행)은 여기서 끝난다.
+    # 예전에는 transcript 구간과 diar 세그먼트의 overlap으로 추론했지만, 그 휴리스틱은
+    # apply_match·participation에서 삭제한 것과 같은 방식이라 함께 제거했다.
+    # 조용히 틀리는 대신 아래에서 명시적으로 422를 낸다.
     if not speaker_segs:
-        transcript = job.get("transcript") or ""
-        # transcript의 모든 발화 시작 시각을 파싱하여 각 화자의 구간을 구성
-        utterances: list[tuple[float, str]] = []  # (start_sec, speaker_name)
-        for line in transcript.split("\n"):
-            m = re.match(r"\[(\d+):(\d+)\]\s*(.+?):", line)
-            if m:
-                t = int(m.group(1)) * 60 + int(m.group(2))
-                utterances.append((t, m.group(3).strip()))
-        if utterances:
-            # 각 발화의 시작~다음 발화 시작까지를 해당 화자의 구간으로 설정
-            target_ranges: list[tuple[float, float]] = []
-            for i, (t, name) in enumerate(utterances):
-                if name == speaker_label:
-                    end_t = utterances[i + 1][0] if i + 1 < len(utterances) else t + 30.0
-                    target_ranges.append((t, end_t))
-            if target_ranges:
-                # 각 SPEAKER_XX의 세그먼트가 target 구간에 겹치는 비율로 점수 계산
-                best_key = None
-                best_score = 0.0
-                for diar_key, segs in diar_data.items():
-                    score = 0.0
-                    for seg in segs:
-                        for rng_start, rng_end in target_ranges:
-                            overlap = min(seg["end"], rng_end) - max(seg["start"], rng_start)
-                            if overlap > 0:
-                                score += overlap
-                                break
-                    if score > best_score:
-                        best_score = score
-                        best_key = diar_key
-                if best_key and best_score > 0:
-                    speaker_segs = diar_data[best_key]
-
-    if not speaker_segs:
-        raise HTTPException(status_code=422, detail=f"화자 {speaker_label}의 구간을 찾을 수 없습니다.")
+        raise HTTPException(
+            status_code=422,
+            detail=f"화자 {speaker_label}의 구간을 찾을 수 없습니다. "
+                   "예전 방식으로 저장된 회의(화자 이름이 스크립트에 직접 기록된 회의)에서는 "
+                   "음성 프로필을 추출할 수 없습니다.",
+        )
 
     # WAV 파일 경로
     wav_path = INPUT_DIR / f"{job_id}_16k.wav"

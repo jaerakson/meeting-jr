@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import { useTheme } from '@/hooks/useTheme'
+import { parse, formatTimestamp, displayName } from '@/lib/transcript'
 
 interface SharedData {
   title: string
@@ -19,24 +20,6 @@ const SPEAKER_COLORS = [
   { bg: 'bg-[#FFF7ED] dark:bg-orange-900/30', text: 'text-[#9A3412] dark:text-orange-400' },
   { bg: 'bg-[#FAF5FF] dark:bg-purple-900/30', text: 'text-[#6B21A8] dark:text-purple-400' },
 ]
-
-interface TranscriptLine {
-  timeStr: string
-  speaker: string
-  text: string
-}
-
-function parseTranscript(raw: string): TranscriptLine[] {
-  const lines: TranscriptLine[] = []
-  const regex = /^\[(\d{2}):(\d{2})\]\s*(.+?):\s*(.*)$/
-  for (const line of raw.split('\n')) {
-    const match = line.trim().match(regex)
-    if (match) {
-      lines.push({ timeStr: `${match[1]}:${match[2]}`, speaker: match[3], text: match[4] })
-    }
-  }
-  return lines
-}
 
 function renderMarkdown(text: string): React.ReactNode[] {
   const lines = text.split('\n')
@@ -98,19 +81,19 @@ export default function SharedPage() {
       .finally(() => setLoading(false))
   }, [token])
 
-  const transcriptLines = useMemo(() => data ? parseTranscript(data.transcript || '') : [], [data])
+  const segments = useMemo(() => data ? parse(data.transcript || '') : [], [data])
 
   const speakerColorMap = useMemo(() => {
     const map = new Map<string, number>()
     let idx = 0
-    for (const line of transcriptLines) {
-      if (!map.has(line.speaker)) {
-        map.set(line.speaker, idx % SPEAKER_COLORS.length)
+    for (const seg of segments) {
+      if (seg.label !== null && !map.has(seg.label)) {
+        map.set(seg.label, idx % SPEAKER_COLORS.length)
         idx++
       }
     }
     return map
-  }, [transcriptLines])
+  }, [segments])
 
   if (loading) {
     return (
@@ -158,21 +141,27 @@ export default function SharedPage() {
         )}
 
         {/* Transcript */}
-        {transcriptLines.length > 0 && (
+        {segments.length > 0 && (
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6">
             <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">대화 스크립트</h2>
             <div className="space-y-3">
-              {transcriptLines.map((line, idx) => {
-                const colorIdx = speakerColorMap.get(line.speaker) ?? 0
+              {segments.map((seg, idx) => {
+                // 매칭 실패 줄(label:null)은 화자 서식 없이 원문 그대로 보존한다(무손실 파싱 계약)
+                if (seg.label === null) {
+                  return seg.text ? (
+                    <p key={idx} className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{seg.text}</p>
+                  ) : null
+                }
+                const colorIdx = speakerColorMap.get(seg.label) ?? 0
                 const color = SPEAKER_COLORS[colorIdx]
                 return (
                   <div key={idx} className={`rounded-xl p-3 ${color.bg}`}>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-sm font-semibold ${color.text}`}>{line.speaker}</span>
-                      <span className="text-xs text-gray-400 font-mono">{line.timeStr}</span>
+                      <span className={`text-sm font-semibold ${color.text}`}>{displayName(seg.label, data.speakers)}</span>
+                      <span className="text-xs text-gray-400 font-mono">{formatTimestamp(seg.start)}</span>
                     </div>
                     <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">
-                      {line.text || <span className="text-gray-300 italic">(빈 발화)</span>}
+                      {seg.text || <span className="text-gray-300 italic">(빈 발화)</span>}
                     </p>
                   </div>
                 )

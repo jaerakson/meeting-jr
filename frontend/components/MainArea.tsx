@@ -13,6 +13,7 @@ import SummaryPanel from './SummaryPanel'
 import ParticipationChart from './ParticipationChart'
 import SeriesSelect from './SeriesSelect'
 import FollowupPanel from './FollowupPanel'
+import { parse as parseTranscript, render as renderTranscript } from '@/lib/transcript'
 
 interface EditData {
   transcript: string
@@ -41,6 +42,11 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   const [editData, setEditData] = useState<EditData | null>(null)
   const [isEditingTranscript, setIsEditingTranscript] = useState(false)
   const [localTranscript, setLocalTranscript] = useState('')
+  // null = 편집으로 갱신된 적 없음(재요약이 편집 모드를 거치지 않는 경로에서 job.speakers로
+  // 폴백해야 한다는 신호). {}는 "편집에서 실제로 빈 맵으로 확정됨"과 구분되는 별개 상태다 —
+  // {}를 초기값으로 쓰면 `localSpeakerMap ?? job.speakers ?? {}`의 `??`가 절대 발동하지 않아
+  // 재요약 시 job.speakers가 빈 맵으로 덮여써진다(회귀, director 리뷰).
+  const [localSpeakerMap, setLocalSpeakerMap] = useState<Record<string, string> | null>(null)
   const [resummaryLoading, setResummaryLoading] = useState(false)
   const [showResummarizeModal, setShowResummarizeModal] = useState(false)
   const [resummarizeCategory, setResummarizeCategory] = useState<string>('meeting')
@@ -83,6 +89,7 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   useEffect(() => {
     setIsEditingTranscript(false)
     setLocalTranscript('')
+    setLocalSpeakerMap(null)
     setNotionUrl(job?.notion_url ?? null)
     setResummarizeCategory(job?.category_id || 'meeting')
     setMemo(job?.memo || '')
@@ -159,34 +166,19 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
 
   const handleSpeakerClick = useCallback((speakerName: string) => {
     if (!job?.transcript) return
-    const lines = job.transcript.split('\n')
-    const regex = /^\[(\d{2}):(\d{2})\]\s*(.+?):\s*(.*)$/
+    const segments = parseTranscript(job.transcript)
+    const firstByLabel = (label: string) => segments.find(s => s.label === label)
 
-    for (const line of lines) {
-      const match = line.trim().match(regex)
-      if (match) {
-        const speaker = match[3]
-        if (speaker === speakerName) {
-          const minutes = parseInt(match[1], 10)
-          const seconds = parseInt(match[2], 10)
-          handleTimeClick(minutes * 60 + seconds)
-          return
-        }
-      }
-    }
+    // speakerName 자체가 라벨인 경우(예: identity mapping) 먼저 시도
+    const direct = firstByLabel(speakerName)
+    if (direct) { handleTimeClick(direct.start ?? 0); return }
 
+    // job.speakers(label -> 표시 이름) 역참조로 라벨을 찾아 시도
     if (job.speakers) {
       for (const [label, displayName] of Object.entries(job.speakers)) {
         if (displayName === speakerName) {
-          for (const line of lines) {
-            const match = line.trim().match(regex)
-            if (match && match[3] === label) {
-              const minutes = parseInt(match[1], 10)
-              const seconds = parseInt(match[2], 10)
-              handleTimeClick(minutes * 60 + seconds)
-              return
-            }
-          }
+          const seg = firstByLabel(label)
+          if (seg) { handleTimeClick(seg.start ?? 0); return }
         }
       }
     }
@@ -197,7 +189,9 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
 
   const downloadTranscript = () => {
     if (!job?.transcript) return
-    const blob = new Blob([job.transcript], { type: 'text/plain;charset=utf-8' })
+    // job.transcript는 항상 라벨 그대로다 — 다운로드는 소비 시점이므로 job.speakers로 이름을 적용해 렌더한다.
+    const rendered = renderTranscript(parseTranscript(job.transcript), job.speakers || {})
+    const blob = new Blob([rendered], { type: 'text/plain;charset=utf-8' })
     const a = Object.assign(document.createElement('a'), {
       href: URL.createObjectURL(blob),
       download: `${job.title || '스크립트'}_스크립트.txt`,
@@ -209,11 +203,13 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
   const downloadMarkdown = () => {
     if (!job) return
     const date = job.created_at ? new Date(job.created_at).toLocaleDateString('ko-KR') : ''
+    // 스크립트 섹션도 소비 시점에 job.speakers로 이름을 적용해 렌더한다(raw 라벨 노출 방지).
+    const renderedTranscript = job.transcript ? renderTranscript(parseTranscript(job.transcript), job.speakers || {}) : ''
     const lines = [
       `# ${job.title || '회의록'}`,
       date ? `\n날짜: ${date}` : '',
       job.summary ? `\n## 요약\n\n${job.summary}` : '',
-      job.transcript ? `\n## 스크립트\n\n${job.transcript}` : '',
+      renderedTranscript ? `\n## 스크립트\n\n${renderedTranscript}` : '',
     ]
     const md = lines.filter(Boolean).join('\n')
     const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
@@ -227,25 +223,36 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
 
   const handleStartEditTranscript = () => {
     setLocalTranscript(job?.transcript || '')
+    setLocalSpeakerMap(job?.speakers || {})
     setIsEditingTranscript(true)
   }
 
   const handleCancelEditTranscript = () => {
     setIsEditingTranscript(false)
     setLocalTranscript('')
+    setLocalSpeakerMap(null)
   }
 
   const handleSaveTranscript = async () => {
     if (!job) return
     setResummaryLoading(true)
     try {
-      await fetch(`/api/jobs/${job.id}/transcript`, {
+      const res = await fetch(`/api/jobs/${job.id}/transcript`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript: localTranscript || job.transcript }),
+        body: JSON.stringify({
+          transcript: localTranscript || job.transcript,
+          speaker_map: localSpeakerMap ?? job.speakers ?? {},
+        }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.detail || '저장에 실패했습니다.')
+        return
+      }
       setIsEditingTranscript(false)
       setLocalTranscript('')
+      setLocalSpeakerMap(null)
       onJobsChange()
     } catch {
       alert('저장에 실패했습니다.')
@@ -258,8 +265,8 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
     if (!job) return
     setResummaryLoading(true)
     try {
-      const speaker_map = job.speakers || {}
-      await fetch(`/api/jobs/${job.id}/finalize`, {
+      const speaker_map = localSpeakerMap ?? job.speakers ?? {}
+      const res = await fetch(`/api/jobs/${job.id}/finalize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -268,8 +275,14 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
           category_id: categoryId || job.category_id || 'meeting',
         }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.detail || '재요약 요청에 실패했습니다.')
+        return
+      }
       setIsEditingTranscript(false)
       setLocalTranscript('')
+      setLocalSpeakerMap(null)
       setShowResummarizeModal(false)
       onJobsChange()
     } catch {
@@ -525,7 +538,8 @@ export default function MainArea({ job, onJobsChange, onNewRecording, onOpenSide
                 currentTime={currentTime}
                 onTimeClick={handleTimeClick}
                 editable={isEditingTranscript}
-                onTranscriptChange={setLocalTranscript}
+                speakers={job.speakers || {}}
+                onTranscriptChange={p => { setLocalTranscript(p.transcript); setLocalSpeakerMap(p.speakerMap) }}
                 searchQuery={searchQuery}
               />
             </div>

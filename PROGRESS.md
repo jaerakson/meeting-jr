@@ -1,3 +1,178 @@
+## 2026-09-01 13:20 (작업 PC: 로컬) — 세션 60 (PR C 검증·푸시·코드리뷰 완료, 머지 대기)
+
+- 브랜치: `refactor/speaker-label-mapping-c` — **PR #82 OPEN, MERGEABLE, 아직 미머지**
+  (https://github.com/jaerakson/meeting-jr/pull/82). 최신 커밋 `e16158e`, **origin 푸시 완료**
+  (세션 59에서 밀려 있던 로컬 27커밋을 이번에 푸시 — `2f09afc..e16158e`).
+- 팀원 4명(dir-c4 / front-c4 / back-c4 / qa-c4)은 이번 세션 시작 시 **전원 종료**했다.
+  세션 59에서 "진행 중"으로 남아 있던 B2~B7 / T10 / F3 / 중복 표시이름 픽스처는
+  종료 전에 모두 커밋 완료된 상태였다(아래 검증으로 확인).
+- 완료:
+  - **검증 전량 재확인(세션 59가 "다음 사람이 반드시 재확인할 것"으로 남긴 항목)**
+    - 백엔드: `pytest tests/ -q` → **359 passed** (경고 2건은 asyncio subprocess 소멸자 관련, 무해)
+    - 프론트: `npx vitest run` → **7 files / 48 tests passed**, `npx tsc --noEmit` → 0,
+      `npm run build` → 성공(8 라우트)
+  - **푸시**: `git push origin refactor/speaker-label-mapping-c` 완료. PR #82가 이제 최신 코드 반영.
+  - **코드 리뷰 실행**(`/code-review:code-review 82`, CLAUDE.md 필수 절차):
+    적격성·CLAUDE.md 수집·PR 요약 3개 + 리뷰 5개(CLAUDE.md 준수 / 얕은 버그 스캔 /
+    git 이력 대조 / 이전 PR 코멘트 대조 / 코드 주석 대조) + 신뢰도 채점 4개 = 12 에이전트.
+    - **이전 PR #82 리뷰 지적 8건(2026-08-31 15:14Z 6건 + 22:04Z 2건) 전부 해소 확인.**
+    - **과거 3대 재발 결함 모두 재발 없음 확인**: ① `finalize_job` identity 재키잉 제거,
+      ② transcript 컬럼 실명 굽기 제거(모든 소비 지점이 `display_transcript`/`render` 경유),
+      ③ `localSpeakerMap` 초기값 `null` 센티널 + 모든 리셋 지점 `null` 일관.
+    - 채점 결과 4건 전부 임계값 80 미만 → **PR 코멘트 미게시**(리뷰 스킬 규칙).
+      다만 아래 "남은 지적"에 기록한다.
+- **남은 지적 (임계값 미달이나 실재 확인됨 — 머지 전/후 판단 필요)**:
+  1. (75) `DEVGUIDE.md:475` §10 항목이 **이미 고친 결함을 미해결 "후속 과제"로 기술**한다.
+     `Transcript.tsx`의 `saveEdit`/`saveSpeakerAll`/`reassignLine`(L186·196·208)은 이미
+     `render(..., {})`로 라벨만 내보낸다. 커밋 순서상 `8c47a56`(수정)이 `8e16cb0`(문서 기록)보다
+     **먼저**였는데 문서를 갱신하지 않았다. 이 프로젝트는 §10 정확성에 의존해 재발을 막으므로
+     그대로 두면 "이미 고친 것을 또 고치는" 위험이 있다.
+  2. (75) `scripts/migrate_legacy_speaker_map.py:151-156`의 `_representative()`가
+     **어디서도 호출되지 않는 죽은 코드**이고, `_merge_duplicate_names`(L202-203)가 동일한
+     tie-break를 인라인으로 재구현했다. 지금은 결과가 같아 버그는 없으나, 이 저장소가
+     "매칭 규칙 사본이 갈라져 5라운드 연속 같은 버그"를 겪은 바로 그 패턴이다.
+     둘 중 하나로 통일(호출하거나 삭제)할 것.
+  3. (50) 실명(`아빠`·`손주환`·`손재락`)과 실제 job ID가 **공개 저장소**에 들어간다
+     (`gh repo view` 실측 `isPrivate: false`). main에도 이미 존재하던 것이나 이번 PR이
+     신규 테스트 파일 전체·DEVGUIDE §10에서 범위를 크게 넓혔다(신규 추가 83행). 전역 보안 규칙
+     "개인정보도 동일하게 마스킹"에 걸린다. 픽스처를 `김팀장`류 placeholder로 교체 권고.
+  4. (50) 커밋 `cbe8447`이 `wip:` 접두어 사용. squash 머지 예정이라 main 이력엔 안 남는다.
+- **다음 할 일**: 위 1·2(각 75점) 반영 여부 결정 → 머지(`gh pr merge --squash --delete-branch`,
+  사용자 확인 필요) → 로컬 브랜치 정리 → **다음 PR 1순위: 회의 전환 시 이전 회의 상태 잔존(전 5건,
+  rematch가 최악)**. 상세는 `docs/ai_analysis/20260828_잔여_기획_후보.md`의 "★ 다음 PR 확정 안건".
+- 막힌 점/주의:
+  - **`pytest tests/`는 여전히 운영 DB `backend/meetings.db`를 오염시킨다**(conftest 부재).
+    이번 세션 실측: `recording_notes` 510행 → 512행(1회 실행당 +2행 누적). 세션 58 기록의 406행에서
+    이미 510행까지 늘어난 상태였다. 이번엔 **실행 전 백업 → 실행 → 백업 복원**으로 처리했고
+    최종 md5 `837db16f...`(510행)로 원복 확인. **다음 사람도 pytest 전에 반드시 백업할 것.**
+    근본 수정(`conftest.py` 신설 + `DB_PATH` tmp 격리)은 여전히 미착수, PR C 범위 밖.
+  - `showResummarizeModal`이 job 전환 시 안 닫히는 결함은 이번에도 미수정(증상만 차단된 상태).
+- 관련 파일/커밋: `e16158e`(HEAD), 리뷰 대상 36파일 +5454/−379.
+  `DEVGUIDE.md:475`, `scripts/migrate_legacy_speaker_map.py:151-156,202-203`
+- 푸시 여부: **origin/refactor/speaker-label-mapping-c 푸시 완료. PR #82 미머지.**
+
+---
+
+## 2026-09-01 07:29 (작업 PC: 로컬) — 세션 59 (PR C 2라운드 진행 중: 프론트 계약 분리 + 화자 이름 소실 회귀 수정)
+
+- 브랜치: `refactor/speaker-label-mapping-c` — **PR #82 OPEN, 아직 미머지**
+  (https://github.com/jaerakson/meeting-jr/pull/82). 이번 라운드 커밋은 **origin에 아직 미푸시**
+  (로컬이 `origin/refactor/speaker-label-mapping-c` 대비 8커밋 앞섬 — 아래 "완료" 목록).
+- **확정 계약(정본)**: `job.transcript` 컬럼은 항상 화자 라벨 그대로(`SPEAKER_00` 등) 저장한다.
+  화자 이름은 `job.speakers`(label→name)가 별도로 나른다. 표시(화면·다운로드·복사·공유)는
+  **소비 시점**에 `displayName(label, speakers)`(프론트) / 동일 규칙(백엔드)로 렌더한다.
+  이름을 본문에 구워 저장하지 않는다.
+- 완료 (세션 58의 PR #82 코드리뷰 지적 6건 수정 이후, 2라운드 근원 수정):
+  - 프론트: `8c47a56`(`Transcript.tsx` — `onTranscriptChange`를 `{transcript, speakerMap}`로
+    분리, 저장용 페이로드는 항상 라벨 그대로 + 비편집 모드도 `speakers` prop으로 이름 렌더 — **근원**),
+    `6a4b84d`(`MainArea.tsx`가 새 계약에 맞춰 편집·다운로드 소비하도록 갱신),
+    `a4c97fb`(**차단급 회귀 수정** — 아래 "핵심 사고 이력" ②),
+    `07bacf4`(시드 `useEffect`의 `eslint-disable` 사유 주석 + 비편집 모드 실명 렌더 회귀 테스트,
+    팀 내부 호칭 F2)
+  - 백엔드: `124fa94`(B1 — `PATCH /api/jobs/{id}/transcript`가 `speaker_map`을 body로 수용)
+  - 테스트: `d56aa95`(T1~T4, `PATCH /transcript` speaker_map 수용 관련),
+    `1b43abe`(T5 — `apply-match`/`rename-speakers`가 transcript 컬럼에 실명을 굽던 결함의
+    **4번째 재발**을 고정하는 회귀 테스트, qa-c4)
+  - 문서: `b4afe09`(프론트 `fetch` 65곳 중 `res.ok` 미검사 36곳을 두 부류로 구분해
+    `docs/ai_analysis/20260828_잔여_기획_후보.md`에 후속 과제로 기록 — 이번 PR 범위 밖으로 확정,
+    코드 수정 없음)
+- 진행 중 (다음 사람이 이어받을 것):
+  - qa-c4: 백엔드 T5(완료, `1b43abe`)에 이어 T10(서버측 빈 `speaker_map` 방어 테스트) 작성 중.
+    프론트 쪽은 **F3**(`res.ok` 422 응답 시 편집 모드 유지·로컬 상태 미소거 검증, 저장·재요약 양쪽)와
+    **중복 표시이름(`대표님`×3) 픽스처로 `reassignLine` payload의 `transcript`가 라벨 그대로인지
+    검증**(차단 3의 실제 안전망) — 둘 다 **미작성**, qa-c4 전담으로 확정.
+  - back-c4: B2~B7 대기. **B7 = 서버측 빈 `speaker_map` 방어**(아래 ② 회귀의 서버측 쌍둥이 결함에
+    대한 방어 — 프론트 수정이 정본, 서버는 방어. 구버전 번들·직접 API 호출 대응상 **둘 다 필요**).
+- **다음 PR 1순위(이 PR 머지 직후 착수, 팀리드·director 확정)**: 회의 전환 시 이전 회의 상태
+  잔존(전 5건, rematch가 최악 — 화자 이름이 DB에 잘못 기록됨). 상세는
+  `docs/ai_analysis/20260828_잔여_기획_후보.md`의 "★ 다음 PR 확정 안건" 항목.
+- **핵심 사고 이력 (다음 사람이 반드시 알아야 할 것)**:
+  1. `apply-match`·`rename-speakers`가 transcript 컬럼에 이름을 **직접 구웠던 것**이 레거시 행
+     생성 결함의 **4번째 재발** 원인이었다. T5(`1b43abe`)로 회귀를 고정했다.
+  2. **[차단급, 수정 완료]** `MainArea.tsx`의 `localSpeakerMap` 초기값이 `{}`(비-null)였던 탓에
+     `localSpeakerMap ?? job.speakers ?? {}`의 `??`가 **죽은 코드**였다. 재요약 모달은
+     `[job?.id]` 이펙트로 닫히지 않는데(별도 결함, 미수정) 그 이펙트가 `localSpeakerMap`은
+     리셋한다 — 모달을 연 채 다른 회의로 전환하면 편집 진입(시드)을 거친 적 없는 새 회의의
+     `speaker_map: {}`가 그대로 `POST /finalize`로 나가 **회의의 모든 화자 이름이 영구 소실**된다.
+     `a4c97fb`에서 `null` 센티널로 수정(null="편집 미진입", `{}`="편집에서 실제로 빈 맵 확정"을
+     구분). **`showResummarizeModal`이 job 전환 시 안 닫히는 것 자체는 아직 안 고쳤다** — 이번엔
+     증상(speaker_map 소실)만 막았다.
+  3. `backend/meetings.db`는 `.gitignore` 대상이라 **`git status`로 오염 여부를 판단할 수 없다**
+     (실측: `.gitignore:25`). 테스트가 운영 DB를 건드렸는지 의심되면 행 수를 직접 세야 한다
+     (세션 58 참조 — `recording_notes` 404→406행 오염 사례, PR C 범위 밖 후속 과제로 남아있음).
+  4. **팀 프로세스 변경**: 구현자가 자기 구현에 맞춰 테스트를 갱신하면 "의도대로 동작하는가"는
+     검증돼도 "의도 자체가 틀렸는가"는 못 잡는다 — 위 ②를 팀리드/구현자 모두 처음엔 놓쳤고
+     director가 리뷰에서 잡았다. 이후 **프론트 신규 테스트는 qa-c4 전담**으로 역할을
+     재분리했다(이미 나온 산출물은 유지, 신규만 분리 — revert 안 함).
+- 막힌 점/주의: 현재 없음. 각자(front-c4 구현 대기, qa-c4 T10+F3+픽스처, back-c4 B2~B7) 진행 중.
+- 관련 파일: `frontend/components/{Transcript,MainArea}.tsx`,
+  `frontend/__tests__/{Transcript.labelModel,MainArea.resummarize}.test.tsx`,
+  `backend/app/main.py`, `docs/ai_analysis/20260828_잔여_기획_후보.md`
+- 검증: 프론트 `npx vitest run`(6 files, 40 tests) / `npx tsc --noEmit` / `npm run build` 전부
+  통과(front-c4 확인, 세션 59 시점). 백엔드 테스트 결과는 qa-c4가 진행 중이라 이 항목에서
+  확정치로 적지 않는다 — **다음 사람은 이어받을 때 반드시 재확인할 것.**
+- 푸시 여부: **미푸시.** 로컬 8커밋(`8c47a56`~`1b43abe`)이 origin에 안 올라가 있다. PR #82는
+  이전 라운드(세션 58) 기준으로 이미 OPEN 상태이며, 이번 라운드 커밋은 아직 반영 안 됨 —
+  director가 PR 프리즈 직전에 최종 상태로 갱신 후 푸시할 예정.
+
+---
+
+## 2026-08-31 (작업 PC: 로컬) — 세션 58 (PR C 진행 중: 마이그레이션 + 확정 결함 2건)
+
+> ### ★ 다음 작업 최우선 — **테스트가 운영 DB 를 오염시킨다 (개발 인프라 결함)**
+> 제품 한계가 아니라 **개발 인프라 결함**이다. PR C 범위 밖이라 이번에 고치지 않았다.
+> - **증상**: `cd backend && pytest tests/` 실행 후 `backend/meetings.db` 의 md5 가 바뀐다.
+>   실측: `recording_notes` 404행 → **406행** (테스트가 운영 DB 에 실제로 INSERT).
+>   삽입 예: `{'content': '중요 포인트', 'timestamp': 10.5}`. **실행할 때마다 누적된다.**
+> - **원인 (확정)**: `backend/app/database.py:13` `DB_PATH` 가 **고정 경로**이고,
+>   `backend/tests/conftest.py` 가 **아예 없다** — DB 를 격리하는 픽스처가 없다.
+>   `test_recording_notes.py` 가 그대로 운영 DB 에 쓴다.
+> - **현재 피해 범위**: `recording_notes` 만 오염(실제 화면에 나오는 데이터).
+>   `meetings` 테이블(회의 데이터)은 **무사**하다.
+> - **위험**: `meetings` 를 쓰는 테스트가 하나라도 추가되는 순간 **사용자 회의 데이터가 오염된다.**
+>   지금 무사한 건 운이 좋았을 뿐이다. 이번 세션에만 pytest 를 수십 번 돌렸다.
+> - **조치 방향**: `conftest.py` 신설 + `DB_PATH` 를 테스트에서 tmp 로 격리
+>   (일부 테스트는 이미 `monkeypatch.setattr(db_module, "DB_PATH", ...)` 로 개별 격리하고 있다 —
+>   이 패턴을 autouse 픽스처로 올리면 된다).
+> - **마이그레이션 `--write` 실행 시 주의**: pytest 를 돌린 직후의 DB 상태와 사용자가 보는
+>   DB 상태가 다를 수 있다. **`--write` 전에 반드시 `backend/meetings.db` 백업.**
+
+- 브랜치: `refactor/speaker-label-mapping-c` (PR C, 진행 중)
+- 완료: `scripts/migrate_legacy_speaker_map.py` (기본 dry-run, `--write` 로만 기록, 자동 실행 없음,
+  커넥션을 `mode=ro` 로 열어 읽기 전용을 코드로 강제). 실 DB dry-run 실측:
+  **자동복구 3 / 병합복구 2 / 건너뜀 1(`60b7b738`, 사전조건③) / 조치불필요 4.**
+  director 독립 계산과 행 구성까지 일치. 실행 전후 md5 동일 확인.
+- **[확정 결함 — PR C 에서 수정 중] `patch_transcript` 가 새 레거시 행을 만든다**
+  `app/main.py:656` 이 `parse_transcript()` 로 **이미 이름이 렌더된 본문**을 다시 파싱해
+  실명을 라벨로 삼는다. MainArea 의 "회의록 수정" 경로. `TranscriptEditor` 는 PR C 가 막았지만
+  **이 경로는 감사에서 빠졌다.** §10 의 "생성자를 막았으므로 모집단이 고정된다"는 **거짓이었다.**
+  깨진 행에 apply-match 를 걸면 422 가 아니라 **200 으로 조용히 성공**하며 고아 키를 남긴다.
+  마이그레이션으로 복구해도 이 경로로 다시 깨지므로(밑 빠진 독) 문서 정정이 아니라 수정을 택했다.
+  수정 계약: (a)이미 키/diar 라벨 → 그대로 / (b)`start` 가 같은 **편집 이전** 세그먼트의 표시 이름과
+  일치 → **그 old label** / (c)값이 유일한 역맵 / (d)미해소 시 **422·부분 저장 금지**.
+  **(b)가 핵심** — 표시 이름 중복 회의(`5938f69c` 의 `대표님` 3벌)도 편집이 막히지 않는다.
+  (b)는 *누가 말했는지* 추론이 아니라 **이미 그 줄에 붙어 있던 라벨을 되찾는 것**이다.
+- **[교훈] 건수 대조만으로는 못 잡는다**: backend-c3 의 첫 판정 기준("모든 라벨이 speaker_map 키에
+  있으면 정상")은 `60b7b738` 을 **정상으로 위장**시켰는데 **건수는 3/2/1/4 로 정확히 맞았다.**
+  숫자만 대조했으면 깨진 행을 정상으로 보고하고 통과했을 것이다. **행 구성까지 대조할 것.**
+  → 팀원에게 예상 숫자를 **목표가 아니라 반증 대상**으로 주는 방식이 유효했다.
+- **[교훈] 폐기 방식 재유입 압력은 실재한다**: qa 가 착수 질문에서 "삭제된 overlap 휴리스틱을
+  마이그레이션 1회성으로 재사용하는 것인지" 를 물었다. 아니라고 못박고, **역맵으로 해소 안 되는
+  라벨이 있으면 diar 가 아무리 풍부해도 복구하지 않고 건너뛴다**는 단언을 테스트에 넣게 했다.
+- 관련 파일: `scripts/migrate_legacy_speaker_map.py`, `backend/app/main.py`(patch_transcript),
+  `backend/tests/test_patch_after_rename_legacy_row.py`, `DEVGUIDE.md` §10(1행 정정 + 4행 추가)
+- 푸시 여부: **PR #82 생성 완료**(https://github.com/jaerakson/meeting-jr/pull/82). 코드리뷰 완료 → **지적 6건 수정 중**(머지 전)
+- **[코드리뷰 지적, 수정 중]** ①**[머지 차단]** `handleResummarize`→`finalize_job` 이 레거시 행을 계속 생성 (`patch_transcript` 와 **같은 결함의 다른 호출부**. summarizer 사본 → patch_transcript → 이번 건으로 **세 번째 반복**) ②(b)의 같은 `start` 충돌 시 first-wins = 추측 ③(b)가 `old_label` 을 라벨 공간에 재검증 안 함 ④공유 페이지가 raw 라벨 표시 ⑤마이그레이션 stale-read ⑥문서 4곳
+- **[후속 과제, 프론트]** `Transcript.tsx` 의 `onTranscriptChange` 가 **전송용 페이로드와 화면용 렌더를 분리하지 않는다**
+  (항상 `render(segments, speakerMap)` = 이름 적용판을 내보냄). 편집 중 이름을 한 번이라도 바꾸면
+  이후 텍스트만 고쳐도 이름이 구워진다. `handleSaveTranscript`·`handleResummarize` **두 결함의 공통 근원**.
+  현재는 서버가 `restore_segment_labels` 로 사후 방어. **서버 방어는 프론트를 고쳐도 계속 필요**하다
+  (구버전 번들·직접 API 호출 무방비). 프론트 수정은 대체가 아니라 **추가 방어**다.
+  PR #82 범위에서 제외한 이유: 재리뷰 단계 + qa 가 서버측 계약으로 테스트 작성 중이라 지금 바꾸면 무효화된다
+- **[교훈] 지목된 한 곳만 고치지 말 것.** `patch_transcript` 를 닫을 때 *"이름이 렌더된 transcript 를 서버로 보내는 호출부"* 를 **전수로 세지 않아** 머지 차단 결함이 남았다. grep 은 증상이 아니라 **패턴**으로 걸어야 한다
+
+---
+
 ## 2026-08-31 (작업 PC: 로컬) — 세션 57 (PR #81: 화자 매핑 리팩터링 PR B — 라벨 기반 전환)
 - 브랜치: main (PR #81 squash 머지, `b1a1ee6`)
 - 완료 (PR B = 3단계 중 2단계, **삭제가 본체**):

@@ -216,21 +216,39 @@ def test_save_profile_lazy_migration_from_file(mock_emb, tmp_path, client, setup
 
 
 # ─────────────────────────────────────────────────────────────────────
-# 테스트 3-1: identity mapping ({아빠: 아빠})에서 타임스탬프 교차 비교
+# 테스트 3-1: identity mapping ({아빠: 아빠}) — 레거시 행은 명시적으로 거부되어야 한다
 # ─────────────────────────────────────────────────────────────────────
+#
+# [계약 뒤집힘, PR C] 이 테스트는 원래 "overlap 휴리스틱으로 SPEAKER_XX를 추론해
+# 200을 반환해야 한다"를 단언했다. PR C에서 그 휴리스틱(diar↔transcript 구간
+# overlap 면적 추론)을 의도적으로 삭제했으므로 지금은 **422가 맞는 동작**이다.
+# 구현이 퇴행한 게 아니다 — 잘못 뒤집으면 폐기된 매칭 방식이 되살아난다.
+#
+# 왜 삭제했나 (DEVGUIDE.md §10 "[한계] 레거시 행에서 음성 프로필 추출 불가 (PR C)" 참조):
+#   - speaker_map 키가 실명(레거시 행)이면 diar 라벨(SPEAKER_XX)과 다리가 없다.
+#   - overlap 휴리스틱은 조용히 틀린 화자의 목소리를 프로필로 저장할 위험이 있고,
+#     apply_match·participation에서 동일 부류 휴리스틱이 이미 제거되어(PR B)
+#     이 엔드포인트만 다르게 동작하는 것 자체가 불일치였다(§10 "일관성 문제").
+#   - 조용히 틀리는 대신 422로 명시 거부하는 쪽을 선택했다.
+#
+# ⚠️ 이 테스트를 다시 200/success로 뒤집지 말 것. 그건 overlap 휴리스틱의 재유입이며,
+#    이 프로젝트에서 폐기된 매칭 방식이 두 번 재유입된 사고와 정확히 같은 형태다.
+#    대신 422 응답의 오류 문구가 "왜 안 되는지"(레거시 행이라 라벨 다리가 없다는 사실)를
+#    실제로 설명하는지까지 단언해서, 이 테스트 자체가 회귀 감시자가 되도록 한다.
 @patch("app.audio_processor.extract_speaker_embedding", side_effect=_mock_embedding)
 def test_save_profile_with_name_key_identity_mapping(mock_emb, client, setup_job_with_diarization):
-    """speakers가 {아빠: 아빠}이고 diarization이 {SPEAKER_00: ...}일 때,
-    transcript 타임스탬프로 SPEAKER_XX를 추론하여 프로필 추출이 성공해야 한다."""
+    """speakers가 {아빠: 아빠}(레거시: 키가 실명)이고 diarization이 {SPEAKER_00: ...}일 때,
+    라벨 공간이 어긋나 프로필 추출이 422로 명시 거부되어야 한다(overlap 휴리스틱 재유입 금지)."""
     import app.database as dbmod
 
-    # identity mapping: 이름이 키
+    # identity mapping: 이름이 키 (레거시 행 — speaker_map 키가 diar 라벨과 다리가 없음)
     speakers = {"아빠": "아빠", "손주환": "손주환"}
     diarization = {
         "SPEAKER_00": [{"start": 0.0, "end": 5.0}, {"start": 10.0, "end": 15.0}],
         "SPEAKER_01": [{"start": 5.0, "end": 10.0}, {"start": 20.0, "end": 25.0}],
     }
-    # transcript에서 아빠는 [00:00], [00:10]에 발화 → SPEAKER_00과 일치
+    # transcript에서 아빠는 [00:00], [00:10]에 발화 → SPEAKER_00과 겹치지만,
+    # PR C 이후 이 겹침은 더 이상 라벨 추론 근거로 쓰이지 않는다.
     transcript = "[00:00] 아빠: 안녕\n[00:05] 손주환: 네\n[00:10] 아빠: 뭐해\n[00:20] 손주환: 놀아요"
 
     job_id = setup_job_with_diarization(speakers, diarization)
@@ -243,7 +261,63 @@ def test_save_profile_with_name_key_identity_mapping(mock_emb, client, setup_job
         json={"speaker_label": "아빠", "profile_name": "아빠"},
     )
 
-    assert res.status_code == 200, f"identity mapping 타임스탬프 추론 실패: {res.json()}"
-    data = res.json()
-    assert "id" in data
-    assert data["name"] == "아빠"
+    assert res.status_code == 422, (
+        f"레거시 행(speaker_map 키가 실명)은 라벨 다리가 없어 422로 명시 거부되어야 한다. "
+        f"200이 나온다면 폐기된 overlap 휴리스틱이 되살아난 것이다: {res.status_code} {res.text}"
+    )
+    detail = res.json().get("detail", "")
+    # 원인(레거시 행이라 라벨 공간이 어긋난다)을 실제로 설명하는지까지 확인 —
+    # 문구 없이 422만 통과시키면 "왜 안 되지" 하며 휴리스틱을 되살릴 여지가 남는다.
+    assert "아빠" in detail, f"오류 문구에 어떤 화자인지 나와야 한다: {detail}"
+    assert ("예전 방식" in detail or "레거시" in detail), (
+        f"오류 문구가 '레거시 행이라 안 된다'는 원인을 설명하지 않는다: {detail}"
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 테스트 4-1: [보강, qa-c3] 중복된 표시 이름 — 역맵이 추측하지 않고 거부해야 한다
+# ─────────────────────────────────────────────────────────────────────
+#
+# main.py의 표시-이름 역맵 로직({값: 키} 역방향, 값이 중복이면 역맵에서 제외)은
+# 이미 구현돼 있지만(마이그레이션 대상 6건 중 "중복 이름으로 병합 판단 필요 3건"과
+# 같은 축), 이 파일에 이 경로를 직접 겨냥한 테스트가 없었다 — 라벨 키는 정상
+# (SPEAKER_XX)인데 speaker_map "값"만 두 라벨에서 같은 이름으로 중복된 경우다.
+# 추측(첫 매치 사용 등)으로 넘어가면 다른 화자의 목소리를 엉뚱한 이름으로 저장하는
+# 조용한 오염이 생긴다 — apply_match/participation이 이미 폐기한 것과 같은 부류.
+@patch("app.audio_processor.extract_speaker_embedding", side_effect=_mock_embedding)
+def test_save_profile_duplicate_display_name_is_rejected_not_guessed(
+    mock_emb, client, setup_job_with_diarization
+):
+    """speaker_map 값이 중복돼 표시 이름만으로는 라벨을 하나로 결정할 수 없으면,
+    첫 매치를 추측해 쓰지 않고 422로 명시 거부해야 한다."""
+    # SPEAKER_00과 SPEAKER_01 둘 다 표시 이름이 "김팀장"으로 중복(예: 동명이인
+    # 오기입, 또는 병합 전 상태) — 라벨 키 자체는 정상(SPEAKER_XX)이라 레거시 행이
+    # 아니다. speaker_label을 표시 이름("김팀장")으로 호출한 경우가 대상.
+    speakers = {"SPEAKER_00": "김팀장", "SPEAKER_01": "김팀장"}
+    diarization = {
+        "SPEAKER_00": [{"start": 0.0, "end": 5.0}, {"start": 10.0, "end": 15.0}],
+        "SPEAKER_01": [{"start": 5.0, "end": 10.0}],
+    }
+
+    job_id = setup_job_with_diarization(speakers, diarization)
+
+    res = client.post(
+        f"/api/jobs/{job_id}/save-speaker-profile",
+        json={"speaker_label": "김팀장", "profile_name": "김팀장"},
+    )
+
+    assert res.status_code == 422, (
+        f"표시 이름이 중복되면 어느 라벨인지 데이터로 결정할 수 없다 — 추측(첫 매치)해서 "
+        f"200을 반환하면 다른 화자의 목소리를 잘못된 이름으로 저장하는 조용한 오염이다. "
+        f"실제: {res.status_code} {res.text}"
+    )
+
+    # regression 방지: 원래 라벨(SPEAKER_00)로 직접 호출하면 중복과 무관하게 여전히 성공해야 한다 —
+    # 중복 방지 로직이 정상 경로(라벨 직접 지정)까지 과잉 차단하면 안 된다.
+    res2 = client.post(
+        f"/api/jobs/{job_id}/save-speaker-profile",
+        json={"speaker_label": "SPEAKER_00", "profile_name": "김팀장"},
+    )
+    assert res2.status_code == 200, (
+        f"라벨을 직접 지정하면 표시 이름 중복과 무관하게 성공해야 한다: {res2.status_code} {res2.text}"
+    )

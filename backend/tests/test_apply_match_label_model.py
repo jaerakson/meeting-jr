@@ -69,7 +69,10 @@ def _assert_rerender_matches(job_id: str, job: dict):
     from app.transcript import get_segments, render
 
     segments = get_segments(job_id)
-    assert render(segments, _get_speakers(job)) == job["transcript"]
+    # PR C 계약: 저장된 transcript 컬럼은 **라벨 공간 렌더**와 바이트 동일해야 한다
+    # (이름은 speakers가 나른다). 표시 문자열 검증은 _display_transcript가 맡는다.
+    assert render(segments, {}) == job["transcript"]
+    assert render(segments, _get_speakers(job)) == _display_transcript(job)
 
 
 # ===========================================================================
@@ -95,8 +98,8 @@ class TestTwoLabelsIndependentUpdate:
         })
         assert res.status_code == 200
         job = client.get("/api/jobs/label-indep-1").json()
-        assert "박과장:" in job["transcript"], f"실제: {job['transcript']}"
-        assert "이대리:" in job["transcript"], f"실제: {job['transcript']}"
+        assert "박과장:" in _display_transcript(job), f"실제: {_display_transcript(job)}"
+        assert "이대리:" in _display_transcript(job), f"실제: {_display_transcript(job)}"
         _assert_rerender_matches("label-indep-1", job)
 
     def test_speaker_map_updated_correctly_per_label(self, client):
@@ -134,8 +137,8 @@ class TestTwoLabelsIndependentUpdate:
         })
         assert res.status_code == 200
         job = client.get("/api/jobs/label-indep-3").json()
-        assert "박과장:" in job["transcript"]
-        assert "이대리:" in job["transcript"]
+        assert "박과장:" in _display_transcript(job)
+        assert "이대리:" in _display_transcript(job)
         speakers = _get_speakers(job)
         assert speakers.get("SPEAKER_00") == "박과장"
         assert speakers.get("SPEAKER_01") == "이대리"
@@ -165,8 +168,8 @@ class TestUnknownLabelWithoutDiarization:
         assert data.get("skipped") == ["SPEAKER_99"], f"실제: {data}"
 
         job = client.get("/api/jobs/unknown-nodia-1").json()
-        assert "박과장:" in job["transcript"]
-        assert "존재안함" not in job["transcript"]
+        assert "박과장:" in _display_transcript(job)
+        assert "존재안함" not in _display_transcript(job)
         _assert_rerender_matches("unknown-nodia-1", job)
 
 
@@ -193,9 +196,9 @@ class TestSameLabelMultipleSegments:
         })
         assert res.status_code == 200
         job = client.get("/api/jobs/multiseg-1").json()
-        assert job["transcript"].count("박과장:") == 3
-        assert "김팀장" not in job["transcript"]
-        assert "이대리:" in job["transcript"]
+        assert _display_transcript(job).count("박과장:") == 3
+        assert "김팀장" not in _display_transcript(job)
+        assert "이대리:" in _display_transcript(job)
         _assert_rerender_matches("multiseg-1", job)
 
 
@@ -221,8 +224,8 @@ class TestZeroSegmentLabel:
         assert data.get("skipped") == ["SPEAKER_01"], f"실제: {data}"
 
         job = client.get("/api/jobs/zeroseg-1").json()
-        assert "최부장" not in job["transcript"]
-        assert "박과장:" in job["transcript"]
+        assert "최부장" not in _display_transcript(job)
+        assert "박과장:" in _display_transcript(job)
         speakers = _get_speakers(job)
         assert "최부장" not in speakers.values()
         _assert_rerender_matches("zeroseg-1", job)
@@ -256,7 +259,7 @@ class TestUnknownLabelResponseShape:
 
         job = client.get("/api/jobs/shape-all-1").json()
         assert job["transcript"] == original_transcript, (
-            f"skipped 시 transcript가 바이트 단위로 불변이어야 함. 실제: {job['transcript']!r}"
+            f"skipped 시 transcript가 바이트 단위로 불변이어야 함. 실제: {_display_transcript(job)!r}"
         )
         assert _get_speakers(job) == {"아빠": "아빠", "엄마": "엄마"}
 
@@ -277,7 +280,7 @@ class TestUnknownLabelResponseShape:
         assert "warning" in data
 
         job = client.get("/api/jobs/shape-partial-1").json()
-        assert "김과장:" in job["transcript"]
+        assert "김과장:" in _display_transcript(job)
         _assert_rerender_matches("shape-partial-1", job)
 
     def test_all_labels_unknown_multi_returns_422(self, client):
@@ -296,7 +299,7 @@ class TestUnknownLabelResponseShape:
 
         job = client.get("/api/jobs/shape-all-2").json()
         assert job["transcript"] == original_transcript, (
-            f"skipped 시 transcript가 바이트 단위로 불변이어야 함. 실제: {job['transcript']!r}"
+            f"skipped 시 transcript가 바이트 단위로 불변이어야 함. 실제: {_display_transcript(job)!r}"
         )
 
 
@@ -319,8 +322,8 @@ class TestNewNameWhitespaceNormalization:
         })
         assert res.status_code == 200
         job = client.get("/api/jobs/ws-new-1").json()
-        assert "박과장:" in job["transcript"]
-        assert "박과장 :" not in job["transcript"]
+        assert "박과장:" in _display_transcript(job)
+        assert "박과장 :" not in _display_transcript(job)
         assert _get_speakers(job).get("SPEAKER_00") == "박과장"
         _assert_rerender_matches("ws-new-1", job)
 
@@ -335,7 +338,7 @@ class TestNewNameWhitespaceNormalization:
         })
         assert res.status_code == 200
         job = client.get("/api/jobs/ws-new-2").json()
-        assert "박과장:" in job["transcript"]
+        assert "박과장:" in _display_transcript(job)
         assert _get_speakers(job).get("SPEAKER_00") == "박과장"
         _assert_rerender_matches("ws-new-2", job)
 
@@ -351,7 +354,7 @@ class TestNewNameWhitespaceNormalization:
         })
         assert res.status_code == 200
         job = client.get("/api/jobs/ws-new-3").json()
-        transcript = job["transcript"]
+        transcript = _display_transcript(job)
         assert "박과장:" in transcript
         assert "정부장:" in transcript
         speakers = _get_speakers(job)
@@ -377,8 +380,8 @@ class TestBasicRematch:
         })
         assert res.status_code == 200
         job = client.get("/api/jobs/basic-1").json()
-        assert "김과장:" in job["transcript"]
-        assert "아빠:" not in job["transcript"]
+        assert "김과장:" in _display_transcript(job)
+        assert "아빠:" not in _display_transcript(job)
         assert _get_speakers(job).get("아빠") == "김과장"
         _assert_rerender_matches("basic-1", job)
 
@@ -395,7 +398,7 @@ class TestBasicRematch:
         })
         assert res.status_code == 200
         job = client.get("/api/jobs/basic-2").json()
-        transcript = job["transcript"]
+        transcript = _display_transcript(job)
         assert transcript.count("김과장:") == 2
         assert "엄마:" in transcript
         _assert_rerender_matches("basic-2", job)
@@ -414,7 +417,7 @@ class TestBasicRematch:
         })
         assert res.status_code == 200
         job = client.get("/api/jobs/basic-3").json()
-        transcript = job["transcript"]
+        transcript = _display_transcript(job)
         assert transcript.count("엄마:") == 2, f"실제: {transcript}"
         assert transcript.count("아빠:") == 1, f"실제: {transcript}"
         _assert_rerender_matches("basic-3", job)
@@ -451,7 +454,7 @@ class TestIdentityMappedRowUsesOwnLabel:
         # 전체 skipped 시 transcript는 바이트 단위로 원본과 완전히 동일해야 한다.
         job_after_skip = client.get("/api/jobs/identity-1").json()
         assert job_after_skip["transcript"] == original_transcript, (
-            f"skipped 시 transcript가 바이트 단위로 불변이어야 함. 실제: {job_after_skip['transcript']!r}"
+            f"skipped 시 transcript가 바이트 단위로 불변이어야 함. 실제: {_display_transcript(job_after_skip)!r}"
         )
 
         # 실제 segment label("아빠")로 보내야 정상 적용된다.
@@ -460,7 +463,7 @@ class TestIdentityMappedRowUsesOwnLabel:
         })
         assert res.status_code == 200
         job = client.get("/api/jobs/identity-1").json()
-        assert "김과장:" in job["transcript"]
+        assert "김과장:" in _display_transcript(job)
         assert _get_speakers(job).get("아빠") == "김과장"
         _assert_rerender_matches("identity-1", job)
 
@@ -493,10 +496,10 @@ class TestBlankNewNameIsSkipped:
         assert data.get("skipped") == ["SPEAKER_00"], f"실제: {data}"
 
         job = client.get("/api/jobs/blank-name-1").json()
-        assert "김팀장:" in job["transcript"], (
-            f"공백 new_name은 기존 이름을 지우면 안 됨. 실제: {job['transcript']}"
+        assert "김팀장:" in _display_transcript(job), (
+            f"공백 new_name은 기존 이름을 지우면 안 됨. 실제: {_display_transcript(job)}"
         )
-        assert "박과장:" in job["transcript"]
+        assert "박과장:" in _display_transcript(job)
         speakers = _get_speakers(job)
         assert speakers.get("SPEAKER_00") == "김팀장", f"실제: {speakers}"
         assert speakers.get("SPEAKER_01") == "박과장", f"실제: {speakers}"
@@ -519,6 +522,27 @@ class TestBlankNewNameIsSkipped:
 
         job = client.get("/api/jobs/blank-name-2").json()
         assert job["transcript"] == original_transcript, (
-            f"전체 skipped 시 transcript가 바이트 단위로 불변이어야 함. 실제: {job['transcript']!r}"
+            f"전체 skipped 시 transcript가 바이트 단위로 불변이어야 함. 실제: {_display_transcript(job)!r}"
         )
         assert _get_speakers(job) == {"SPEAKER_00": "김팀장", "SPEAKER_01": "이대리"}
+
+
+def _display_transcript(job: dict) -> str:
+    """소비 시점 렌더로 **표시 문자열**을 만든다.
+
+    PR C 확정 계약: 저장되는 `job.transcript` 컬럼은 **항상 라벨**(`SPEAKER_XX`)이고
+    이름은 `job.speakers`가 나른다. 표시(화면·다운로드·복사·공유)는 소비 시점에
+    `render(segments, speakers)`로 만든다. 따라서 "이름이 보이는가"를 검증하는 단언은
+    저장 문자열이 아니라 **이 함수의 결과**를 봐야 한다. 단언의 판별력은 그대로다 —
+    이름이 잘못 매핑되면 여기서 똑같이 실패한다.
+    """
+    from app.transcript import parse as _parse, render as _render
+    speakers = job.get("speakers") or {}
+    if isinstance(speakers, str):
+        import json as _json
+        speakers = _json.loads(speakers)
+    segments = job.get("transcript_segments") or _parse(job.get("transcript") or "")
+    if isinstance(segments, str):
+        import json as _json
+        segments = _json.loads(segments)
+    return _render(segments, speakers)

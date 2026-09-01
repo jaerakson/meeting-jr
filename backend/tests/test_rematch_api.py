@@ -198,11 +198,11 @@ def test_apply_match_updates_transcript(client, create_done_job):
 
     # DB에서 transcript 확인
     job = dbmod.get_job(job_id)
-    assert "김팀장" in job["transcript"]
-    assert "이대리" in job["transcript"]
+    assert "김팀장" in _display_transcript(job)
+    assert "이대리" in _display_transcript(job)
     # 원래 SPEAKER_XX 라벨이 치환되었는지
-    assert "SPEAKER_00" not in job["transcript"]
-    assert "SPEAKER_01" not in job["transcript"]
+    assert "SPEAKER_00" not in _display_transcript(job)
+    assert "SPEAKER_01" not in _display_transcript(job)
 
 
 def test_apply_match_updates_speakers(client, create_done_job):
@@ -260,3 +260,24 @@ def test_apply_match_empty_matches(client, create_done_job):
     # transcript가 변경되지 않았는지 확인
     job = dbmod.get_job(job_id)
     assert job["transcript"] == original_transcript
+
+
+def _display_transcript(job: dict) -> str:
+    """소비 시점 렌더로 **표시 문자열**을 만든다.
+
+    PR C 확정 계약: 저장되는 `job.transcript` 컬럼은 **항상 라벨**(`SPEAKER_XX`)이고
+    이름은 `job.speakers`가 나른다. 표시(화면·다운로드·복사·공유)는 소비 시점에
+    `render(segments, speakers)`로 만든다. 따라서 "이름이 보이는가"를 검증하는 단언은
+    저장 문자열이 아니라 **이 함수의 결과**를 봐야 한다. 단언의 판별력은 그대로다 —
+    이름이 잘못 매핑되면 여기서 똑같이 실패한다.
+    """
+    from app.transcript import parse as _parse, render as _render
+    speakers = job.get("speakers") or {}
+    if isinstance(speakers, str):
+        import json as _json
+        speakers = _json.loads(speakers)
+    segments = job.get("transcript_segments") or _parse(job.get("transcript") or "")
+    if isinstance(segments, str):
+        import json as _json
+        segments = _json.loads(segments)
+    return _render(segments, speakers)
