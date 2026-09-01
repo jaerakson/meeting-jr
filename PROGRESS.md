@@ -1,3 +1,58 @@
+## 2026-09-01 13:20 (작업 PC: 로컬) — 세션 60 (PR C 검증·푸시·코드리뷰 완료, 머지 대기)
+
+- 브랜치: `refactor/speaker-label-mapping-c` — **PR #82 OPEN, MERGEABLE, 아직 미머지**
+  (https://github.com/jaerakson/meeting-jr/pull/82). 최신 커밋 `e16158e`, **origin 푸시 완료**
+  (세션 59에서 밀려 있던 로컬 27커밋을 이번에 푸시 — `2f09afc..e16158e`).
+- 팀원 4명(dir-c4 / front-c4 / back-c4 / qa-c4)은 이번 세션 시작 시 **전원 종료**했다.
+  세션 59에서 "진행 중"으로 남아 있던 B2~B7 / T10 / F3 / 중복 표시이름 픽스처는
+  종료 전에 모두 커밋 완료된 상태였다(아래 검증으로 확인).
+- 완료:
+  - **검증 전량 재확인(세션 59가 "다음 사람이 반드시 재확인할 것"으로 남긴 항목)**
+    - 백엔드: `pytest tests/ -q` → **359 passed** (경고 2건은 asyncio subprocess 소멸자 관련, 무해)
+    - 프론트: `npx vitest run` → **7 files / 48 tests passed**, `npx tsc --noEmit` → 0,
+      `npm run build` → 성공(8 라우트)
+  - **푸시**: `git push origin refactor/speaker-label-mapping-c` 완료. PR #82가 이제 최신 코드 반영.
+  - **코드 리뷰 실행**(`/code-review:code-review 82`, CLAUDE.md 필수 절차):
+    적격성·CLAUDE.md 수집·PR 요약 3개 + 리뷰 5개(CLAUDE.md 준수 / 얕은 버그 스캔 /
+    git 이력 대조 / 이전 PR 코멘트 대조 / 코드 주석 대조) + 신뢰도 채점 4개 = 12 에이전트.
+    - **이전 PR #82 리뷰 지적 8건(2026-08-31 15:14Z 6건 + 22:04Z 2건) 전부 해소 확인.**
+    - **과거 3대 재발 결함 모두 재발 없음 확인**: ① `finalize_job` identity 재키잉 제거,
+      ② transcript 컬럼 실명 굽기 제거(모든 소비 지점이 `display_transcript`/`render` 경유),
+      ③ `localSpeakerMap` 초기값 `null` 센티널 + 모든 리셋 지점 `null` 일관.
+    - 채점 결과 4건 전부 임계값 80 미만 → **PR 코멘트 미게시**(리뷰 스킬 규칙).
+      다만 아래 "남은 지적"에 기록한다.
+- **남은 지적 (임계값 미달이나 실재 확인됨 — 머지 전/후 판단 필요)**:
+  1. (75) `DEVGUIDE.md:475` §10 항목이 **이미 고친 결함을 미해결 "후속 과제"로 기술**한다.
+     `Transcript.tsx`의 `saveEdit`/`saveSpeakerAll`/`reassignLine`(L186·196·208)은 이미
+     `render(..., {})`로 라벨만 내보낸다. 커밋 순서상 `8c47a56`(수정)이 `8e16cb0`(문서 기록)보다
+     **먼저**였는데 문서를 갱신하지 않았다. 이 프로젝트는 §10 정확성에 의존해 재발을 막으므로
+     그대로 두면 "이미 고친 것을 또 고치는" 위험이 있다.
+  2. (75) `scripts/migrate_legacy_speaker_map.py:151-156`의 `_representative()`가
+     **어디서도 호출되지 않는 죽은 코드**이고, `_merge_duplicate_names`(L202-203)가 동일한
+     tie-break를 인라인으로 재구현했다. 지금은 결과가 같아 버그는 없으나, 이 저장소가
+     "매칭 규칙 사본이 갈라져 5라운드 연속 같은 버그"를 겪은 바로 그 패턴이다.
+     둘 중 하나로 통일(호출하거나 삭제)할 것.
+  3. (50) 실명(`아빠`·`손주환`·`손재락`)과 실제 job ID가 **공개 저장소**에 들어간다
+     (`gh repo view` 실측 `isPrivate: false`). main에도 이미 존재하던 것이나 이번 PR이
+     신규 테스트 파일 전체·DEVGUIDE §10에서 범위를 크게 넓혔다(신규 추가 83행). 전역 보안 규칙
+     "개인정보도 동일하게 마스킹"에 걸린다. 픽스처를 `김팀장`류 placeholder로 교체 권고.
+  4. (50) 커밋 `cbe8447`이 `wip:` 접두어 사용. squash 머지 예정이라 main 이력엔 안 남는다.
+- **다음 할 일**: 위 1·2(각 75점) 반영 여부 결정 → 머지(`gh pr merge --squash --delete-branch`,
+  사용자 확인 필요) → 로컬 브랜치 정리 → **다음 PR 1순위: 회의 전환 시 이전 회의 상태 잔존(전 5건,
+  rematch가 최악)**. 상세는 `docs/ai_analysis/20260828_잔여_기획_후보.md`의 "★ 다음 PR 확정 안건".
+- 막힌 점/주의:
+  - **`pytest tests/`는 여전히 운영 DB `backend/meetings.db`를 오염시킨다**(conftest 부재).
+    이번 세션 실측: `recording_notes` 510행 → 512행(1회 실행당 +2행 누적). 세션 58 기록의 406행에서
+    이미 510행까지 늘어난 상태였다. 이번엔 **실행 전 백업 → 실행 → 백업 복원**으로 처리했고
+    최종 md5 `837db16f...`(510행)로 원복 확인. **다음 사람도 pytest 전에 반드시 백업할 것.**
+    근본 수정(`conftest.py` 신설 + `DB_PATH` tmp 격리)은 여전히 미착수, PR C 범위 밖.
+  - `showResummarizeModal`이 job 전환 시 안 닫히는 결함은 이번에도 미수정(증상만 차단된 상태).
+- 관련 파일/커밋: `e16158e`(HEAD), 리뷰 대상 36파일 +5454/−379.
+  `DEVGUIDE.md:475`, `scripts/migrate_legacy_speaker_map.py:151-156,202-203`
+- 푸시 여부: **origin/refactor/speaker-label-mapping-c 푸시 완료. PR #82 미머지.**
+
+---
+
 ## 2026-09-01 07:29 (작업 PC: 로컬) — 세션 59 (PR C 2라운드 진행 중: 프론트 계약 분리 + 화자 이름 소실 회귀 수정)
 
 - 브랜치: `refactor/speaker-label-mapping-c` — **PR #82 OPEN, 아직 미머지**
